@@ -10,6 +10,7 @@ enum DateSelection: String, CaseIterable {
 // MARK: - App State
 /// Shared observable state that replaces the binding cascade from ContentView.
 /// All child views access this via @EnvironmentObject instead of @Binding chains.
+@MainActor
 class AppState: ObservableObject {
     // MARK: - Service References (wired at app startup)
     weak var schedulingEngine: SchedulingEngine?
