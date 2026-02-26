@@ -1108,7 +1108,7 @@ struct RightPanel: View {
                 }
             }
             if sessions.isEmpty {
-                if schedulingEngine.awareExistingTasks && schedulingEngine.schedulingMessage.contains("quota met") {
+                if schedulingEngine.awareExistingTasks && schedulingEngine.schedulingMessage.contains("quota already met") {
                     Text("Daily quotas satisfied")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color(hex: "10B981"))
