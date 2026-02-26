@@ -87,6 +87,11 @@ class SchedulingEngine: ObservableObject {
     // MARK: - Scheduled Output
     @Published var projectedSessions: [ScheduledSession] = []
     @Published var schedulingMessage: String = ""
+    @Published var quotasSatisfied: Bool = false
+
+    var hasNoSessionTargets: Bool {
+        workSessions == 0 && sideSessions == 0 && (!deepSessionConfig.enabled || deepSessionConfig.sessionCount == 0) && !schedulePlanning
+    }
     
     // MARK: - Initialization
     
@@ -461,7 +466,10 @@ class SchedulingEngine: ObservableObject {
         }
         
         projectedSessions = sessions
-        
+
+        let deepQuotaMet = !deepSessionConfig.enabled || deepCount >= deepSessionConfig.sessionCount
+        quotasSatisfied = workCount >= workSessions && sideCount >= sideSessions && deepQuotaMet
+
         var existingNote = ""
         if awareExistingTasks, let existing = existingSessions {
             let total = existing.work + existing.side + existing.deep
@@ -470,14 +478,33 @@ class SchedulingEngine: ObservableObject {
             }
         }
 
+        // Build quota detail when not satisfied
+        func quotaDetail() -> String {
+            var parts: [String] = []
+            if workCount < workSessions {
+                parts.append("\(workSessions - workCount) work")
+            }
+            if sideCount < sideSessions {
+                parts.append("\(sideSessions - sideCount) side")
+            }
+            if deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount {
+                parts.append("\(deepSessionConfig.sessionCount - deepCount) deep")
+            }
+            return parts.isEmpty ? "" : " Still need: \(parts.joined(separator: ", "))."
+        }
+
+        let totalTarget = workSessions + sideSessions + (deepSessionConfig.enabled ? deepSessionConfig.sessionCount : 0)
+
         if sessions.isEmpty {
-            if awareExistingTasks && workCount >= workSessions && sideCount >= sideSessions {
+            if totalTarget == 0 && !planningNeeded {
+                schedulingMessage = "No sessions configured."
+            } else if quotasSatisfied {
                 schedulingMessage = "Daily quota met by existing sessions." + existingNote
             } else {
-                schedulingMessage = "No suitable time slots found or quota already met." + existingNote
+                schedulingMessage = "No suitable time slots found." + quotaDetail() + existingNote
             }
-        } else if workCount < workSessions || sideCount < sideSessions {
-            schedulingMessage = "Projected \(sessions.count) sessions. Quota not met." + existingNote
+        } else if !quotasSatisfied {
+            schedulingMessage = "Projected \(sessions.count) sessions." + quotaDetail() + existingNote
         } else {
             schedulingMessage = "Successfully projected \(sessions.count) sessions." + existingNote
         }

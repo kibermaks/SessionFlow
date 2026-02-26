@@ -1108,13 +1108,23 @@ struct RightPanel: View {
                 }
             }
             if sessions.isEmpty {
-                if schedulingEngine.awareExistingTasks && schedulingEngine.schedulingMessage.contains("quota already met") {
+                if schedulingEngine.hasNoSessionTargets {
+                    Text("No sessions configured")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.vertical, 8)
+                } else if schedulingEngine.quotasSatisfied {
                     Text("Daily quotas satisfied")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(Color(hex: "10B981"))
                         .padding(.vertical, 8)
+                } else if !schedulingEngine.schedulingMessage.isEmpty {
+                    Text("No additional sessions projected")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.5))
+                        .padding(.vertical, 8)
                 } else {
-                    Text("Enable 'Auto' or click 'Preview'")
+                    Text("Scheduling preview will appear here")
                         .font(.system(size: 12))
                         .foregroundColor(.white.opacity(0.5))
                         .padding(.vertical, 8)
