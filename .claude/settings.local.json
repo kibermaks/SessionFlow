@@ -13,7 +13,9 @@
       "Bash(git checkout main)",
       "Bash(git checkout -- TaskScheduler/Services/SchedulingEngine.swift)",
       "Bash(xcodebuild -scheme TaskScheduler -configuration Debug build)",
-      "Bash(swift build)"
+      "Bash(swift build)",
+      "Bash(./build_app.sh patch)",
+      "Bash(./create_dmg.sh)"
     ]
   }
 }

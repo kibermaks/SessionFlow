@@ -56,6 +56,7 @@ struct TimelineView: View {
     @State private var flagsMonitor: Any? = nil
     @State private var keyDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
+    @State private var eventsLocked: Bool = false
 
     private enum DragMode: Equatable {
         case none
@@ -413,6 +414,20 @@ struct TimelineView: View {
                 }
             }
             
+            // Lock/unlock event dragging
+            Button {
+                withAnimation { eventsLocked.toggle() }
+            } label: {
+                Image(systemName: eventsLocked ? "hand.raised.slash" : "hand.draw")
+                    .frame(width: 16, height: 16)
+                    .padding(8)
+                    .background(eventsLocked ? Color.white.opacity(0.05) : Color.white.opacity(0.1))
+                    .cornerRadius(6)
+                    .foregroundColor(eventsLocked ? .white.opacity(0.35) : .white)
+            }
+            .buttonStyle(.plain)
+            .help(eventsLocked ? "Click to drag & resize calendar events" : "Click to lock calendar event positions")
+
             // Toggle night button
             Button(action: {
                 withAnimation {
@@ -703,7 +718,7 @@ extension TimelineView {
         .frame(width: blockWidth, height: blockHeight)
         .contentShape(Rectangle())
         .onContinuousHover { phase in
-            guard dragMode == .none else { return }
+            guard !eventsLocked, dragMode == .none else { return }
             switch phase {
             case .active(let location):
                 if location.y < edgeZone {
@@ -722,6 +737,7 @@ extension TimelineView {
         .gesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { value in
+                    guard !eventsLocked else { return }
                     // Determine mode on first movement
                     if dragMode == .none {
                         let startY = value.startLocation.y
