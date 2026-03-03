@@ -47,6 +47,16 @@ struct TaskSchedulerApp: App {
                 Button("Organizing Tasks...") {
                     NotificationCenter.default.post(name: Notification.Name("ShowTasksGuide"), object: nil)
                 }
+
+                Divider()
+
+                Button("What's New...") {
+                    NotificationCenter.default.post(name: Notification.Name("ShowWhatsNew"), object: nil)
+                }
+
+                Button("Star on GitHub") {
+                    openGitHubRepo()
+                }
             }
         }
         
@@ -68,6 +78,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 private extension TaskSchedulerApp {
     func openProjectReadme() {
         guard let url = URL(string: "https://github.com/kibermaks/TaskScheduler#readme") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    func openGitHubRepo() {
+        guard let url = URL(string: "https://github.com/kibermaks/TaskScheduler") else { return }
         NSWorkspace.shared.open(url)
     }
 }

@@ -9,7 +9,6 @@ struct ContentView: View {
     
     @State private var selectedDate = Date()
     @State private var startTime = Date()
-    @State private var showingConfirmation = false
     @State private var showingDeleteConfirmation = false
     @State private var dateSelection: DateSelection = .today
     @State private var autoPreview = true
@@ -28,6 +27,8 @@ struct ContentView: View {
     @State private var showingTasksGuide = false
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
+    @State private var showingWhatsNew = false
+    @AppStorage("TaskScheduler.LastSeenVersion") private var lastSeenVersion = ""
     
     enum DateSelection: String, CaseIterable {
         case today = "Today"
@@ -55,7 +56,6 @@ struct ContentView: View {
                 ContentViewBody(
                     selectedDate: $selectedDate,
                     startTime: $startTime,
-                    showingConfirmation: $showingConfirmation,
                     showingDeleteConfirmation: $showingDeleteConfirmation,
                     dateSelection: $dateSelection,
                     autoPreview: $autoPreview,
@@ -102,7 +102,31 @@ struct ContentView: View {
         .onReceive(updateService.$pendingAlert) { alert in
             updateAlert = alert
         }
-        .alert(item: $updateAlert, content: buildUpdateAlert)
+        .sheet(item: $updateAlert) { alert in
+            UpdateAlertSheet(alert: alert)
+                .environmentObject(updateService)
+        }
+        .sheet(isPresented: $showingWhatsNew) {
+            WhatsNewView(changelog: ChangelogService.shared)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowWhatsNew"))) { _ in
+            showingWhatsNew = true
+        }
+        .onAppear {
+            checkForWhatsNew()
+        }
+    }
+
+    private func checkForWhatsNew() {
+        let currentVersion = ChangelogService.currentVersion
+        guard lastSeenVersion != currentVersion else { return }
+        lastSeenVersion = currentVersion
+        ChangelogService.shared.fetchIfNeeded()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            if hasCompletedSetup && hasSeenWelcome {
+                showingWhatsNew = true
+            }
+        }
     }
 }
 
@@ -113,7 +137,6 @@ struct ContentViewBody: View {
     
     @Binding var selectedDate: Date
     @Binding var startTime: Date
-    @Binding var showingConfirmation: Bool
     @Binding var showingDeleteConfirmation: Bool
     @Binding var dateSelection: ContentView.DateSelection
     @Binding var autoPreview: Bool
@@ -153,12 +176,6 @@ struct ContentViewBody: View {
             }
             .environmentObject(schedulingEngine)
         }
-        .alert("Schedule Sessions", isPresented: $showingConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Schedule") { scheduleAllSessions() }
-        } message: {
-            Text("Add \(schedulingEngine.projectedSessions.count) sessions to your calendar?")
-        }
         .sheet(isPresented: $showingDeleteConfirmation) {
             DeleteConfirmationSheet(
                 deletePastSessions: $deletePastSessions,
@@ -192,6 +209,7 @@ struct ContentViewBody: View {
             updateSelectedDate(for: newSelection)
         }
         .onChange(of: selectedDate) { _, newDate in
+            schedulingEngine.sessionsFrozen = false
             Task {
                 // If we are in custom mode, we might want to update startTime's day to match selectedDate
                 // so that the scheduler doesn't look at a different day's 08:00
@@ -203,7 +221,7 @@ struct ContentViewBody: View {
                         startTime = updatedStartTime
                     }
                 }
-                
+
                 await calendarService.fetchEvents(for: newDate)
                 if autoPreview { updateProjectedSchedule() }
             }
@@ -223,7 +241,7 @@ struct ContentViewBody: View {
             schedulingEngine.reconcileCalendars(with: calendarService)
             PresetStorage.shared.populateCalendarIdentifiers(using: calendarService.availableCalendars)
         }
-        .modifier(SettingsChangeModifier(autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
+        .modifier(SettingsChangeModifier(selectedDate: $selectedDate, autoPreview: autoPreview, updatePreview: updateProjectedSchedule))
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             let calendar = Calendar.current
             var dateChanged = false
@@ -313,7 +331,7 @@ struct ContentViewBody: View {
                 selectedDate: selectedDate,
                 effectiveStartTime: effectiveStartTime,
                 autoPreview: autoPreview,
-                showingConfirmation: $showingConfirmation,
+                scheduleAll: scheduleAllSessions,
                 showingDeleteConfirmation: $showingDeleteConfirmation,
                 deletePastSessions: $deletePastSessions,
                 updatePreview: updateProjectedSchedule
@@ -355,6 +373,8 @@ struct ContentViewBody: View {
             applyPreset(first)
         }
         
+        calendarService.scheduleEndHour = schedulingEngine.scheduleEndHour
+
         nowTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             if useNowTime && dateSelection == .today && autoPreview {
                 DispatchQueue.main.async { updateProjectedSchedule() }
@@ -438,6 +458,7 @@ struct ContentViewBody: View {
         } else {
             schedulingEngine.schedulingMessage = "Scheduled \(result.success), failed \(result.failed)"
         }
+        schedulingEngine.sessionsFrozen = false
         Task {
             await calendarService.fetchEvents(for: selectedDate)
             schedulingEngine.projectedSessions = []
@@ -502,99 +523,12 @@ struct ContentViewBody: View {
     }
 }
 
-private extension ContentView {
-    /// Enriches markdown text by converting it to nicely formatted plain text
-    func enrichMarkdown(_ text: String) -> String {
-        var result = text
-        
-        // Process line by line for multiline patterns
-        let lines = result.components(separatedBy: .newlines)
-        let processedLines = lines.map { line -> String in
-            var processed = line
-            
-            // Convert markdown headers to plain text (keep the text, remove #)
-            if let headerMatch = try? NSRegularExpression(pattern: #"^#{1,6}\s+(.+)$"#, options: []),
-               let match = headerMatch.firstMatch(in: processed, range: NSRange(processed.startIndex..., in: processed)),
-               let textRange = Range(match.range(at: 1), in: processed) {
-                processed = String(processed[textRange])
-            }
-            
-            // Convert markdown list markers to bullet points
-            if let listMatch = try? NSRegularExpression(pattern: #"^[\-\*\+]\s+(.+)$"#, options: []),
-               let match = listMatch.firstMatch(in: processed, range: NSRange(processed.startIndex..., in: processed)),
-               let textRange = Range(match.range(at: 1), in: processed) {
-                processed = "• \(processed[textRange])"
-            }
-            
-            return processed
-        }
-        result = processedLines.joined(separator: "\n")
-        
-        // Remove markdown bold/italic markers but keep the text
-        result = result.replacingOccurrences(of: #"\*\*([^\*]+)\*\*"#, with: "$1", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"\*([^\*]+)\*"#, with: "$1", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"__([^_]+)__"#, with: "$1", options: .regularExpression)
-        result = result.replacingOccurrences(of: #"_([^_]+)_"#, with: "$1", options: .regularExpression)
-        
-        // Remove markdown code blocks (```code```)
-        result = result.replacingOccurrences(of: #"```[\s\S]*?```"#, with: "", options: .regularExpression)
-        
-        // Convert inline code to plain text (remove backticks)
-        result = result.replacingOccurrences(of: #"`([^`]+)`"#, with: "$1", options: .regularExpression)
-        
-        // Convert markdown links [text](url) -> text
-        result = result.replacingOccurrences(of: #"\[([^\]]+)\]\([^\)]+\)"#, with: "$1", options: .regularExpression)
-        
-        // Clean up multiple consecutive newlines
-        result = result.replacingOccurrences(of: #"\n{3,}"#, with: "\n\n", options: .regularExpression)
-        
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-    
-    func buildUpdateAlert(_ payload: UpdateService.UpdateAlert) -> Alert {
-        switch payload.kind {
-        case .updateAvailable(let info):
-            let releaseNotes = info.releaseNotes.isEmpty 
-                ? "Visit the release page for full details." 
-                : enrichMarkdown(info.releaseNotes)
-            let message = [
-                "Task Scheduler \(info.version) is available.",
-                "",
-                releaseNotes
-            ].joined(separator: "\n")
-            return Alert(
-                title: Text("Update Available"),
-                message: Text(message),
-                primaryButton: .default(Text("Install Update")) {
-                    updateService.installLatestUpdate(info)
-                },
-                secondaryButton: .cancel(Text("Later")) {
-                    updateService.dismissAlert()
-                }
-            )
-        case .upToDate(let version):
-            return Alert(
-                title: Text("You're Up to Date"),
-                message: Text("You're already running version \(version)."),
-                dismissButton: .default(Text("OK")) {
-                    updateService.dismissAlert()
-                }
-            )
-        case .failure(let message):
-            return Alert(
-                title: Text("Update Check Failed"),
-                message: Text(message),
-                dismissButton: .default(Text("OK")) {
-                    updateService.dismissAlert()
-                }
-            )
-        }
-    }
-}
 
 // MARK: - Settings Change Modifier
 struct SettingsChangeModifier: ViewModifier {
     @EnvironmentObject var engine: SchedulingEngine
+    @EnvironmentObject var calendarService: CalendarService
+    @Binding var selectedDate: Date
     let autoPreview: Bool
     let updatePreview: () -> Void
     
@@ -635,14 +569,20 @@ struct SettingsChangeModifier: ViewModifier {
         Color.clear
             .onChange(of: engine.deepSessionConfig.duration) { _, _ in trigger() }
             .onChange(of: engine.deepSessionConfig.calendarName) { _, _ in trigger() }
+            .onChange(of: engine.deepSessionConfig.andThenGap) { _, _ in trigger() }
             .onChange(of: engine.workTasks) { _, _ in trigger() }
             .onChange(of: engine.sideTasks) { _, _ in trigger() }
             .onChange(of: engine.deepTasks) { _, _ in trigger() }
             .onChange(of: engine.useWorkTasks) { _, _ in trigger() }
             .onChange(of: engine.useSideTasks) { _, _ in trigger() }
             .onChange(of: engine.useDeepTasks) { _, _ in trigger() }
+            .onChange(of: engine.scheduleEndHour) { _, newValue in
+                calendarService.scheduleEndHour = newValue
+                trigger()
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
     }
-    
+
     private func trigger() {
         if autoPreview { updatePreview() }
     }
@@ -710,6 +650,20 @@ struct HeaderView: View {
     
     private var dateButtons: some View {
         HStack(spacing: 12) {
+            Button {
+                showPastDaysMenu()
+            } label: {
+                Text("⋮")
+                    .font(.system(size: 14, weight: .medium))
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.1))
+                    .foregroundColor(.white)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .focusEffectDisabled()
+
             ForEach(ContentView.DateSelection.allCases, id: \.self) { sel in
                 Button { dateSelection = sel } label: {
                     Text(sel.rawValue)
@@ -724,19 +678,48 @@ struct HeaderView: View {
                 .focusEffectDisabled()
             }
             if dateSelection == .custom {
-                DatePicker("", selection: $selectedDate, displayedComponents: .date)
-                    .labelsHidden()
-                    .datePickerStyle(.compact)
-                    .frame(width: 100)
+                DateInputField(date: $selectedDate)
             }
         }
     }
-    
-    // Approach: Use FocusState to programmatically focus the DatePicker's TextField after clicking Button.
-    // Note: SwiftUI does not (as of 2024) expose direct focus for DatePicker, but a workaround is available
-    // by overlaying an invisible TextField bound to a FocusState, and programmatically focusing it to open the DatePicker popover.
 
-    @FocusState private var datePickerFocused: Bool
+    private func pastDayLabel(daysAgo: Int) -> String {
+        let date = Calendar.current.date(byAdding: .day, value: -daysAgo, to: Date()) ?? Date()
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEE, MMM d"
+        let dateStr = formatter.string(from: date)
+        switch daysAgo {
+        case 1: return "Yesterday (\(dateStr))"
+        default: return "\(daysAgo) days ago (\(dateStr))"
+        }
+    }
+    
+    private func showPastDaysMenu() {
+        let menu = NSMenu()
+        for daysAgo in 1..<8 {
+            let item = NSMenuItem(title: pastDayLabel(daysAgo: daysAgo), action: #selector(NSApplication.sendAction(_:to:from:)), keyEquivalent: "")
+            item.target = nil
+            item.representedObject = daysAgo
+            menu.addItem(item)
+        }
+
+        // Use a responder-based approach: create action items via a helper
+        menu.removeAllItems()
+        for daysAgo in 1..<8 {
+            let item = PastDayMenuItem(title: pastDayLabel(daysAgo: daysAgo), daysAgo: daysAgo) { [self] days in
+                let date = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date()
+                selectedDate = date
+                dateSelection = .custom
+                useNowTime = false
+                startTime = Calendar.current.date(bySettingHour: 8, minute: 0, second: 0, of: date) ?? date
+            }
+            menu.addItem(item)
+        }
+
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: event.window?.contentView ?? NSView())
+        }
+    }
 
     private var startTimeControls: some View {
         HStack(spacing: 8) {
@@ -750,25 +733,10 @@ struct HeaderView: View {
             
             ZStack {
                 if !useNowTime {
-                    // Standard DatePicker shown when useNowTime == false
-                    // Overlay a TextField (hidden) to steal focus if needed
-                    DatePicker("", selection: $startTime, displayedComponents: .hourAndMinute)
-                        .labelsHidden()
-                        .frame(width: 85)
-                        // Try to overlay an invisible TextField (macOS only hack)
-                        .overlay(
-                            TextField("", text: .constant(""))
-                                .frame(width: 0, height: 0)
-                                .opacity(0)
-                                .focused($datePickerFocused)
-                        )
+                    TimeInputField(date: $startTime)
                 } else {
                     Button(action: {
                         useNowTime = false
-                        // Defer focus to the next runloop to ensure DatePicker appears and is focusable
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            datePickerFocused = true
-                        }
                     }) {
                         Text(formatNowTime())
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
@@ -812,34 +780,69 @@ struct LeftPanel: View {
     let autoPreview: Bool
     let updatePreview: () -> Void
     let applyPreset: (Preset) -> Void
-    
+
     @Binding var hasSeenPatternsGuide: Bool
     @Binding var showingPatternsGuide: Bool
     @Binding var hasSeenTasksGuide: Bool
     @Binding var showingTasksGuide: Bool
-    
+
     @State private var selectedTab: TabArea = .settings
-    
+    @State private var showingUnfreezeAlert: Bool = false
+
     enum TabArea: String, CaseIterable {
         case settings = "Time Settings"
         case tasks = "Tasks"
     }
-    
+
     var body: some View {
-        VStack(spacing: 0) {
-            tabPicker
-            
-            if selectedTab == .settings {
-                VStack(spacing: 0) {
-                    presetDropdown
-                    Divider().background(Color.white.opacity(0.1))
-                    SettingsPanel(
-                        hasSeenPatternsGuide: $hasSeenPatternsGuide,
-                        showingPatternsGuide: $showingPatternsGuide
-                    )
+        ZStack {
+            VStack(spacing: 0) {
+                tabPicker
+
+                if selectedTab == .settings {
+                    VStack(spacing: 0) {
+                        presetDropdown
+                        Divider().background(Color.white.opacity(0.1))
+                        SettingsPanel(
+                            hasSeenPatternsGuide: $hasSeenPatternsGuide,
+                            showingPatternsGuide: $showingPatternsGuide
+                        )
+                    }
+                } else {
+                    TasksPanel()
                 }
-            } else {
-                TasksPanel()
+            }
+            .allowsHitTesting(!schedulingEngine.sessionsFrozen)
+
+            if schedulingEngine.sessionsFrozen {
+                Color.black.opacity(0.6)
+                    .background(.ultraThinMaterial)
+
+                VStack(spacing: 12) {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white.opacity(0.8))
+                    Text("Manual alignment active")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                    Text("Settings are locked while you adjust projected sessions")
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                    Button {
+                        showingUnfreezeAlert = true
+                    } label: {
+                        Text("Reset")
+                            .font(.system(size: 13, weight: .medium))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 8)
+                            .background(Color(hex: "8B5CF6"))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -850,6 +853,15 @@ struct LeftPanel: View {
         }
         .frame(width: 320)
         .padding()
+        .alert("Reset manual alignment?", isPresented: $showingUnfreezeAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Reset", role: .destructive) {
+                schedulingEngine.sessionsFrozen = false
+                updatePreview()
+            }
+        } message: {
+            Text("This will discard your position adjustments and recalculate sessions from settings.")
+        }
     }
     
     private var tabPicker: some View {
@@ -963,7 +975,7 @@ struct RightPanel: View {
     let selectedDate: Date
     let effectiveStartTime: Date
     let autoPreview: Bool
-    @Binding var showingConfirmation: Bool
+    let scheduleAll: () -> Void
     @Binding var showingDeleteConfirmation: Bool
     @Binding var deletePastSessions: Bool
     let updatePreview: () -> Void
@@ -1053,6 +1065,12 @@ struct RightPanel: View {
                 if schedulingEngine.deepSessionConfig.enabled {
                     row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
                 }
+                if schedulingEngine.scheduleEndHour > 24 {
+                    Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
+                        .font(.system(size: 11))
+                        .foregroundColor(.orange.opacity(0.7))
+                        .italic()
+                }
             }
             .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
         }
@@ -1062,7 +1080,17 @@ struct RightPanel: View {
     private func row(_ label: String, _ val: String, _ color: Color? = nil) -> some View {
         HStack { Text(label); Spacer(); Text(val).fontWeight(.semibold).foregroundColor(color ?? .white.opacity(0.8)) }
     }
-    
+
+    private func formattedHourForCard(_ hour: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        var comps = DateComponents()
+        comps.hour = hour % 24
+        if let date = Calendar.current.date(from: comps) { return formatter.string(from: date) }
+        return "\(hour % 24):00"
+    }
+
     private var currentDidYouKnowFact: DidYouKnowFact? {
         guard !didYouKnowFacts.isEmpty else { return nil }
         let safeIndex = max(0, min(didYouKnowIndex, didYouKnowFacts.count - 1))
@@ -1171,10 +1199,19 @@ struct RightPanel: View {
             Divider().background(Color.white.opacity(0.2))
             HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessions.count) sessions").fontWeight(.semibold) }
             if let last = sessions.last {
+                let isNextDay = !Calendar.current.isDate(last.endTime, inSameDayAs: selectedDate)
                 HStack {
                     Text("Done by:").foregroundColor(Color(hex: "10B981"))
                     Spacer()
-                    Text(formatter.string(from: last.endTime)).fontWeight(.semibold).foregroundColor(Color(hex: "10B981"))
+                    HStack(spacing: 4) {
+                        if isNextDay {
+                            Text("+1d")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .foregroundColor(.orange)
+                        }
+                        Text(formatter.string(from: last.endTime)).fontWeight(.semibold).foregroundColor(Color(hex: "10B981"))
+                    }
                 }
             }
         }
@@ -1186,33 +1223,51 @@ struct RightPanel: View {
     }
     
     private var actionButtons: some View {
-        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
-        let primaryRed = Color(hex: "EF4444") // Bright Red
-        let paleRed = primaryRed.opacity(0.4)
-        
+        let purple = Color(hex: "8B5CF6")
+        let disabled = schedulingEngine.projectedSessions.isEmpty
+
         return VStack(spacing: 12) {
-            Button(action: createPlanningSession) {
-                HStack { Image(systemName: "calendar.badge.clock"); Text("Create Just Planning") }
-                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(planningExists ? paleRed : primaryRed)
-                    .foregroundColor(.white).cornerRadius(10)
+            // Split button: Schedule Sessions (main) + dropdown arrow (planning)
+            HStack(spacing: 0) {
+                Button(action: { scheduleAll() }) {
+                    HStack { Image(systemName: "calendar.badge.plus"); Text("Schedule Sessions") }
+                        .font(.system(size: 15, weight: .semibold))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .buttonStyle(.plain)
+                .disabled(disabled)
+                .help("Add all projected sessions to your Calendar")
+
+                Rectangle()
+                    .fill(Color.white.opacity(0.2))
+                    .frame(width: 1)
+                    .padding(.vertical, 6)
+
+                Menu {
+                    Button {
+                        createPlanningSession()
+                    } label: {
+                        Label("Create Just Planning", systemImage: "calendar.badge.clock")
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(maxWidth: 36, maxHeight: .infinity)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize(horizontal: true, vertical: false)
+                .help("More scheduling options")
             }
-            .buttonStyle(.plain)
-            .help("Immediately schedule a single Planning session at the next available time")
-            
-            Button(action: { showingConfirmation = true }) {
-                HStack { Image(systemName: "calendar.badge.plus"); Text("Schedule Sessions") }
-                    .font(.system(size: 15, weight: .semibold)).frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(schedulingEngine.projectedSessions.isEmpty ? Color.gray.opacity(0.3) : Color(hex: "8B5CF6"))
-                    .foregroundColor(.white).cornerRadius(10)
-            }
-            .buttonStyle(.plain)
-            .disabled(schedulingEngine.projectedSessions.isEmpty)
-            .help("Add all projected sessions to your Calendar")
-            
+            .frame(height: 44)
+            .background(disabled ? Color.gray.opacity(0.3) : purple)
+            .foregroundColor(.white)
+            .cornerRadius(10)
+
             Button(action: { deletePastSessions = false; showingDeleteConfirmation = true }) {
                 HStack { Image(systemName: "trash"); Text("Delete Day's Sessions") }
-                    .font(.system(size: 13, weight: .medium)).frame(maxWidth: .infinity).padding(.vertical, 10)
+                    .font(.system(size: 13, weight: .medium))
+                    .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.red.opacity(0.2)).foregroundColor(.red).cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.red.opacity(0.3), lineWidth: 1))
             }
@@ -1434,6 +1489,26 @@ struct DeleteConfirmationSheet: View {
         .environmentObject(CalendarService())
         .environmentObject(SchedulingEngine())
         .frame(width: 1200, height: 800)
+}
+
+// MARK: - Past Day Menu Item Helper
+
+private class PastDayMenuItem: NSMenuItem {
+    private let handler: (Int) -> Void
+    private let daysAgo: Int
+
+    init(title: String, daysAgo: Int, handler: @escaping (Int) -> Void) {
+        self.handler = handler
+        self.daysAgo = daysAgo
+        super.init(title: title, action: #selector(didSelect), keyEquivalent: "")
+        self.target = self
+    }
+
+    required init(coder: NSCoder) { fatalError() }
+
+    @objc private func didSelect() {
+        handler(daysAgo)
+    }
 }
 
 // MARK: - Window Drag & Zoom Helpers

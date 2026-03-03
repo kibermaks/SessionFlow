@@ -33,6 +33,11 @@
 		020 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 120 /* UpdateService.swift */; };
 		021 /* TimeSnapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121 /* TimeSnapping.swift */; };
 		022 /* EventUndoManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 122 /* EventUndoManager.swift */; };
+		023 /* TimeInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 123 /* TimeInputField.swift */; };
+		024 /* DateInputField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 124 /* DateInputField.swift */; };
+		025 /* Changelog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 125 /* Changelog.swift */; };
+		026 /* WhatsNewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 126 /* WhatsNewView.swift */; };
+		027 /* UpdateAlertSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 127 /* UpdateAlertSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,6 +69,11 @@
 		120 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		121 /* TimeSnapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeSnapping.swift; sourceTree = "<group>"; };
 		122 /* EventUndoManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventUndoManager.swift; sourceTree = "<group>"; };
+		123 /* TimeInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimeInputField.swift; sourceTree = "<group>"; };
+		124 /* DateInputField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateInputField.swift; sourceTree = "<group>"; };
+		125 /* Changelog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Changelog.swift; sourceTree = "<group>"; };
+		126 /* WhatsNewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WhatsNewView.swift; sourceTree = "<group>"; };
+		127 /* UpdateAlertSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateAlertSheet.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -114,6 +124,7 @@
 				103 /* Session.swift */,
 				104 /* SchedulePattern.swift */,
 				105 /* Preset.swift */,
+				125 /* Changelog.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -131,9 +142,13 @@
 				114 /* TasksGuide.swift */,
 				115 /* AppSettingsView.swift */,
 				116 /* NumericInputField.swift */,
+				123 /* TimeInputField.swift */,
+				124 /* DateInputField.swift */,
 				117 /* CalendarPermissionView.swift */,
 				118 /* CalendarSetupView.swift */,
 				119 /* CalendarPickerPopover.swift */,
+				126 /* WhatsNewView.swift */,
+				127 /* UpdateAlertSheet.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -245,6 +260,11 @@
 				020 /* UpdateService.swift in Sources */,
 				021 /* TimeSnapping.swift in Sources */,
 				022 /* EventUndoManager.swift in Sources */,
+				023 /* TimeInputField.swift in Sources */,
+				024 /* DateInputField.swift in Sources */,
+				025 /* Changelog.swift in Sources */,
+				026 /* WhatsNewView.swift in Sources */,
+				027 /* UpdateAlertSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -382,7 +402,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 372;
+				CURRENT_PROJECT_VERSION = 398;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -401,7 +421,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.10;
+				MARKETING_VERSION = 1.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
 				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -419,7 +439,7 @@
 				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 372;
+				CURRENT_PROJECT_VERSION = 398;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -438,7 +458,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.10;
+				MARKETING_VERSION = 1.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
 				PRODUCT_NAME = "Task Scheduler";
 				SWIFT_EMIT_LOC_STRINGS = YES;
