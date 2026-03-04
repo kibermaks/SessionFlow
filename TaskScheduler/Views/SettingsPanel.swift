@@ -339,104 +339,6 @@ struct SettingsPanel: View {
         }
     }
     
-    // MARK: - Deep Sessions Section
-    
-    private var deepSessionSection: some View {
-         VStack(alignment: .leading, spacing: 12) {
-             HStack(spacing: 8) {
-                 Image(systemName: "bolt.circle.fill")
-                     .foregroundColor(Color(hex: "10B981"))
-                 Text("Deep Sessions")
-                     .font(.headline)
-                     .foregroundColor(.white)
-                 
-                 Button {
-                     showingDeepHelp.toggle()
-                 } label: {
-                     Image(systemName: "info.circle")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.4))
-                 }
-                 .buttonStyle(.plain)
-                 .popover(isPresented: $showingDeepHelp) {
-                     Text(deepHelpText)
-                         .font(.system(size: 13))
-                         .padding()
-                         .frame(width: 250)
-                 }
-                 
-                 Spacer()
-                 Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
-                     .labelsHidden()
-                     .toggleStyle(.switch)
-                     .tint(Color(hex: "10B981"))
-             }
-             
-             if schedulingEngine.deepSessionConfig.enabled {
-                 HStack {
-                     Text("Count:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
-                 }
-                 
-                HStack {
-                    Text("Inject after:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
-                }
-
-                if schedulingEngine.deepSessionConfig.sessionCount > 1 {
-                    HStack {
-                        Text("And then after:")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
-                    }
-                    .help("Regular sessions between consecutive deep sessions (0 = back to back)")
-                }
-
-                 NameFieldWithHistory(
-                     label: "Name:",
-                     text: $schedulingEngine.deepSessionConfig.name,
-                     sessionType: .deep,
-                     placeholder: "Name"
-                 )
-                 
-                 HStack {
-                     Text("Duration:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
-                 }
-                 
-                HStack {
-                    Text("Calendar:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    CalendarPickerCompact(
-                        selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
-                        calendars: calendarService.calendarInfoList(includeExcluded: false),
-                        accentColor: Color(hex: "10B981"),
-                        onSelection: { info in
-                            var config = schedulingEngine.deepSessionConfig
-                            config.calendarName = info.name
-                            config.calendarIdentifier = info.identifier
-                            schedulingEngine.deepSessionConfig = config
-                        }
-                    )
-                    .frame(width: 150)
-                }
-            }
-       }
-   }
-    
     // MARK: - Pattern Section
     
     private var patternSection: some View {
@@ -585,6 +487,104 @@ struct SettingsPanel: View {
             }
         }
     }
+
+    // MARK: - Deep Sessions Section
+    
+    private var deepSessionSection: some View {
+         VStack(alignment: .leading, spacing: 12) {
+             HStack(spacing: 8) {
+                 Image(systemName: "bolt.circle.fill")
+                     .foregroundColor(Color(hex: "10B981"))
+                 Text("Deep Sessions")
+                     .font(.headline)
+                     .foregroundColor(.white)
+                 
+                 Button {
+                     showingDeepHelp.toggle()
+                 } label: {
+                     Image(systemName: "info.circle")
+                         .font(.system(size: 13))
+                         .foregroundColor(.white.opacity(0.4))
+                 }
+                 .buttonStyle(.plain)
+                 .popover(isPresented: $showingDeepHelp) {
+                     Text(deepHelpText)
+                         .font(.system(size: 13))
+                         .padding()
+                         .frame(width: 250)
+                 }
+                 
+                 Spacer()
+                 Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
+                     .labelsHidden()
+                     .toggleStyle(.switch)
+                     .tint(Color(hex: "10B981"))
+             }
+             
+             if schedulingEngine.deepSessionConfig.enabled {
+                 HStack {
+                     Text("Count:")
+                         .font(.system(size: 13))
+                         .foregroundColor(.white.opacity(0.7))
+                     Spacer()
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
+                 }
+                 
+                HStack {
+                    Text("Inject after:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
+                }
+
+                if schedulingEngine.deepSessionConfig.sessionCount > 1 {
+                    HStack {
+                        Text("And then after:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
+                    }
+                    .help("Regular sessions between consecutive deep sessions (0 = back to back)")
+                }
+
+                 NameFieldWithHistory(
+                     label: "Name:",
+                     text: $schedulingEngine.deepSessionConfig.name,
+                     sessionType: .deep,
+                     placeholder: "Name"
+                 )
+                 
+                 HStack {
+                     Text("Duration:")
+                         .font(.system(size: 13))
+                         .foregroundColor(.white.opacity(0.7))
+                     Spacer()
+                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
+                 }
+                 
+                HStack {
+                    Text("Calendar:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    CalendarPickerCompact(
+                        selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
+                        calendars: calendarService.calendarInfoList(includeExcluded: false),
+                        accentColor: Color(hex: "10B981"),
+                        onSelection: { info in
+                            var config = schedulingEngine.deepSessionConfig
+                            config.calendarName = info.name
+                            config.calendarIdentifier = info.identifier
+                            schedulingEngine.deepSessionConfig = config
+                        }
+                    )
+                    .frame(width: 150)
+                }
+            }
+       }
+   }
     
     // MARK: - Rest Section
     
