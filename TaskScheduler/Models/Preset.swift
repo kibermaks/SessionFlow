@@ -85,7 +85,7 @@ struct BigRestConfig: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 1
         duration = try container.decodeIfPresent(Int.self, forKey: .duration) ?? 50
         afterMinutes = try container.decodeIfPresent(Int.self, forKey: .afterMinutes) ?? 120

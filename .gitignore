@@ -117,3 +117,4 @@ release_notes.md
 *.log
 dev/
 .derived_data/
+TaskScheduler.xcodeproj/project.xcworkspace/xcuserdata/maks.xcuserdatad/UserInterfaceState.xcuserstate
