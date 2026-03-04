@@ -25,6 +25,12 @@ struct WelcomeScreen: View {
             color: Color(hex: "10B981")
         ),
         WelcomePage(
+            title: "Built-in Recovery",
+            subtitle: "Long Rest is a longer break automatically placed after sustained focus time. It keeps you sharp across long days without you having to plan it.",
+            image: "pause.circle.fill",
+            color: Color(hex: "F59E0B")
+        ),
+        WelcomePage(
             title: "Plan with Clarity",
             subtitle: "Each day starts with a Planning session. Visualize your productivity gains before you even start.",
             image: "calendar.badge.clock",
@@ -91,6 +97,9 @@ struct WelcomeScreen: View {
                         calendarFittingView
                             .transition(.push(from: .bottom).combined(with: .opacity))
                     } else if currentPage == 3 {
+                        bigRestInteractiveView
+                            .transition(.scale.combined(with: .opacity))
+                    } else if currentPage == 4 {
                         productivityGainView
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     } else {
@@ -284,6 +293,87 @@ struct WelcomeScreen: View {
         )
     }
     
+    private var bigRestInteractiveView: some View {
+        VStack(spacing: 8) {
+            // Mini timeline showing session flow with Big Rest
+            HStack(spacing: 4) {
+                // Work session
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: "8B5CF6"))
+                        .frame(width: 60, height: 36)
+                        .overlay(Text("Work").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                    Text("40m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                }
+
+                // Small rest gap
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 14, height: 36)
+                    Text("10m").font(.system(size: 8)).foregroundColor(.white.opacity(0.3))
+                }
+
+                // Another work session
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: "8B5CF6"))
+                        .frame(width: 60, height: 36)
+                        .overlay(Text("Work").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                    Text("40m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                }
+
+                // Rest before big rest
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.white.opacity(0.08))
+                        .frame(width: 14, height: 36)
+                    Text("10m").font(.system(size: 8)).foregroundColor(.white.opacity(0.3))
+                }
+
+                // Big Rest block (hollow with dashed border)
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: "F59E0B").opacity(0.08))
+                        .frame(width: 70, height: 36)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                                .foregroundColor(Color(hex: "F59E0B").opacity(0.6))
+                        )
+                        .overlay(
+                            HStack(spacing: 3) {
+                                Image(systemName: "pause.circle.fill")
+                                    .font(.system(size: 8))
+                                Text("Long Rest")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .foregroundColor(Color(hex: "F59E0B"))
+                        )
+                    Text("50m").font(.system(size: 8)).foregroundColor(Color(hex: "F59E0B").opacity(0.6))
+                }
+
+                // Next session
+                VStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color(hex: "3B82F6"))
+                        .frame(width: 60, height: 36)
+                        .overlay(Text("Side").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
+                    Text("30m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                }
+            }
+
+            Text("Automatically placed after enough focus time accumulates")
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
+                .multilineTextAlignment(.center)
+        }
+        .padding()
+        .background(Color.white.opacity(0.05))
+        .cornerRadius(16)
+        .padding(.horizontal, 20)
+    }
+
     private var productivityGainView: some View {
         VStack(spacing: 16) {
             Text("Potential Productivity Gain")

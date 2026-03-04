@@ -8,7 +8,8 @@ struct SettingsPanel: View {
     
     @Binding var hasSeenPatternsGuide: Bool
     @Binding var showingPatternsGuide: Bool
-    
+    var isLocked: Bool = false
+
     @State private var showingWorkHelp = false
     @State private var showingSideHelp = false
     @State private var showingDeepHelp = false
@@ -16,6 +17,7 @@ struct SettingsPanel: View {
     @State private var showingPlanningHelp = false
     @State private var showingPatternHelp = false
     @State private var showingRestHelp = false
+    @State private var showingBigRestHelp = false
     
     @StateObject private var nameHistory = SessionNameHistory.shared
     
@@ -88,6 +90,7 @@ struct SettingsPanel: View {
                 restSection
             }
             .padding()
+            .disabled(isLocked)
         }
         .background(Color.white.opacity(0.03))
         .cornerRadius(12)
@@ -371,7 +374,7 @@ struct SettingsPanel: View {
              
              if schedulingEngine.deepSessionConfig.enabled {
                  HStack {
-                     Text("Sessions Count:")
+                     Text("Count:")
                          .font(.system(size: 13))
                          .foregroundColor(.white.opacity(0.7))
                      Spacer()
@@ -636,11 +639,67 @@ struct SettingsPanel: View {
                  Text("After Deep:")
                      .font(.system(size: 13))
                      .foregroundColor(.white.opacity(0.7))
-                 
+
                  Spacer()
-                 
+
                  NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
              }
+
+            Divider().background(Color.white.opacity(0.08))
+
+            // Big Rest
+            HStack(spacing: 8) {
+                Image(systemName: "pause.circle.fill")
+                    .foregroundColor(Color(hex: "F59E0B"))
+                Text("Long Rest")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                Button {
+                    showingBigRestHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showingBigRestHelp) {
+                    Text("A longer rest period injected after sustained focus time. Helps prevent burnout during long work days. The break appears as a gap between calendar events — it won't create an event itself.")
+                        .font(.system(size: 13))
+                        .padding()
+                        .frame(width: 260)
+                }
+                Spacer()
+                Toggle("", isOn: $schedulingEngine.bigRestConfig.enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(Color(hex: "F59E0B"))
+            }
+
+            if schedulingEngine.bigRestConfig.enabled {
+                HStack {
+                    Text("Count:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.bigRestConfig.count, range: 1...5, step: 1, unit: "")
+                }
+
+                HStack {
+                    Text("Duration:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 15, unit: "min")
+                }
+
+                HStack {
+                    Text("After:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.bigRestConfig.afterMinutes, range: 30...480, step: 15, unit: "min")
+                }
+            }
         }
     }
 }

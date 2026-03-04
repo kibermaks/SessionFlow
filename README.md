@@ -23,11 +23,14 @@ Task Scheduler is a native macOS application built with SwiftUI that helps you p
 - **🧠 Smart Scheduling**: Automatically fits work, side and deep sessions into available gaps in your macOS Calendar
 - **🔄 Dynamic Patterns**: Choose from multiple scheduling patterns (Alternating, All Work First, All Side First, Custom Ratio)
 - **💾 Preset Management**: Save and quickly apply different configurations for Workdays, Focus Days, or Weekends
-- **📊 Timeline Visualization**: Interactive side-by-side view of existing calendar events and projected sessions
-- **📅 Calendar Integration**: Read from and write directly to macOS Calendar calendars
+- **📊 Interactive Timeline**: Drag-and-drop events, resize sessions, lock layout, and freeze projections for manual fine-tuning
+- **📅 Calendar Integration**: Read from and write directly to macOS Calendar calendars with per-calendar filtering and replacement controls
 - **⚙️ Customizable Sessions**: Configure names, durations, and target calendars for different session types (Work, Side, Planning, Deep Work)
 - **🎯 Hashtag System**: Track existing sessions with hashtags (#work, #side, #deep, #plan)
-- **🌙 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
+- **🌙 Night-Owl Mode**: Schedule beyond midnight with +1d markers on the timeline (up to 6 am next day)
+- **↩️ Undo/Redo**: Full history for event moves and projected session edits
+- **🔄 Auto-Updates**: Automatic update checks with self-install from GitHub Releases, plus a What's New changelog viewer
+- **🌑 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
 
 ## 🖼 Visual Walkthrough
 
@@ -94,7 +97,7 @@ See [Building from Source](#-building-from-source) section below.
 
 - **Local Only**: Scheduling logic, presets, and state live entirely on your Mac—no accounts, telemetry, or remote services.
 - **Privacy Respected**: Calendar access is limited to the calendars you explicitly pick, and the data never leaves the device.
-- **User Confirmation**: As called out in the Calendar Setup/Permission views, the app never modifies your calendars without an explicit button click; every add/remove requires your confirmation.
+- **User Confirmation**: The app only modifies your calendar when you explicitly schedule sessions or drag events — you're always in control.
 
 ## 💡 Usage Tips
 
@@ -102,6 +105,10 @@ See [Building from Source](#-building-from-source) section below.
 - **Visual Language**: Solid borders mark real events; dashed borders are projections.
 - **Presets**: Save Workday, Focus, Weekend, or any custom mix for instant reuse.
 - **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
+- **Freeze & Adjust**: After scheduling, freeze projections and drag/resize them by hand for pixel-perfect layouts.
+- **Copy Events**: Right-click any timeline event and use “Copy to...” to duplicate it to a nearby day.
+- **Lock Dragging**: Toggle the lock icon to prevent accidental event moves while reviewing your schedule.
+- **Night Scheduling**: Extend the schedule end hour past midnight to plan late-night sessions with clear +1d markers.
 
 ## 🏗 Architecture & Key Elements
 
@@ -117,14 +124,16 @@ TaskScheduler/
 ├── Services/
 │   ├── SchedulingEngine.swift
 │   ├── CalendarService.swift
-│   └── AvailabilityCalculator.swift
+│   ├── AvailabilityCalculator.swift
+│   └── EventUndoManager.swift
 │
 └── Views/
     ├── ContentView.swift
     ├── TimelineView.swift
     ├── SettingsPanel.swift
     ├── PresetManager.swift
-    ├── TaskEditor.swift
+    ├── WhatsNewView.swift
+    ├── AboutView.swift
     └── [other views...]
 ```
 
@@ -139,15 +148,18 @@ TaskScheduler/
 #### Services
 
 - **`SchedulingEngine.swift`**: Core scheduling algorithm that fits sessions into available time gaps
-- **`CalendarService.swift`**: EventKit wrapper for reading/writing calendar events
+- **`CalendarService.swift`**: EventKit wrapper for reading/writing calendar events with per-calendar filtering
 - **`AvailabilityCalculator.swift`**: Identifies free time slots between existing events
+- **`EventUndoManager.swift`**: Custom undo/redo stack for calendar event and projected session changes
 
 #### Views
 
 - **`ContentView.swift`**: Main layout container and state management
-- **`TimelineView.swift`**: Interactive timeline with existing events and projected sessions
+- **`TimelineView.swift`**: Interactive timeline with drag-and-drop, resize, locking, and freeze mode for both events and projected sessions
 - **`SettingsPanel.swift`**: Configuration controls (session counts, durations, patterns)
 - **`PresetManager.swift`**: Preset saving, loading, and management UI
+- **`WhatsNewView.swift`**: Fetches and displays the changelog from GitHub after updates
+- **`AboutView.swift`**: About window with version and build info
 
 ## 🔧 Development Guide
 
@@ -315,7 +327,6 @@ Future features and improvements:
 - [ ] Custom session colors and icons
 - [ ] Statistics and productivity insights
 - [ ] Calendar widget support
-- [ ] Integration with other productivity tools
 
 ## 🐛 Known Issues
 

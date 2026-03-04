@@ -321,6 +321,9 @@ struct TimelineView: View {
         }
         .background(Color.white.opacity(0.02))
         .cornerRadius(12)
+        .simultaneousGesture(TapGesture().onEnded { _ in
+            NSApp.keyWindow?.makeFirstResponder(nil)
+        })
     }
     
     private var eventsAreaView: some View {
@@ -975,8 +978,11 @@ extension TimelineView {
     // MARK: - Projected Session Block - Right Half with Tooltip
     
     private func projectedSessionBlock(for session: ScheduledSession, containerWidth: CGFloat) -> some View {
-        let yPos = calculateYPosition(for: session.startTime)
-        let height = calculateHeight(from: session.startTime, to: session.endTime)
+        let isBigRest = session.type == .bigRest
+        let minuteHeight = hourHeight / 60
+        let visualInset: CGFloat = isBigRest ? minuteHeight : 0 // 1 min inset per edge
+        let yPos = calculateYPosition(for: session.startTime) + visualInset
+        let height = calculateHeight(from: session.startTime, to: session.endTime) - (visualInset * 2)
         let blockHeight = max(height, 20)
         let blockWidth = (containerWidth / 2) - 24  // Extra space for scrollbar
         let xOffset = containerWidth / 2 + 8
@@ -987,17 +993,28 @@ extension TimelineView {
         // Calculate center position for .position() modifier
         let centerX = xOffset + blockWidth / 2
         let centerY = yPos + blockHeight / 2
-        
+
         return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 4)
-                .fill(session.type.color.opacity(0.8))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 4)
-                        .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
-                        .foregroundColor(session.type.color)
-                )
-                .shadow(color: session.type.color.opacity(0.3), radius: 3, y: 1)
-            
+            if isBigRest {
+                // Hollow block with dashed border for big break
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(session.type.color.opacity(0.08))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+                            .foregroundColor(session.type.color.opacity(0.6))
+                    )
+            } else {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(session.type.color.opacity(0.8))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(style: StrokeStyle(lineWidth: 1.5, dash: [4, 2]))
+                            .foregroundColor(session.type.color)
+                    )
+                    .shadow(color: session.type.color.opacity(0.3), radius: 3, y: 1)
+            }
+
             if isCompact {
                 HStack(spacing: 3) {
                     Image(systemName: session.type.icon)
@@ -1041,9 +1058,9 @@ extension TimelineView {
             guard !eventsLocked, dragMode == .none else { return }
             switch phase {
             case .active(let location):
-                if location.y < edgeZone {
+                if !isBigRest && location.y < edgeZone {
                     NSCursor.resizeUp.set()
-                } else if location.y > blockHeight - edgeZone {
+                } else if !isBigRest && location.y > blockHeight - edgeZone {
                     NSCursor.resizeDown.set()
                 } else {
                     NSCursor.openHand.set()
@@ -1059,9 +1076,9 @@ extension TimelineView {
                     guard !eventsLocked, !dragCancelled else { return }
                     if dragMode == .none {
                         let startY = value.startLocation.y
-                        if startY < edgeZone {
+                        if !isBigRest && startY < edgeZone {
                             dragMode = .resizeTop
-                        } else if startY > blockHeight - edgeZone {
+                        } else if !isBigRest && startY > blockHeight - edgeZone {
                             dragMode = .resizeBottom
                         } else {
                             dragMode = .move
@@ -1146,20 +1163,22 @@ extension TimelineView {
             } label: {
                 Label("View Details", systemImage: "info.circle")
             }
-            Button {
-                scheduleProjectedSession(session)
-            } label: {
-                Label("Schedule Session", systemImage: "calendar.badge.plus")
-            }
-            Divider()
-            Button {
-                renameText = session.title
-                renamingSessionId = session.id
-                if !schedulingEngine.sessionsFrozen {
-                    schedulingEngine.sessionsFrozen = true
+            if !isBigRest {
+                Button {
+                    scheduleProjectedSession(session)
+                } label: {
+                    Label("Schedule Session", systemImage: "calendar.badge.plus")
                 }
-            } label: {
-                Label("Rename", systemImage: "pencil")
+                Divider()
+                Button {
+                    renameText = session.title
+                    renamingSessionId = session.id
+                    if !schedulingEngine.sessionsFrozen {
+                        schedulingEngine.sessionsFrozen = true
+                    }
+                } label: {
+                    Label("Rename", systemImage: "pencil")
+                }
             }
         }
     }

@@ -47,7 +47,7 @@ struct CalendarPermissionView: View {
                     HStack(spacing: 12) {
                         privacyBadge(icon: "shield.checkered", text: "Privacy in Core")
                         privacyBadge(icon: "lock.icloud.fill", text: "Local Only")
-                        privacyBadge(icon: "hand.raised.fill", text: "No Auto Changes")
+                        privacyBadge(icon: "hand.raised.fill", text: "You're in Control")
                     }
                     .padding(.top, 8)
                 }
@@ -59,7 +59,7 @@ struct CalendarPermissionView: View {
                             .font(.system(size: 16))
                             .foregroundColor(Color(hex: "10B981"))
                         
-                        Text("The app never modifies your calendar without an explicit button click. All operations require your confirmation.")
+                        Text("The app only modifies your calendar when you explicitly schedule sessions or drag events. You're always in control.")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.white.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)

@@ -73,6 +73,7 @@ class SchedulingEngine: ObservableObject {
     @Published var deepRestDuration: Int = 20 { didSet { saveState() } }
     
     @Published var deepSessionConfig: DeepSessionConfig = .default { didSet { saveState() } }
+    @Published var bigRestConfig: BigRestConfig = .default { didSet { saveState() } }
 
     // MARK: - State Tracking
     @Published var currentPresetId: UUID? {
@@ -129,7 +130,8 @@ class SchedulingEngine: ObservableObject {
         deepSessionConfig = preset.deepSessionConfig
         sideFirst = preset.sideFirst
         flexibleSideScheduling = preset.flexibleSideScheduling
-        
+        bigRestConfig = preset.bigRestConfig
+
         schedulePlanning = preset.schedulePlanning
         pattern = preset.pattern
         workSessionsPerCycle = preset.workSessionsPerCycle
@@ -166,6 +168,7 @@ class SchedulingEngine: ObservableObject {
             sideFirst: sideFirst,
             deepSessionConfig: deepSessionConfig,
             flexibleSideScheduling: flexibleSideScheduling,
+            bigRestConfig: bigRestConfig,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName,
@@ -227,6 +230,8 @@ class SchedulingEngine: ObservableObject {
         var deepCount = 0
         var regularSessionsScheduled = 0
         var regularCountAtLastDeep = 0
+        var cumulativeSessionMinutes = 0
+        var bigRestCount = 0
         
         if awareExistingTasks, let existing = existingSessions {
             workCount = existing.work
@@ -332,7 +337,7 @@ class SchedulingEngine: ObservableObject {
                         calendarName = sideCalendarName
                         calendarIdentifier = sideCalendarIdentifier
                         sessionTag = "#side"
-                    case .planning, .deep:
+                    case .planning, .deep, .bigRest:
                          sessionDuration = workSessionDuration
                          sessionTitle = "Unknown"
                          calendarName = workCalendarName
@@ -483,7 +488,34 @@ class SchedulingEngine: ObservableObject {
                 sessionIndex += 1
             }
             
-            currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
+            // Long Rest injection: track cumulative session time and inject when threshold reached
+            cumulativeSessionMinutes += sessionDuration
+            let deepQuotaMetNow = !deepSessionConfig.enabled || deepCount >= deepSessionConfig.sessionCount
+            let allQuotasMet = workCount >= workSessions && sideCount >= sideSessions && deepQuotaMetNow
+            if bigRestConfig.enabled && !allQuotasMet && bigRestCount < bigRestConfig.count && cumulativeSessionMinutes >= bigRestConfig.afterMinutes {
+                // Big Rest starts right after the session (no rest gap before it)
+                let restStart = roundToNextInterval(potentialEnd)
+                let restEnd = restStart.addingTimeInterval(TimeInterval(bigRestConfig.duration * 60))
+                if restEnd <= endOfDay {
+                    let bigRest = ScheduledSession(
+                        type: .bigRest,
+                        title: "Long Rest",
+                        startTime: restStart,
+                        endTime: restEnd,
+                        calendarName: calendarName,
+                        notes: "#break"
+                    )
+                    sessions.append(bigRest)
+                    bigRestCount += 1
+                    cumulativeSessionMinutes = 0
+                    // Next session starts immediately after big rest (no extra rest gap)
+                    currentTime = roundToNextInterval(restEnd)
+                } else {
+                    currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
+                }
+            } else {
+                currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
+            }
         }
         
         projectedSessions = sessions
@@ -773,6 +805,7 @@ class SchedulingEngine: ObservableObject {
         case .side: sessionDuration = sideSessionDuration
         case .planning: sessionDuration = planningDuration
         case .deep: sessionDuration = deepSessionConfig.duration
+        case .bigRest: sessionDuration = bigRestConfig.duration
         }
 
         var attempts = 0
@@ -818,6 +851,9 @@ class SchedulingEngine: ObservableObject {
                 calendarIdentifier = deepSessionConfig.calendarIdentifier
             case .planning:
                 calendar = workCalendarName // Planning uses work calendar
+                calendarIdentifier = workCalendarIdentifier
+            case .bigRest:
+                calendar = workCalendarName
                 calendarIdentifier = workCalendarIdentifier
             }
             
@@ -933,6 +969,7 @@ class SchedulingEngine: ObservableObject {
             sideFirst: sideFirst,
             deepSessionConfig: deepSessionConfig,
             flexibleSideScheduling: flexibleSideScheduling,
+            bigRestConfig: bigRestConfig,
             calendarMapping: CalendarMapping(
                 workCalendarName: workCalendarName,
                 sideCalendarName: sideCalendarName,
@@ -940,7 +977,7 @@ class SchedulingEngine: ObservableObject {
                 sideCalendarIdentifier: sideCalendarIdentifier
             )
         )
-        
+
         if let data = try? JSONEncoder().encode(state) {
             UserDefaults.standard.set(data, forKey: "TaskScheduler.SavedState")
         }
@@ -975,6 +1012,7 @@ class SchedulingEngine: ObservableObject {
         sideFirst = state.sideFirst
         deepSessionConfig = state.deepSessionConfig
         flexibleSideScheduling = state.flexibleSideScheduling
+        bigRestConfig = state.bigRestConfig
         workCalendarName = state.calendarMapping.workCalendarName
         sideCalendarName = state.calendarMapping.sideCalendarName
         workCalendarIdentifier = state.calendarMapping.workCalendarIdentifier
@@ -999,6 +1037,7 @@ class SchedulingEngine: ObservableObject {
                sideFirst != preset.sideFirst ||
                deepSessionConfig != preset.deepSessionConfig ||
                flexibleSideScheduling != preset.flexibleSideScheduling ||
+               bigRestConfig != preset.bigRestConfig ||
                workCalendarName != preset.calendarMapping.workCalendarName ||
                sideCalendarName != preset.calendarMapping.sideCalendarName ||
                workCalendarIdentifier != preset.calendarMapping.workCalendarIdentifier ||
@@ -1042,6 +1081,7 @@ class SchedulingEngine: ObservableObject {
     /// Returns the rest duration (in seconds) that follows a given session type.
     private func restAfterSession(_ type: SessionType) -> TimeInterval {
         switch type {
+        case .bigRest: return 0  // Long Rest is rest itself — no gap after it
         case .side: return TimeInterval(sideRestDuration * 60)
         case .deep: return TimeInterval(deepRestDuration * 60)
         default: return TimeInterval(restDuration * 60)
@@ -1061,13 +1101,15 @@ class SchedulingEngine: ObservableObject {
     ) {
         let bufferDuration = TimeInterval(existingEventBuffer * 60)
 
-        // Build immovable obstacles from busy slots (with buffer) + the dragged session
-        var obstacles: [(start: Date, end: Date)] = busySlots.map {
-            ($0.startTime.addingTimeInterval(-bufferDuration),
-             $0.endTime.addingTimeInterval(bufferDuration))
+        // Obstacles track both the raw end and the padded end (with rest).
+        // Long Rest sessions ignore rest padding and can start at rawEnd.
+        var obstacles: [(start: Date, rawEnd: Date, paddedEnd: Date)] = busySlots.map {
+            let s = $0.startTime.addingTimeInterval(-bufferDuration)
+            let e = $0.endTime.addingTimeInterval(bufferDuration)
+            return (s, e, e)
         }
-        // Dragged session is an obstacle but without rest padding
-        obstacles.append((draggedStart, draggedEnd))
+        // Dragged session is an obstacle without rest padding
+        obstacles.append((draggedStart, draggedEnd, draggedEnd))
         obstacles.sort { $0.start < $1.start }
 
         // Collect non-dragged sessions sorted by start time
@@ -1077,14 +1119,17 @@ class SchedulingEngine: ObservableObject {
 
         for (idx, session) in otherIndices {
             let duration = session.endTime.timeIntervalSince(session.startTime)
+            let isBigRest = session.type == .bigRest
             var candidateStart = max(session.startTime, earliestTime)
 
             // Push forward until no overlap with any obstacle
             var settled = false
             while !settled {
                 let candidateEnd = candidateStart.addingTimeInterval(duration)
-                if let blocker = obstacles.first(where: { candidateStart < $0.end && candidateEnd > $0.start }) {
-                    candidateStart = blocker.end
+                // Long Rest ignores rest padding — uses rawEnd; others use paddedEnd
+                let effectiveEnd: (Date, Date, Date) -> Date = { _, raw, padded in isBigRest ? raw : padded }
+                if let blocker = obstacles.first(where: { candidateStart < effectiveEnd($0.start, $0.rawEnd, $0.paddedEnd) && candidateEnd > $0.start }) {
+                    candidateStart = effectiveEnd(blocker.start, blocker.rawEnd, blocker.paddedEnd)
                 } else {
                     settled = true
                 }
@@ -1096,7 +1141,7 @@ class SchedulingEngine: ObservableObject {
 
             // This placed session + its rest becomes an obstacle for subsequent ones
             let rest = restAfterSession(session.type)
-            obstacles.append((candidateStart, newEnd.addingTimeInterval(rest)))
+            obstacles.append((candidateStart, newEnd, newEnd.addingTimeInterval(rest)))
             obstacles.sort { $0.start < $1.start }
         }
     }

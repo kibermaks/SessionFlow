@@ -452,7 +452,8 @@ struct ContentViewBody: View {
     }
     
     private func scheduleAllSessions() {
-        let result = calendarService.createSessions(schedulingEngine.projectedSessions)
+        let sessionsToSchedule = schedulingEngine.projectedSessions.filter { $0.type != .bigRest }
+        let result = calendarService.createSessions(sessionsToSchedule)
         if result.failed == 0 {
             schedulingEngine.schedulingMessage = "Successfully scheduled \(result.success) sessions!"
         } else {
@@ -576,6 +577,10 @@ struct SettingsChangeModifier: ViewModifier {
             .onChange(of: engine.useWorkTasks) { _, _ in trigger() }
             .onChange(of: engine.useSideTasks) { _, _ in trigger() }
             .onChange(of: engine.useDeepTasks) { _, _ in trigger() }
+            .onChange(of: engine.bigRestConfig.enabled) { _, _ in trigger() }
+            .onChange(of: engine.bigRestConfig.count) { _, _ in trigger() }
+            .onChange(of: engine.bigRestConfig.duration) { _, _ in trigger() }
+            .onChange(of: engine.bigRestConfig.afterMinutes) { _, _ in trigger() }
             .onChange(of: engine.scheduleEndHour) { _, newValue in
                 calendarService.scheduleEndHour = newValue
                 trigger()
@@ -787,7 +792,7 @@ struct LeftPanel: View {
     @Binding var showingTasksGuide: Bool
 
     @State private var selectedTab: TabArea = .settings
-    @State private var showingUnfreezeAlert: Bool = false
+    @State private var isConfirmingReset: Bool = false
 
     enum TabArea: String, CaseIterable {
         case settings = "Time Settings"
@@ -805,19 +810,23 @@ struct LeftPanel: View {
                         Divider().background(Color.white.opacity(0.1))
                         SettingsPanel(
                             hasSeenPatternsGuide: $hasSeenPatternsGuide,
-                            showingPatternsGuide: $showingPatternsGuide
+                            showingPatternsGuide: $showingPatternsGuide,
+                            isLocked: schedulingEngine.sessionsFrozen
                         )
                     }
                 } else {
-                    TasksPanel()
+                    TasksPanel(isLocked: schedulingEngine.sessionsFrozen)
                 }
             }
-            .allowsHitTesting(!schedulingEngine.sessionsFrozen)
 
             if schedulingEngine.sessionsFrozen {
-                Color.black.opacity(0.6)
-                    .background(.ultraThinMaterial)
+                // Overlay with same effect as card – allows scroll through
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.black.opacity(0.75))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
 
+                // Centered card content
                 VStack(spacing: 12) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 28))
@@ -831,18 +840,21 @@ struct LeftPanel: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                     Button {
-                        showingUnfreezeAlert = true
+                        handleResetTap()
                     } label: {
-                        Text("Reset")
+                        Text(isConfirmingReset ? "Click again to confirm" : "Reset")
                             .font(.system(size: 13, weight: .medium))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(Color(hex: "8B5CF6"))
+                            .background(isConfirmingReset ? Color(hex: "EF4444") : Color(hex: "8B5CF6"))
                             .foregroundColor(.white)
                             .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .help(isConfirmingReset ? "Click again to confirm" : "Reset manual alignment")
+                    .animation(.easeInOut(duration: 0.15), value: isConfirmingReset)
                 }
+                .padding(20)
             }
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -853,14 +865,29 @@ struct LeftPanel: View {
         }
         .frame(width: 320)
         .padding()
-        .alert("Reset manual alignment?", isPresented: $showingUnfreezeAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Reset", role: .destructive) {
-                schedulingEngine.sessionsFrozen = false
-                updatePreview()
+        .onChange(of: schedulingEngine.sessionsFrozen) { _, frozen in
+            if !frozen { isConfirmingReset = false }
+        }
+    }
+
+    private func handleResetTap() {
+        if isConfirmingReset {
+            schedulingEngine.sessionsFrozen = false
+            updatePreview()
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isConfirmingReset = false
             }
-        } message: {
-            Text("This will discard your position adjustments and recalculate sessions from settings.")
+        } else {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isConfirmingReset = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                if isConfirmingReset {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        isConfirmingReset = false
+                    }
+                }
+            }
         }
     }
     

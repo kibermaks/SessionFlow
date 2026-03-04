@@ -3,6 +3,7 @@ import SwiftUI
 struct TasksPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @ObservedObject private var taskLineHistory = TaskLineHistory.shared
+    var isLocked: Bool = false
 
     @StateObject private var workAction = TaskEditorAction()
     @StateObject private var sideAction = TaskEditorAction()
@@ -55,6 +56,7 @@ struct TasksPanel: View {
                 )
             }
             .padding()
+            .disabled(isLocked)
         }
         .background(Color.white.opacity(0.03))
         .cornerRadius(12)

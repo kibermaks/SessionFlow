@@ -7,33 +7,37 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
     case side = "Side"
     case planning = "Planning"
     case deep = "Deep"
-    
+    case bigRest = "Long Rest"
+
     var id: String { rawValue }
-    
+
     var defaultDuration: Int {
         switch self {
         case .work: return 40
         case .side: return 30
         case .planning: return 15
         case .deep: return 15
+        case .bigRest: return 60
         }
     }
-    
+
     var color: Color {
         switch self {
         case .work: return Color(hex: "8B5CF6")      // Purple
         case .side: return Color(hex: "3B82F6")       // Blue
         case .planning: return Color(hex: "EF4444")   // Red
         case .deep: return Color(hex: "10B981")      // Emerald Green
+        case .bigRest: return Color(hex: "F59E0B")  // Amber
         }
     }
-    
+
     var icon: String {
         switch self {
         case .work: return "briefcase.fill"
         case .side: return "star.fill"
         case .planning: return "calendar.badge.clock"
         case .deep: return "bolt.circle.fill"
+        case .bigRest: return "pause.circle.fill"
         }
     }
 }
@@ -84,6 +88,7 @@ struct ScheduledSession: Identifiable, Equatable {
         case .side: return "side"
         case .deep: return "deep"
         case .planning: return "plan"
+        case .bigRest: return "break"
         }
     }
 }

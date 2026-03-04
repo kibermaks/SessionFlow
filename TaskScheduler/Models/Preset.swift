@@ -69,6 +69,31 @@ struct DeepSessionConfig: Codable, Equatable {
     static let `default` = DeepSessionConfig()
 }
 
+// MARK: - Big Rest Configuration
+struct BigRestConfig: Codable, Equatable {
+    var enabled: Bool
+    var count: Int          // max number of long rests to inject
+    var duration: Int       // minutes
+    var afterMinutes: Int   // cumulative session minutes before injecting a big rest
+
+    init(enabled: Bool = true, count: Int = 1, duration: Int = 50, afterMinutes: Int = 120) {
+        self.enabled = enabled
+        self.count = count
+        self.duration = duration
+        self.afterMinutes = afterMinutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        enabled = try container.decodeIfPresent(Bool.self, forKey: .enabled) ?? false
+        count = try container.decodeIfPresent(Int.self, forKey: .count) ?? 1
+        duration = try container.decodeIfPresent(Int.self, forKey: .duration) ?? 50
+        afterMinutes = try container.decodeIfPresent(Int.self, forKey: .afterMinutes) ?? 120
+    }
+
+    static let `default` = BigRestConfig()
+}
+
 // MARK: - Preset Configuration
 struct Preset: Identifiable, Codable, Equatable {
     let id: UUID
@@ -103,7 +128,9 @@ struct Preset: Identifiable, Codable, Equatable {
     var pattern: SchedulePattern
     var workSessionsPerCycle: Int
     var flexibleSideScheduling: Bool
-    
+
+    var bigRestConfig: BigRestConfig
+
     // Default start hour for future days
     var defaultStartHour: Int
     
@@ -131,6 +158,7 @@ struct Preset: Identifiable, Codable, Equatable {
         sideFirst: Bool = false,
         deepSessionConfig: DeepSessionConfig = .default,
         flexibleSideScheduling: Bool = true,
+        bigRestConfig: BigRestConfig = .default,
         calendarMapping: CalendarMapping = .default,
         defaultStartHour: Int = 8,
         schemaVersion: PresetSchemaVersion = .current
@@ -158,6 +186,7 @@ struct Preset: Identifiable, Codable, Equatable {
         self.sideFirst = sideFirst
         self.deepSessionConfig = deepSessionConfig
         self.flexibleSideScheduling = flexibleSideScheduling
+        self.bigRestConfig = bigRestConfig
         self.calendarMapping = calendarMapping
         self.defaultStartHour = defaultStartHour
         self.schemaVersion = schemaVersion
@@ -228,7 +257,7 @@ struct Preset: Identifiable, Codable, Equatable {
         case workSessionDuration, sideSessionDuration
         case planningDuration, restDuration, sideRestDuration, deepRestDuration
         case schedulePlanning, pattern, workSessionsPerCycle, sideSessionsPerCycle, sideFirst
-        case deepSessionConfig, flexibleSideScheduling, calendarMapping, defaultStartHour
+        case deepSessionConfig, flexibleSideScheduling, bigRestConfig, calendarMapping, defaultStartHour
         case schemaVersion
     }
     
@@ -254,6 +283,7 @@ struct Preset: Identifiable, Codable, Equatable {
         sideFirst = try container.decodeIfPresent(Bool.self, forKey: .sideFirst) ?? false
         deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
         flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
+        bigRestConfig = try container.decodeIfPresent(BigRestConfig.self, forKey: .bigRestConfig) ?? .default
         calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
         defaultStartHour = try container.decodeIfPresent(Int.self, forKey: .defaultStartHour) ?? 8
         // If version is missing, assume v1 (old preset)
@@ -419,6 +449,12 @@ struct Preset: Identifiable, Codable, Equatable {
             calendarIdentifier: deepCalendarId
         )
         
+        let bigRestCfg = BigRestConfig(
+            enabled: false,
+            duration: restDuration * 5,
+            afterMinutes: workDuration * 3
+        )
+
         // Deep config enabled for Focus Day preset
         let deepConfigEnabled = DeepSessionConfig(
             enabled: true,
@@ -452,6 +488,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 restDuration: restDuration,
                 pattern: .alternating,
                 deepSessionConfig: deepConfigEnabled,
+                bigRestConfig: bigRestCfg,
                 calendarMapping: workMapping
             ),
             Preset(
@@ -464,6 +501,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 restDuration: restDuration,
                 pattern: .alternating,
                 deepSessionConfig: deepConfigDisabled,
+                bigRestConfig: bigRestCfg,
                 calendarMapping: workMapping
             ),
             Preset(
@@ -476,6 +514,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 restDuration: restDuration,
                 pattern: .allWorkFirst,
                 deepSessionConfig: deepConfigDisabled,
+                bigRestConfig: bigRestCfg,
                 calendarMapping: workMapping
             ),
             Preset(
@@ -491,6 +530,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 schedulePlanning: false,
                 pattern: .alternatingReverse,
                 deepSessionConfig: deepConfigWeekend,
+                bigRestConfig: bigRestCfg,
                 calendarMapping: workMapping,
                 defaultStartHour: 10
             ),
@@ -504,6 +544,7 @@ struct Preset: Identifiable, Codable, Equatable {
                 restDuration: restDuration,
                 pattern: .alternating,
                 deepSessionConfig: deepConfigDisabled,
+                bigRestConfig: bigRestCfg,
                 calendarMapping: workMapping
             )
         ]
