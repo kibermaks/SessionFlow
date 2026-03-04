@@ -79,6 +79,8 @@ struct TimelineView: View {
     @State private var scrollProxy: ScrollViewProxy? = nil
     @State private var lastAutoScrollTime: Date = .distantPast
     @State private var scrollViewFrame: CGRect = .zero
+    /// Last hour we scrolled to; used to avoid resetting scroll on every timer tick (only scroll when hour changes)
+    @State private var lastScrolledStartHour: Int? = nil
 
     private enum DragMode: Equatable {
         case none
@@ -322,8 +324,17 @@ struct TimelineView: View {
                 }
                 .padding(.vertical, 20)
                 .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
-                .onAppear { scrollProxy = proxy; scrollToStartTime(proxy: proxy) }
-                .onChange(of: startTime) { _, _ in scrollToStartTime(proxy: proxy) }
+                .onAppear {
+                    scrollProxy = proxy
+                    lastScrolledStartHour = Calendar.current.component(.hour, from: startTime)
+                    scrollToStartTime(proxy: proxy)
+                }
+                .onChange(of: startTime) { _, new in
+                    let hour = Calendar.current.component(.hour, from: new)
+                    guard lastScrolledStartHour != hour else { return }
+                    lastScrolledStartHour = hour
+                    scrollToStartTime(proxy: proxy)
+                }
             }
         }
         .background(
