@@ -76,14 +76,13 @@ struct SettingsPanel: View {
                 
                 Divider().background(Color.white.opacity(0.1))
                 
-                // Deep Sessions Section
-                deepSessionSection
-                
-                Divider().background(Color.white.opacity(0.1))
-                
                 // Pattern Section
                 patternSection
                 
+                Divider().background(Color.white.opacity(0.1))
+                
+                // Deep Sessions Section
+                deepSessionSection
                 Divider().background(Color.white.opacity(0.1))
                 
                 // Rest Section
