@@ -15,7 +15,8 @@
       "Bash(xcodebuild -scheme TaskScheduler -configuration Debug build)",
       "Bash(swift build)",
       "Bash(./build_app.sh patch)",
-      "Bash(./create_dmg.sh)"
+      "Bash(./create_dmg.sh)",
+      "Bash(xcodebuild -scheme TaskScheduler -configuration Debug build -derivedDataPath /tmp/TaskSchedulerBuild)"
     ]
   }
 }
