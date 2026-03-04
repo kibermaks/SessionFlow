@@ -37,7 +37,7 @@ echo -e "   Keychain profile: ${GREEN}$KEYCHAIN_PROFILE${NC}"
 CLEANUP_ZIP=""
 if [[ "$ARTIFACT" == *.app ]]; then
     # notarytool requires zip/dmg/pkg — zip the .app to a temp file
-    SUBMIT_PATH=$(mktemp /tmp/notarize_XXXXXX.zip)
+    SUBMIT_PATH=$(mktemp /tmp/notarize_XXXXXXXX).zip
     CLEANUP_ZIP="$SUBMIT_PATH"
     echo -e "${BLUE}📦 Zipping app for submission...${NC}"
     ditto -c -k --keepParent "$ARTIFACT" "$SUBMIT_PATH"

@@ -34,29 +34,42 @@ set_build_number() {
     sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $new_build;/g" "$PROJECT/project.pbxproj"
 }
 
-# Determine increment type or forced version
+# Parse flags
 INCREMENT_TYPE="patch"
 FORCED_VERSION=""
+RELEASE_BUILD=false
 
-if [[ "$1" == "major" ]]; then
+ARGS=()
+for arg in "$@"; do
+    if [[ "$arg" == "--release" ]]; then
+        RELEASE_BUILD=true
+    else
+        ARGS+=("$arg")
+    fi
+done
+
+if [[ "${ARGS[0]}" == "major" ]]; then
     INCREMENT_TYPE="major"
-elif [[ "$1" == "minor" ]]; then
+elif [[ "${ARGS[0]}" == "minor" ]]; then
     INCREMENT_TYPE="minor"
-elif [[ "$1" == "version" && -n "$2" ]]; then
+elif [[ "${ARGS[0]}" == "version" && -n "${ARGS[1]}" ]]; then
     # Validate version format (e.g., 1.4, 2.0, 10.12)
-    if [[ "$2" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    if [[ "${ARGS[1]}" =~ ^[0-9]+\.[0-9]+$ ]]; then
         INCREMENT_TYPE="forced"
-        FORCED_VERSION="$2"
+        FORCED_VERSION="${ARGS[1]}"
     else
         echo "❌ Invalid version format. Use: ./build_app.sh version X.Y (e.g., version 1.4)"
         exit 1
     fi
 fi
 
-if [ "$INCREMENT_TYPE" == "forced" ]; then
-    echo "📋 Preparing to build (forcing version $FORCED_VERSION)..."
+if [ "$RELEASE_BUILD" = true ]; then
+    echo "📋 Preparing RELEASE build ($INCREMENT_TYPE increment)..."
 else
     echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
+fi
+if [ "$INCREMENT_TYPE" == "forced" ]; then
+    echo "   Forcing version $FORCED_VERSION"
 fi
 
 # 0. Clean Build Directory
@@ -154,7 +167,16 @@ if [ -n "$APP_PATH" ]; then
     
     cp -R "$APP_PATH" "./$APP_NAME"
     touch "./$APP_NAME"
-    
+
+    # Re-sign with Developer ID for distribution (--release flag)
+    if [ "$RELEASE_BUILD" = true ]; then
+        echo "🔏 Re-signing with Developer ID (hardened runtime + timestamp)..."
+        codesign --deep --force --options runtime --timestamp \
+            --sign "Developer ID Application: MaksymTW Grigorash ($TEAM_ID)" \
+            "./$APP_NAME"
+        echo "   ✓ Signed for distribution"
+    fi
+
     # Calculate build duration
     BUILD_END_TIME=$(date +%s)
     BUILD_DURATION=$((BUILD_END_TIME - BUILD_START_TIME))

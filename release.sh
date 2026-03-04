@@ -98,7 +98,7 @@ fi
 # Build the app
 echo ""
 echo -e "${BLUE}🔨 Building app...${NC}"
-./build_app.sh $INCREMENT
+./build_app.sh --release $INCREMENT
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Build failed!${NC}"
