@@ -131,10 +131,21 @@ struct CalendarPickerCompact: View {
         }
     }
     
+    private var isSelectedCalendarHidden: Bool {
+        guard let info = calendars.first(where: { $0.name == selectedCalendar }) else { return false }
+        return info.isExcluded
+    }
+
     private var compactLabel: some View {
         let calendarInfo = calendars.first { $0.name == selectedCalendar }
-        
+
         return HStack(spacing: 8) {
+            if isSelectedCalendarHidden {
+                Image(systemName: "eye.slash.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(.red)
+                    .help("This calendar is hidden from the timeline via Calendar Filters")
+            }
             if let info = calendarInfo {
                 Circle()
                     .fill(info.color)

@@ -1262,8 +1262,45 @@ struct RightPanel: View {
         .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
     }
     
+    private func isCalendarHidden(for type: SessionType) -> Bool {
+        let identifier: String?
+        let name: String
+        switch type {
+        case .work, .planning:
+            identifier = schedulingEngine.workCalendarIdentifier
+            name = schedulingEngine.workCalendarName
+        case .side:
+            identifier = schedulingEngine.sideCalendarIdentifier
+            name = schedulingEngine.sideCalendarName
+        case .deep:
+            identifier = schedulingEngine.deepSessionConfig.calendarIdentifier
+            name = schedulingEngine.deepSessionConfig.calendarName
+        default:
+            return false
+        }
+        if let id = identifier {
+            return calendarService.isCalendarExcluded(identifier: id)
+        }
+        if let cal = calendarService.availableCalendars.first(where: { $0.title == name }) {
+            return calendarService.isCalendarExcluded(identifier: cal.calendarIdentifier)
+        }
+        return false
+    }
+
     private func countRow(_ type: SessionType, _ count: Int) -> some View {
-        HStack { Circle().fill(type.color).frame(width: 8, height: 8); Text("\(type.rawValue):"); Spacer(); Text("\(count)").fontWeight(.medium) }
+        let hidden = isCalendarHidden(for: type)
+        return HStack {
+            if hidden {
+                Image(systemName: "eye.slash.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(.red)
+                    .help("Calendar for \(type.rawValue) sessions is hidden from the timeline")
+            }
+            Circle().fill(type.color).frame(width: 8, height: 8)
+            Text("\(type.rawValue):")
+            Spacer()
+            Text("\(count)").fontWeight(.medium)
+        }
     }
     
     private var actionButtons: some View {

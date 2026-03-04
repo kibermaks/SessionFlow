@@ -20,7 +20,14 @@ struct SettingsPanel: View {
     @State private var showingBigRestHelp = false
     
     @StateObject private var nameHistory = SessionNameHistory.shared
-    
+
+    @AppStorage("settings.workExpanded") private var workExpanded = true
+    @AppStorage("settings.sideExpanded") private var sideExpanded = true
+    @AppStorage("settings.patternExpanded") private var patternExpanded = true
+    @AppStorage("settings.deepExpanded") private var deepExpanded = true
+    @AppStorage("settings.restExpanded") private var restExpanded = true
+    @AppStorage("settings.longRestExpanded") private var longRestExpanded = true
+
     private let workHelpText = "Work sessions are your primary focus blocks. Use these for your main professional tasks or projects that require sustained concentration."
     private let sideHelpText = "Side sessions are for secondary tasks or 'life admin'. Perfect for paying bills, checking something new, responding to emails, or handling quick errands."
     private let deepHelpText = "Deep sessions (often called Deep Work) are rare, high-intensity focus blocks. You want to inject these periodically for your most demanding creative or analytical work that requires additional focus."
@@ -47,6 +54,7 @@ struct SettingsPanel: View {
                     calendar: $schedulingEngine.workCalendarName,
                     helpText: workHelpText,
                     isShowingHelp: $showingWorkHelp,
+                    isExpanded: $workExpanded,
                     sessionType: .work,
                     onCalendarSelected: { info in
                         schedulingEngine.workCalendarIdentifier = info.identifier
@@ -67,6 +75,7 @@ struct SettingsPanel: View {
                     calendar: $schedulingEngine.sideCalendarName,
                     helpText: sideHelpText,
                     isShowingHelp: $showingSideHelp,
+                    isExpanded: $sideExpanded,
                     sessionType: .side,
                     onCalendarSelected: { info in
                         schedulingEngine.sideCalendarIdentifier = info.identifier
@@ -87,6 +96,10 @@ struct SettingsPanel: View {
                 
                 // Rest Section
                 restSection
+                Divider().background(Color.white.opacity(0.1))
+
+                // Long Rest Section
+                longRestSection
             }
             .padding()
             .disabled(isLocked)
@@ -196,7 +209,7 @@ struct SettingsPanel: View {
                 Text("Planning Session")
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Button {
                     showingPlanningHelp.toggle()
                 } label: {
@@ -211,29 +224,22 @@ struct SettingsPanel: View {
                         .padding()
                         .frame(width: 250)
                 }
-            }
-            
-            HStack {
-                Text("Schedule planning session")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.8))
-                
+
                 Spacer()
-                
                 Toggle("", isOn: $schedulingEngine.schedulePlanning)
                     .labelsHidden()
                     .toggleStyle(.switch)
                     .tint(Color(hex: "EF4444"))
             }
-            
+
             if schedulingEngine.schedulePlanning {
                 HStack {
                     Text("Duration:")
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.7))
-                    
+
                     Spacer()
-                    
+
                     NumericInputField(
                         value: $schedulingEngine.planningDuration,
                         range: 5...60,
@@ -257,17 +263,20 @@ struct SettingsPanel: View {
         calendar: Binding<String>,
         helpText: String,
         isShowingHelp: Binding<Bool>,
+        isExpanded: Binding<Bool>,
         sessionType: SessionType,
         onCalendarSelected: @escaping (CalendarService.CalendarInfo) -> Void
     ) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let secondaryTooltip = "Duration: \(duration.wrappedValue) min\nCalendar: \(calendar.wrappedValue)"
+
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: icon)
                     .foregroundColor(iconColor)
                 Text(title)
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Button {
                     isShowingHelp.wrappedValue.toggle()
                 } label: {
@@ -282,64 +291,88 @@ struct SettingsPanel: View {
                         .padding()
                         .frame(width: 250)
                 }
+
+                SectionExpandButton(isExpanded: isExpanded, tooltip: secondaryTooltip)
             }
-            
-            // Count
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.wrappedValue.toggle()
+                }
+            }
+
+            // Count — essential
             HStack {
                 Text("Count:")
                     .font(.system(size: 13))
                     .foregroundColor(.white.opacity(0.7))
-                
+
                 Spacer()
-                
+
                 NumericInputField(value: count, range: 0...15)
             }
-            
-            // Name with history dropdown
+
+            // Name — essential
             NameFieldWithHistory(
                 label: "Name:",
                 text: name,
                 sessionType: sessionType,
                 placeholder: "Session name"
             )
-            
-            // Duration
-            HStack {
-                Text("Duration:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                NumericInputField(
-                    value: duration,
-                    range: 10...120,
-                    step: 5,
-                    unit: "min"
-                )
-            }
-            
-            // Calendar
-            HStack {
-                Text("Calendar:")
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Spacer()
-                
-                CalendarPickerCompact(
-                    selectedCalendar: calendar,
-                    calendars: calendarService.calendarInfoList(includeExcluded: false),
-                    accentColor: iconColor,
-                    onSelection: onCalendarSelected
-                )
-                .frame(width: 150)
+
+            // Secondary fields
+            if isExpanded.wrappedValue {
+                HStack {
+                    Text("Duration:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+
+                    Spacer()
+
+                    NumericInputField(
+                        value: duration,
+                        range: 10...120,
+                        step: 5,
+                        unit: "min"
+                    )
+                }
+
+                HStack {
+                    Text("Calendar:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+
+                    Spacer()
+
+                    CalendarPickerCompact(
+                        selectedCalendar: calendar,
+                        calendars: calendarService.calendarInfoList(includeExcluded: true),
+                        accentColor: iconColor,
+                        onSelection: onCalendarSelected
+                    )
+                    .frame(width: 150)
+                }
             }
         }
     }
     
     // MARK: - Pattern Section
     
+    private var patternSecondaryTooltip: String {
+        var lines: [String] = []
+        if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
+            lines.append("Work per cycle: \(schedulingEngine.workSessionsPerCycle)")
+        }
+        if [.customRatio, .sidesFirstAndLast].contains(schedulingEngine.pattern) {
+            lines.append("Side per cycle: \(schedulingEngine.sideSessionsPerCycle)")
+        }
+        if schedulingEngine.pattern == .customRatio {
+            lines.append("Side First: \(schedulingEngine.sideFirst ? "On" : "Off")")
+        }
+        lines.append("Flexible Side: \(schedulingEngine.flexibleSideScheduling ? "On" : "Off")")
+        return lines.joined(separator: "\n")
+    }
+
     private var patternSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -348,7 +381,7 @@ struct SettingsPanel: View {
                 Text("Scheduling Pattern")
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Button {
                     showingPatternHelp.toggle()
                 } label: {
@@ -363,10 +396,21 @@ struct SettingsPanel: View {
                         .padding()
                         .frame(width: 250)
                 }
+
+                if hasSeenPatternsGuide {
+                    SectionExpandButton(isExpanded: $patternExpanded, tooltip: patternSecondaryTooltip)
+                }
             }
-            
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if hasSeenPatternsGuide {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        patternExpanded.toggle()
+                    }
+                }
+            }
+
             if !hasSeenPatternsGuide {
-                // Reveal options button with frosted glass effect
                 Button {
                     showingPatternsGuide = true
                     hasSeenPatternsGuide = true
@@ -398,8 +442,8 @@ struct SettingsPanel: View {
                 .buttonStyle(.plain)
                 .padding(.vertical, 8)
             } else {
-                // Pattern options (shown after guide is seen)
                 VStack(alignment: .leading, spacing: 12) {
+                    // Pattern picker — essential
                     HStack {
                         Text("Pattern:")
                             .font(.system(size: 13))
@@ -417,70 +461,71 @@ struct SettingsPanel: View {
                         .pickerStyle(.menu)
                         .frame(width: 200, height: 24)
                     }
-                    
-                    Text(schedulingEngine.pattern.description)
-                        .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
-                    
-                    if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
-                        HStack {
-                            Text("Work per cycle:")
+
+                    // Secondary fields
+                    if patternExpanded {
+                        Text(schedulingEngine.pattern.description)
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.5))
+                        if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
+                            HStack {
+                                Text("Work per cycle:")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.7))
+
+                                Spacer()
+
+                                NumericInputField(value: $schedulingEngine.workSessionsPerCycle, range: 1...5)
+                            }
+                        }
+
+                        if [.customRatio, .sidesFirstAndLast].contains(schedulingEngine.pattern) {
+                            HStack {
+                                Text("Side per cycle:")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.7))
+
+                                Spacer()
+
+                                NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
+                            }
+                        }
+
+                        if schedulingEngine.pattern == .customRatio {
+                            Toggle("Side First", isOn: $schedulingEngine.sideFirst)
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.7))
-                            
-                            Spacer()
-                            
-                            NumericInputField(value: $schedulingEngine.workSessionsPerCycle, range: 1...5)
+                                .toggleStyle(.switch)
+                                .tint(Color(hex: "3B82F6"))
                         }
-                    }
-                    
-                    if [.customRatio, .sidesFirstAndLast].contains(schedulingEngine.pattern) {
-                        HStack {
-                            Text("Side per cycle:")
+
+                        Divider().background(Color.white.opacity(0.05))
+
+                        HStack(spacing: 8) {
+                            Text("Flexible Side Scheduling")
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.7))
-                            
+                            Button {
+                                showingFlexibleSideHelp.toggle()
+                            } label: {
+                                Image(systemName: "info.circle")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.white.opacity(0.4))
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showingFlexibleSideHelp) {
+                                Text(flexibleSideHelpText)
+                                    .font(.system(size: 13))
+                                    .padding()
+                                    .frame(width: 250)
+                            }
                             Spacer()
-                            
-                            NumericInputField(value: $schedulingEngine.sideSessionsPerCycle, range: 1...5)
+
+                            Toggle("", isOn: $schedulingEngine.flexibleSideScheduling)
+                                .labelsHidden()
+                                .toggleStyle(.switch)
+                                .tint(Color(hex: "3B82F6"))
                         }
-                    }
-                    
-                    if schedulingEngine.pattern == .customRatio {
-                        Toggle("Side First", isOn: $schedulingEngine.sideFirst)
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
-                            .toggleStyle(.switch)
-                            .tint(Color(hex: "3B82F6"))
-                    }
-                    
-                    // Flexible Side Scheduling setting
-                    Divider().background(Color.white.opacity(0.05))
-                    
-                    HStack(spacing: 8) {
-                        Text("Flexible Side Scheduling")
-                            .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
-                        Button {
-                            showingFlexibleSideHelp.toggle()
-                        } label: {
-                            Image(systemName: "info.circle")
-                                .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showingFlexibleSideHelp) {
-                            Text(flexibleSideHelpText)
-                                .font(.system(size: 13))
-                                .padding()
-                                .frame(width: 250)
-                        }
-                        Spacer()
-                        
-                        Toggle("", isOn: $schedulingEngine.flexibleSideScheduling)
-                            .labelsHidden()
-                            .toggleStyle(.switch)
-                            .tint(Color(hex: "3B82F6"))
                     }
                 }
             }
@@ -489,104 +534,132 @@ struct SettingsPanel: View {
 
     // MARK: - Deep Sessions Section
     
+    private var deepSecondaryTooltip: String {
+        var lines = ["Duration: \(schedulingEngine.deepSessionConfig.duration) min"]
+        lines.append("Inject after: \(schedulingEngine.deepSessionConfig.injectAfterEvery) slots")
+        if schedulingEngine.deepSessionConfig.sessionCount > 1 {
+            lines.append("And then after: \(schedulingEngine.deepSessionConfig.andThenGap) slots")
+        }
+        lines.append("Calendar: \(schedulingEngine.deepSessionConfig.calendarName)")
+        return lines.joined(separator: "\n")
+    }
+
     private var deepSessionSection: some View {
-         VStack(alignment: .leading, spacing: 12) {
-             HStack(spacing: 8) {
-                 Image(systemName: "bolt.circle.fill")
-                     .foregroundColor(Color(hex: "10B981"))
-                 Text("Deep Sessions")
-                     .font(.headline)
-                     .foregroundColor(.white)
-                 
-                 Button {
-                     showingDeepHelp.toggle()
-                 } label: {
-                     Image(systemName: "info.circle")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.4))
-                 }
-                 .buttonStyle(.plain)
-                 .popover(isPresented: $showingDeepHelp) {
-                     Text(deepHelpText)
-                         .font(.system(size: 13))
-                         .padding()
-                         .frame(width: 250)
-                 }
-                 
-                 Spacer()
-                 Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
-                     .labelsHidden()
-                     .toggleStyle(.switch)
-                     .tint(Color(hex: "10B981"))
-             }
-             
-             if schedulingEngine.deepSessionConfig.enabled {
-                 HStack {
-                     Text("Count:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
-                 }
-                 
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "bolt.circle.fill")
+                        .foregroundColor(Color(hex: "10B981"))
+                    Text("Deep Sessions")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    Button {
+                        showingDeepHelp.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showingDeepHelp) {
+                        Text(deepHelpText)
+                            .font(.system(size: 13))
+                            .padding()
+                            .frame(width: 250)
+                    }
+
+                    SectionExpandButton(isExpanded: $deepExpanded, tooltip: deepSecondaryTooltip)
+                }
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        deepExpanded.toggle()
+                    }
+                }
+
+                Spacer()
+                Toggle("", isOn: $schedulingEngine.deepSessionConfig.enabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .tint(Color(hex: "10B981"))
+            }
+
+            if schedulingEngine.deepSessionConfig.enabled {
+                // Essential fields
                 HStack {
-                    Text("Inject after:")
+                    Text("Count:")
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.7))
                     Spacer()
-                    NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
+                    NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
                 }
 
-                if schedulingEngine.deepSessionConfig.sessionCount > 1 {
+                NameFieldWithHistory(
+                    label: "Name:",
+                    text: $schedulingEngine.deepSessionConfig.name,
+                    sessionType: .deep,
+                    placeholder: "Name"
+                )
+
+                // Secondary fields
+                if deepExpanded {
                     HStack {
-                        Text("And then after:")
+                        Text("Duration:")
                             .font(.system(size: 13))
                             .foregroundColor(.white.opacity(0.7))
                         Spacer()
-                        NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
+                        NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
                     }
-                    .help("Regular sessions between consecutive deep sessions (0 = back to back)")
-                }
 
-                 NameFieldWithHistory(
-                     label: "Name:",
-                     text: $schedulingEngine.deepSessionConfig.name,
-                     sessionType: .deep,
-                     placeholder: "Name"
-                 )
-                 
-                 HStack {
-                     Text("Duration:")
-                         .font(.system(size: 13))
-                         .foregroundColor(.white.opacity(0.7))
-                     Spacer()
-                     NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
-                 }
-                 
-                HStack {
-                    Text("Calendar:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    CalendarPickerCompact(
-                        selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
-                        calendars: calendarService.calendarInfoList(includeExcluded: false),
-                        accentColor: Color(hex: "10B981"),
-                        onSelection: { info in
-                            var config = schedulingEngine.deepSessionConfig
-                            config.calendarName = info.name
-                            config.calendarIdentifier = info.identifier
-                            schedulingEngine.deepSessionConfig = config
+                    HStack {
+                        Text("Inject after:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
+                    }
+
+                    if schedulingEngine.deepSessionConfig.sessionCount > 1 {
+                        HStack {
+                            Text("And then after:")
+                                .font(.system(size: 13))
+                                .foregroundColor(.white.opacity(0.7))
+                            Spacer()
+                            NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
                         }
-                    )
-                    .frame(width: 150)
+                        .help("Regular sessions between consecutive deep sessions (0 = back to back)")
+                    }
+
+                    HStack {
+                        Text("Calendar:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        CalendarPickerCompact(
+                            selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
+                            calendars: calendarService.calendarInfoList(includeExcluded: true),
+                            accentColor: Color(hex: "10B981"),
+                            onSelection: { info in
+                                var config = schedulingEngine.deepSessionConfig
+                                config.calendarName = info.name
+                                config.calendarIdentifier = info.identifier
+                                schedulingEngine.deepSessionConfig = config
+                            }
+                        )
+                        .frame(width: 150)
+                    }
                 }
             }
-       }
-   }
+        }
+    }
     
     // MARK: - Rest Section
     
+    private var restSecondaryTooltip: String {
+        "After Work: \(schedulingEngine.restDuration) min\nAfter Side: \(schedulingEngine.sideRestDuration) min\nAfter Deep: \(schedulingEngine.deepRestDuration) min"
+    }
+
     private var restSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
@@ -595,7 +668,7 @@ struct SettingsPanel: View {
                 Text("Rest Between Sessions")
                     .font(.headline)
                     .foregroundColor(.white)
-                
+
                 Button {
                     showingRestHelp.toggle()
                 } label: {
@@ -610,63 +683,82 @@ struct SettingsPanel: View {
                         .padding()
                         .frame(width: 250)
                 }
+
+                SectionExpandButton(isExpanded: $restExpanded, tooltip: restSecondaryTooltip)
             }
-            
-             // Work Rest
-              HStack {
-                 Text("After Work:")
-                     .font(.system(size: 13))
-                     .foregroundColor(.white.opacity(0.7))
-                 
-                 Spacer()
-                 
-                 NumericInputField(value: $schedulingEngine.restDuration, range: 0...60, step: 5, unit: "min")
-             }
-             
-             // Side Rest
-              HStack {
-                 Text("After Side:")
-                     .font(.system(size: 13))
-                     .foregroundColor(.white.opacity(0.7))
-                 
-                 Spacer()
-                 
-                 NumericInputField(value: $schedulingEngine.sideRestDuration, range: 0...60, step: 5, unit: "min")
-             }
-             
-              HStack {
-                 Text("After Deep:")
-                     .font(.system(size: 13))
-                     .foregroundColor(.white.opacity(0.7))
+            .contentShape(Rectangle())
+            .onTapGesture {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    restExpanded.toggle()
+                }
+            }
 
-                 Spacer()
+            if restExpanded {
+                HStack {
+                    Text("After Work:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.restDuration, range: 0...60, step: 5, unit: "min")
+                }
 
-                 NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
-             }
+                HStack {
+                    Text("After Side:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.sideRestDuration, range: 0...60, step: 5, unit: "min")
+                }
 
-            Divider().background(Color.white.opacity(0.08))
+                HStack {
+                    Text("After Deep:")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.7))
+                    Spacer()
+                    NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
+                }
+            }
+        }
+    }
 
-            // Big Rest
+    private var longRestSecondaryTooltip: String {
+        "Duration: \(schedulingEngine.bigRestConfig.duration) min\nAfter: \(schedulingEngine.bigRestConfig.afterMinutes) min"
+    }
+
+    private var longRestSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Image(systemName: "pause.circle.fill")
-                    .foregroundColor(Color(hex: "F59E0B"))
-                Text("Long Rest")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                Button {
-                    showingBigRestHelp.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                HStack(spacing: 8) {
+                    Image(systemName: "pause.circle.fill")
+                        .foregroundColor(Color(hex: "F59E0B"))
+                    Text("Long Rest")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    Button {
+                        showingBigRestHelp.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.4))
+                    }
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showingBigRestHelp) {
+                        Text("A longer rest period injected after sustained focus time. Helps prevent burnout during long work days. The break appears as a gap between calendar events — it won't create an event itself.")
+                            .font(.system(size: 13))
+                            .padding()
+                            .frame(width: 260)
+                    }
+
+                    SectionExpandButton(isExpanded: $longRestExpanded, tooltip: longRestSecondaryTooltip)
                 }
-                .buttonStyle(.plain)
-                .popover(isPresented: $showingBigRestHelp) {
-                    Text("A longer rest period injected after sustained focus time. Helps prevent burnout during long work days. The break appears as a gap between calendar events — it won't create an event itself.")
-                        .font(.system(size: 13))
-                        .padding()
-                        .frame(width: 260)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        longRestExpanded.toggle()
+                    }
                 }
+
                 Spacer()
                 Toggle("", isOn: $schedulingEngine.bigRestConfig.enabled)
                     .labelsHidden()
@@ -675,6 +767,7 @@ struct SettingsPanel: View {
             }
 
             if schedulingEngine.bigRestConfig.enabled {
+                // Essential
                 HStack {
                     Text("Count:")
                         .font(.system(size: 13))
@@ -683,23 +776,51 @@ struct SettingsPanel: View {
                     NumericInputField(value: $schedulingEngine.bigRestConfig.count, range: 1...5, step: 1, unit: "")
                 }
 
-                HStack {
-                    Text("Duration:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 5, unit: "min")
-                }
+                // Secondary
+                if longRestExpanded {
+                    HStack {
+                        Text("Duration:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 5, unit: "min")
+                    }
 
-                HStack {
-                    Text("After:")
-                        .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
-                    Spacer()
-                    NumericInputField(value: $schedulingEngine.bigRestConfig.afterMinutes, range: 30...480, step: 15, unit: "min")
+                    HStack {
+                        Text("After:")
+                            .font(.system(size: 13))
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        NumericInputField(value: $schedulingEngine.bigRestConfig.afterMinutes, range: 30...480, step: 15, unit: "min")
+                    }
                 }
             }
         }
+    }
+}
+
+// MARK: - Section Expand Button
+
+struct SectionExpandButton: View {
+    @Binding var isExpanded: Bool
+    var tooltip: String = ""
+
+    var body: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundColor(.white.opacity(0.3))
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .animation(.easeInOut(duration: 0.2), value: isExpanded)
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
+        .disabled(false)
+        .help(isExpanded ? "" : tooltip)
     }
 }
 
