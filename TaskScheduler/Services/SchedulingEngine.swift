@@ -232,6 +232,7 @@ class SchedulingEngine: ObservableObject {
         var regularCountAtLastDeep = 0
         var cumulativeSessionMinutes = 0
         var bigRestCount = 0
+        var lastSessionEnd: Date?
         
         if awareExistingTasks, let existing = existingSessions {
             workCount = existing.work
@@ -267,7 +268,49 @@ class SchedulingEngine: ObservableObject {
                 schedulingMessage = "Reached end of day."
                 break
             }
-            
+
+            // Try to place Long Rest when cumulative threshold is reached
+            if bigRestConfig.enabled && bigRestCount < bigRestConfig.count && cumulativeSessionMinutes >= bigRestConfig.afterMinutes, let prevEnd = lastSessionEnd {
+                // Start right after previous session (no rest gap)
+                let restStart = roundToNextInterval(prevEnd)
+                let restDuration = TimeInterval(bigRestConfig.duration * 60)
+                let restEnd = restStart.addingTimeInterval(restDuration)
+                let restConflict = findConflict(start: restStart, end: restEnd, busySlots: busySlots, buffer: bufferDuration)
+
+                // Determine best start: prefer lastSessionEnd, fallback to right after conflict
+                var bestStart: Date? = nil
+                if restEnd <= endOfDay && restConflict == nil {
+                    bestStart = restStart
+                } else if restConflict != nil {
+                    // Try placing right after the blocking event (no buffer — it's just a rest)
+                    let rawConflictEnd = busySlots.first(where: { restStart < $0.endTime && restEnd > $0.startTime })?.endTime ?? restConflict!
+                    let altStart = roundToNextInterval(rawConflictEnd)
+                    let altEnd = altStart.addingTimeInterval(restDuration)
+                    let altConflict = findConflict(start: altStart, end: altEnd, busySlots: busySlots, buffer: 0)
+                    if altEnd <= endOfDay && altConflict == nil {
+                        bestStart = altStart
+                    }
+                }
+
+                if let start = bestStart {
+                    let end = start.addingTimeInterval(restDuration)
+                    let bigRest = ScheduledSession(
+                        type: .bigRest,
+                        title: "Long Rest",
+                        startTime: start,
+                        endTime: end,
+                        calendarName: workCalendarName,
+                        notes: "#break"
+                    )
+                    sessions.append(bigRest)
+                    bigRestCount += 1
+                    cumulativeSessionMinutes = 0
+                    currentTime = roundToNextInterval(end)
+                    continue
+                }
+                // Can't fit at either position — fall through, schedule a session in the gap instead
+            }
+
             var sessionType: SessionType
             var sessionDuration: Int
             var sessionTitle: String
@@ -488,34 +531,9 @@ class SchedulingEngine: ObservableObject {
                 sessionIndex += 1
             }
             
-            // Long Rest injection: track cumulative session time and inject when threshold reached
             cumulativeSessionMinutes += sessionDuration
-            let deepQuotaMetNow = !deepSessionConfig.enabled || deepCount >= deepSessionConfig.sessionCount
-            let allQuotasMet = workCount >= workSessions && sideCount >= sideSessions && deepQuotaMetNow
-            if bigRestConfig.enabled && !allQuotasMet && bigRestCount < bigRestConfig.count && cumulativeSessionMinutes >= bigRestConfig.afterMinutes {
-                // Big Rest starts right after the session (no rest gap before it)
-                let restStart = roundToNextInterval(potentialEnd)
-                let restEnd = restStart.addingTimeInterval(TimeInterval(bigRestConfig.duration * 60))
-                if restEnd <= endOfDay {
-                    let bigRest = ScheduledSession(
-                        type: .bigRest,
-                        title: "Long Rest",
-                        startTime: restStart,
-                        endTime: restEnd,
-                        calendarName: calendarName,
-                        notes: "#break"
-                    )
-                    sessions.append(bigRest)
-                    bigRestCount += 1
-                    cumulativeSessionMinutes = 0
-                    // Next session starts immediately after big rest (no extra rest gap)
-                    currentTime = roundToNextInterval(restEnd)
-                } else {
-                    currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
-                }
-            } else {
-                currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
-            }
+            lastSessionEnd = potentialEnd
+            currentTime = roundToNextInterval(potentialEnd.addingTimeInterval(TimeInterval(appliedRest * 60)))
         }
         
         projectedSessions = sessions
