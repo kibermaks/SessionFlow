@@ -113,12 +113,32 @@ ZIP_PATH="$ZIP_FILENAME"
 echo ""
 echo -e "${GREEN}✅ Built version $NEW_VERSION${NC}"
 
+# Notarize the .app
+echo ""
+echo -e "${BLUE}🔏 Notarizing app...${NC}"
+./notarize.sh "Task Scheduler.app"
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ App notarization failed!${NC}"
+    exit 1
+fi
+
 echo ""
 echo -e "${BLUE}📦 Creating DMG...${NC}"
 ./create_dmg.sh
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ DMG creation failed!${NC}"
+    exit 1
+fi
+
+# Notarize the DMG
+echo ""
+echo -e "${BLUE}🔏 Notarizing DMG...${NC}"
+./notarize.sh "$DMG_PATH"
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}❌ DMG notarization failed!${NC}"
     exit 1
 fi
 
@@ -135,7 +155,7 @@ zip -r "$ZIP_PATH" "Task Scheduler.app" -q
 echo -e "${GREEN}✅ ZIP created: $ZIP_PATH${NC}"
 
 echo ""
-echo -e "${GREEN}✅ Release artifacts created!${NC}"
+echo -e "${GREEN}✅ Release artifacts created (signed & notarized)!${NC}"
 echo ""
 echo "The following files are ready:"
 ls -lh "$DMG_PATH" 2>/dev/null || echo "  (DMG not found)"

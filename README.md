@@ -29,22 +29,6 @@ Task Scheduler is a native macOS application built with SwiftUI that helps you p
 - **🎯 Hashtag System**: Track existing sessions with hashtags (#work, #side, #deep, #plan)
 - **🌙 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
 
-## 🛡 Gatekeeper & First Launch
-
-Task Scheduler ships outside the Mac App Store, so Gatekeeper may warn you the first time you open it. Use **System Settings → Privacy & Security → Open Anyway** (or right-click the app in Finder and choose **Open**) to continue; power users can also drop the quarantine flag below.
-
-<p align="center">
-  <img src="docs/assets/Gate%20Keeper.png" alt="macOS warning that Task Scheduler is from an unidentified developer" width="420" />
-</p>
-
-<p align="center">
-  <img src="docs/assets/Gatekeeper%20-%20Security%20Pass.png" alt="Allow Task Scheduler to open within Privacy & Security settings" width="420" />
-</p>
-
-```bash
-xattr -d com.apple.quarantine /Applications/Task\ Scheduler.app
-```
-
 ## 🖼 Visual Walkthrough
 
 ### Welcome Guide
@@ -98,8 +82,6 @@ Summary cards highlight real events, projected work, and when you are supposed t
 ### Option 2: Build from Source
 
 See [Building from Source](#-building-from-source) section below.
-
-> **Heads-up:** macOS may warn about unidentified developers the first time you open the app. Follow the steps in [Gatekeeper & First Launch](#-gatekeeper--first-launch) if that happens.
 
 ## 🎯 Quick Start
 
@@ -218,7 +200,7 @@ See [Agents.md](Agents.md) for detailed instructions.
 - Xcode 15.0 or later
 - macOS 13.0 or later
 - Git
-- Apple Developer Team ID (update the `TEAM_ID="252H5L8A2H"` placeholder in `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
+- Apple Developer Team ID (update the `TEAM_ID="RGFAX8X946"` placeholder in `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
 
 ### Clone and Build
 
@@ -242,7 +224,7 @@ The project includes several convenience scripts:
 
 Builds a Release version of the app with version management.
 
-> ⚠️ Before running, update the `TEAM_ID="252H5L8A2H"` placeholder in both `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
+> ⚠️ Before running, update the `TEAM_ID="RGFAX8X946"` placeholder in both `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
 
 ```bash
 # Increment build number only (default)

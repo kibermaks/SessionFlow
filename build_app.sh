@@ -9,7 +9,7 @@ SCHEME="TaskScheduler"
 PROJECT="TaskScheduler.xcodeproj"
 BUILD_DIR="./build_output"
 # Team ID found in project.pbxproj
-TEAM_ID="252H5L8A2H"
+TEAM_ID="RGFAX8X946"
 
 # Function to get current marketing version directly from project file
 get_version() {
