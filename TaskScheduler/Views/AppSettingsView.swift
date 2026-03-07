@@ -19,25 +19,58 @@ struct AppSettingsView: View {
     @State private var pendingReplacementContext: CalendarReplacementContext?
     @State private var selectedReplacementCalendarId: String = ""
     @State private var replacementErrorMessage: String?
+    @State private var selectedSettingsTab: SettingsTab = .general
+    @State private var activePreviewID: String? = nil
+    @State private var previewResetWorkItem: DispatchWorkItem? = nil
+    private let ambientVolumeSliderWidth: CGFloat = 132
+    private let soundControlHeight: CGFloat = 22
+    private let showVolumeSliderDebugBorder = false
+    private let previewDuration: TimeInterval = 4.0
+    private let transitionPreviewDuration: TimeInterval = 1.5
+
+    private enum SettingsTab: String, CaseIterable {
+        case general, calendars, awareness
+        var icon: String {
+            switch self {
+            case .general: return "gearshape"
+            case .calendars: return "calendar"
+            case .awareness: return "eye.circle"
+            }
+        }
+        var label: String {
+            switch self {
+            case .general: return "General"
+            case .calendars: return "Calendars"
+            case .awareness: return "Awareness"
+            }
+        }
+    }
 
     var body: some View {
-        TabView {
-            generalTab
-                .tabItem {
-                    Label("General", systemImage: "gearshape")
+        VStack(spacing: 0) {
+            HStack(spacing: 4) {
+                ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
+                    settingsTabButton(tab)
                 }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 10)
+            .frame(height: 72)
+            .background(Color(nsColor: .windowBackgroundColor))
 
-            calendarsTab
-                .tabItem {
-                    Label("Calendars", systemImage: "calendar")
-                }
+            Divider()
+                .background(Color.white.opacity(0.1))
 
-            sessionAwarenessTab
-                .tabItem {
-                    Label("Awareness", systemImage: "eye.circle")
+            Group {
+                switch selectedSettingsTab {
+                case .general: generalTab
+                case .calendars: calendarsTab
+                case .awareness: sessionAwarenessTab
                 }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 520, height: 580)
+        .frame(width: 520, height: 680)
         .preferredColorScheme(.dark)
         .alert("Reset Presets?", isPresented: $showingResetPresetsConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -67,6 +100,35 @@ struct AppSettingsView: View {
         } message: {
             Text(replacementErrorMessage ?? "Unknown issue occurred.")
         }
+        .onDisappear {
+            stopPreview()
+        }
+    }
+
+    private func settingsTabButton(_ tab: SettingsTab) -> some View {
+        let isSelected = selectedSettingsTab == tab
+        return Button {
+            selectedSettingsTab = tab
+        } label: {
+            VStack(spacing: 4) {
+                Image(systemName: tab.icon)
+                    .font(.system(size: 18, weight: .medium))
+                Text(tab.label)
+                    .font(.system(size: 11, weight: .medium))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .contentShape(Rectangle())
+            .foregroundColor(isSelected ? .accentColor : .secondary)
+            .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isSelected ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .focusable(false)
     }
 
     // MARK: - Tab 1: General
@@ -181,6 +243,27 @@ struct AppSettingsView: View {
 
                     Divider()
 
+                    Menu {
+                        Button {
+                            sessionAwarenessService.simulatePresenceReminder()
+                        } label: {
+                            Label("Presence Reminder", systemImage: "bell.badge.fill")
+                        }
+                        Button {
+                            sessionAwarenessService.simulateEndingSoon()
+                        } label: {
+                            Label("Ending Soon", systemImage: "clock.badge.exclamationmark")
+                        }
+                    } label: {
+                        Label("Simulate Awareness Event", systemImage: "play.circle")
+                    }
+
+                    Text("Triggers awareness sounds and flash effects for testing.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+
                     Button(role: .destructive, action: resetCalendarPermissions) {
                         Label("Reset Calendar Permissions", systemImage: "lock.slash.fill")
                     }
@@ -267,7 +350,20 @@ struct AppSettingsView: View {
     private var sessionAwarenessTab: some View {
         Form {
             Section {
-                Toggle("Enable session awareness", isOn: Binding(
+                HStack(spacing: 8) {
+                    Image(systemName: "eye.circle")
+                        .font(.system(size: 20))
+                        .foregroundColor(.accentColor)
+
+                    Text("Session Awareness")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+
+            Section {
+                Toggle("Enable Tracking", isOn: Binding(
                     get: { sessionAwarenessService.config.enabled },
                     set: { newValue in
                         sessionAwarenessService.config.enabled = newValue
@@ -278,10 +374,44 @@ struct AppSettingsView: View {
                 Text("Bottom panel tracks your current session with timer, progress, and ambient sound.")
                     .font(.caption)
                     .foregroundColor(.secondary)
+
+                if sessionAwarenessService.config.enabled {
+                    HStack(spacing: 10) {
+                        Image(systemName: "speaker.wave.3.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                            .frame(width: 16)
+
+                        Text("Master Volume")
+                            .font(.system(size: 14, weight: .medium))
+
+                        Slider(value: Binding(
+                            get: { sessionAwarenessService.config.masterVolume },
+                            set: { newValue in
+                                sessionAwarenessService.config.masterVolume = newValue
+                                sessionAudioService.setMasterVolume(newValue)
+                            }
+                        ), in: 0...1)
+
+                        Text("\(Int(sessionAwarenessService.config.masterVolume * 100))%")
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundColor(.white.opacity(0.5))
+                            .frame(width: 38, alignment: .trailing)
+                    }
+
+                    Toggle("Awareness of your other calendar events", isOn: Binding(
+                        get: { sessionAwarenessService.config.trackOtherEvents },
+                        set: { sessionAwarenessService.config.trackOtherEvents = $0 }
+                    ))
+
+                    Text("Tracking with timer, progress, and ambient sound.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
 
             if sessionAwarenessService.config.enabled {
-                Section("Ambient Sounds") {
+                Section("Ambient Sounds For") {
                     ambientSoundRow(icon: "briefcase.fill", iconColor: SessionType.work.color, label: "Work",
                                     soundKeyPath: \.workSound, accelKeyPath: \.workSoundAccelerando)
                     ambientSoundRow(icon: "star.fill", iconColor: SessionType.side.color, label: "Side",
@@ -290,6 +420,11 @@ struct AppSettingsView: View {
                                     soundKeyPath: \.deepSound, accelKeyPath: \.deepSoundAccelerando)
                     ambientSoundRow(icon: "calendar.badge.clock", iconColor: SessionType.planning.color, label: "Planning",
                                     soundKeyPath: \.planningSound, accelKeyPath: \.planningSoundAccelerando)
+
+                    if sessionAwarenessService.config.trackOtherEvents {
+                        ambientSoundRow(icon: "calendar", iconColor: .gray, label: "Your events",
+                                        soundKeyPath: \.otherEventsSound, accelKeyPath: \.otherEventsSoundAccelerando)
+                    }
                 }
 
                 Section("Session Transitions") {
@@ -306,8 +441,8 @@ struct AppSettingsView: View {
                              config: bindingSoundConfig(forTransition: \.endSound), isAmbient: false)
                 }
 
-                Section("Session Presence Reminder") {
-                    Toggle("Enable presence reminder", isOn: Binding(
+                Section("Presence Reminder") {
+                    Toggle("Periodic nudge during sessions", isOn: Binding(
                         get: { sessionAwarenessService.config.presenceReminderEnabled },
                         set: { sessionAwarenessService.config.presenceReminderEnabled = $0 }
                     ))
@@ -328,25 +463,9 @@ struct AppSettingsView: View {
                                  config: bindingSoundConfig(forTransition: \.presenceReminderSound), isAmbient: false)
                     }
 
-                    Text("Plays a reminder sound periodically during active sessions.")
+                    Text("Plays a short sound at regular intervals to help you stay focused.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                }
-
-                Section("Other Calendar Events") {
-                    Toggle("Track non-tagged events", isOn: Binding(
-                        get: { sessionAwarenessService.config.trackOtherEvents },
-                        set: { sessionAwarenessService.config.trackOtherEvents = $0 }
-                    ))
-
-                    Text("Shows calendar events without session tags in the bottom panel.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-
-                    if sessionAwarenessService.config.trackOtherEvents {
-                        ambientSoundRow(icon: "calendar", iconColor: .gray, label: "Other",
-                                        soundKeyPath: \.otherEventsSound, accelKeyPath: \.otherEventsSoundAccelerando)
-                    }
                 }
 
                 Section("Menu Bar & Dock") {
@@ -383,6 +502,18 @@ struct AppSettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        sessionAudioService.resetAudioEngine()
+                    } label: {
+                        Label("Fix Sound Issues", systemImage: "wrench.and.screwdriver")
+                    }
+
+                    Text("Stops all audio, resets the sound engine, and clears stale playback state.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+
+                Section {
                     Button("Reset Awareness Settings", role: .destructive) {
                         showingResetAwarenessConfirmation = true
                     }
@@ -416,153 +547,219 @@ struct AppSettingsView: View {
     private func ambientSoundRow(icon: String, iconColor: Color, label: String,
                                   soundKeyPath: WritableKeyPath<SessionAwarenessConfig, SessionSoundConfig>,
                                   accelKeyPath: WritableKeyPath<SessionAwarenessConfig, AccelerandoConfig>) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(iconColor)
-                .frame(width: 16)
+        let isEnabled = sessionAwarenessService.config[keyPath: soundKeyPath].enabled
+        let accelEnabled = sessionAwarenessService.config[keyPath: accelKeyPath].enabled
+        let defaultSound = SessionAwarenessConfig.default[keyPath: soundKeyPath].sound
+        let fallbackSound = defaultSound == "Off"
+            ? (SessionSoundConfig.availableSounds.first ?? "Off")
+            : defaultSound
 
-            Text(label)
-                .font(.system(size: 13))
-                .frame(width: 70, alignment: .leading)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(iconColor)
+                    .frame(width: 16)
 
-            soundPicker(for: soundKeyPath, isAmbient: true)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
 
-            Slider(value: Binding(
-                get: { sessionAwarenessService.config[keyPath: soundKeyPath].volume },
-                set: { sessionAwarenessService.config[keyPath: soundKeyPath].volume = $0 }
-            ), in: 0...1)
-                .frame(maxWidth: .infinity)
-                .opacity(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off" ? 0 : 1)
-                .disabled(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off")
+                Spacer(minLength: 8)
 
-            Button {
-                previewAmbientSound(sessionAwarenessService.config[keyPath: soundKeyPath].sound,
-                                    volume: sessionAwarenessService.config[keyPath: soundKeyPath].volume)
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.6))
-                    .frame(width: 22, height: 22)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(4)
-            }
-            .buttonStyle(.plain)
-            .help("Preview")
-            .opacity(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off" ? 0 : 1)
-            .disabled(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off")
-
-            // Accelerando toggle
-            let accelEnabled = sessionAwarenessService.config[keyPath: accelKeyPath].enabled
-            Button {
-                sessionAwarenessService.config[keyPath: accelKeyPath].enabled.toggle()
-            } label: {
-                Image(systemName: "hare.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(accelEnabled ? .orange : .white.opacity(0.25))
-                    .frame(width: 22, height: 22)
-                    .background(accelEnabled ? Color.orange.opacity(0.15) : Color.white.opacity(0.05))
-                    .cornerRadius(4)
-            }
-            .buttonStyle(.plain)
-            .help(accelEnabled
-                  ? "Accelerando: sound gradually speeds up during the session"
-                  : "Enable accelerando — gradually speeds up playback over the session duration")
-            .opacity(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off" ? 0 : 1)
-            .disabled(sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off")
-
-            if accelEnabled && sessionAwarenessService.config[keyPath: soundKeyPath].sound != "Off" {
-                Picker("", selection: Binding(
-                    get: { sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier },
-                    set: { sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier = $0 }
-                )) {
-                    ForEach(AccelerandoConfig.multiplierOptions, id: \.self) { mult in
-                        Text(String(format: "%.1fx", mult)).tag(mult)
+                Toggle("", isOn: Binding(
+                    get: { sessionAwarenessService.config[keyPath: soundKeyPath].enabled },
+                    set: { isEnabled in
+                        sessionAwarenessService.config[keyPath: soundKeyPath].enabled = isEnabled
+                        if isEnabled {
+                            if sessionAwarenessService.config[keyPath: soundKeyPath].sound == "Off" {
+                                sessionAwarenessService.config[keyPath: soundKeyPath].sound = fallbackSound
+                            }
+                        }
                     }
-                }
+                ))
                 .labelsHidden()
-                .frame(width: 60)
-                .help("Target speed at session end — playback linearly accelerates from 1.0x to this speed")
+                .toggleStyle(.switch)
+            }
+
+            if isEnabled {
+                HStack(spacing: 8) {
+                    soundPicker(for: soundKeyPath, isAmbient: true, width: nil)
+                        .layoutPriority(1)
+
+                    let previewID = "ambient-\(label)"
+                    iconButton(systemName: activePreviewID == previewID ? "stop.fill" : "play.fill", isEnabled: true) {
+                        toggleAmbientPreview(
+                            id: previewID,
+                            sound: sessionAwarenessService.config[keyPath: soundKeyPath].sound,
+                            volume: sessionAwarenessService.config[keyPath: soundKeyPath].volume,
+                            accelConfig: accelEnabled ? sessionAwarenessService.config[keyPath: accelKeyPath] : nil
+                        )
+                    }
+                    .help(activePreviewID == previewID ? "Stop preview" : "Preview")
+
+                    volumeSlider(
+                        value: Binding(
+                            get: { sessionAwarenessService.config[keyPath: soundKeyPath].volume },
+                            set: { sessionAwarenessService.config[keyPath: soundKeyPath].volume = $0 }
+                        ),
+                        width: ambientVolumeSliderWidth
+                    )
+
+                    speedPicker(value: Binding(
+                        get: { sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier },
+                        set: { sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier = $0 }
+                    ))
+
+                    accelerandoButton(
+                        isEnabled: accelEnabled,
+                        isDisabled: sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier == 1.0
+                    ) {
+                        sessionAwarenessService.config[keyPath: accelKeyPath].enabled.toggle()
+                    }
+                    .help(
+                        sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier == 1.0
+                        ? "Choose a speed other than 1.0x to enable accelerando"
+                        : (accelEnabled
+                           ? (sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier < 1.0
+                              ? "Accelerando ON — playback speeds up from \(String(format: "%.1fx", sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier)) to 1.0x during session"
+                              : "Accelerando ON — playback speeds up from 1.0x to \(String(format: "%.1fx", sessionAwarenessService.config[keyPath: accelKeyPath].maxMultiplier)) during session")
+                           : "Enable accelerando — gradually changes playback speed over the session")
+                    )
+                }
             }
         }
+        .padding(.vertical, 4)
     }
 
     // MARK: - Sound Picker with Standard/Custom sections
 
-    private func soundPicker(for keyPath: WritableKeyPath<SessionAwarenessConfig, SessionSoundConfig>, isAmbient: Bool) -> some View {
-        let currentSound = sessionAwarenessService.config[keyPath: keyPath].sound
-        let customSounds = CustomSoundStore.shared.loadEntries()
-
-        return Picker("", selection: Binding(
-            get: { currentSound },
-            set: { newValue in
-                if newValue == "__import__" {
-                    customSoundImportIsAmbient = isAmbient
-                    openCustomSoundImport(for: keyPath)
-                } else {
-                    sessionAwarenessService.config[keyPath: keyPath].sound = newValue
-                }
-            }
-        )) {
-            Section("Standard") {
-                ForEach(SessionSoundConfig.availableSounds, id: \.self) { Text($0).tag($0) }
-            }
-            if !customSounds.isEmpty {
-                Section("Custom") {
-                    ForEach(customSounds) { entry in
-                        Text(entry.name).tag(entry.name)
-                    }
-                }
-            }
-            Divider()
-            Text("Import Sound...").tag("__import__")
+    private func soundPicker(for keyPath: WritableKeyPath<SessionAwarenessConfig, SessionSoundConfig>, isAmbient: Bool, width: CGFloat? = nil) -> some View {
+        soundSelectionPicker(
+            selection: Binding(
+                get: { sessionAwarenessService.config[keyPath: keyPath].sound },
+                set: { sessionAwarenessService.config[keyPath: keyPath].sound = $0 }
+            ),
+            availableSounds: SessionSoundConfig.availableSounds,
+            width: width
+        ) {
+            customSoundImportIsAmbient = isAmbient
+            openCustomSoundImport(for: keyPath)
         }
-        .labelsHidden()
-        .frame(width: 140)
     }
 
-    private func transitionSoundPicker(for keyPath: WritableKeyPath<SessionAwarenessConfig, TransitionSoundConfig>) -> some View {
-        let currentSound = sessionAwarenessService.config[keyPath: keyPath].sound
-        let customSounds = CustomSoundStore.shared.loadEntries()
+    private func transitionSoundPicker(for keyPath: WritableKeyPath<SessionAwarenessConfig, TransitionSoundConfig>, width: CGFloat? = nil) -> some View {
+        soundSelectionPicker(
+            selection: Binding(
+                get: { sessionAwarenessService.config[keyPath: keyPath].sound },
+                set: { sessionAwarenessService.config[keyPath: keyPath].sound = $0 }
+            ),
+            availableSounds: TransitionSoundConfig.availableSounds,
+            width: width
+        ) {
+            customSoundImportIsAmbient = false
+            openTransitionSoundImport(for: keyPath)
+        }
+    }
 
-        return Picker("", selection: Binding(
-            get: { currentSound },
-            set: { newValue in
-                if newValue == "__import__" {
-                    customSoundImportIsAmbient = false
-                    openTransitionSoundImport(for: keyPath)
-                } else {
-                    sessionAwarenessService.config[keyPath: keyPath].sound = newValue
-                }
+    private func soundSelectionPicker(selection: Binding<String>, availableSounds: [String], width: CGFloat? = nil, onImport: @escaping () -> Void) -> some View {
+        SoundSelectionButton(
+            selection: selection,
+            availableSounds: availableSounds,
+            onImport: onImport
+        )
+        .frame(minWidth: width ?? 150,
+               idealWidth: width,
+               maxWidth: width ?? .infinity,
+               minHeight: soundControlHeight,
+               maxHeight: soundControlHeight,
+               alignment: .leading)
+    }
+
+    private func volumeSlider(value: Binding<Float>, width: CGFloat = 170) -> some View {
+        let iconWidth: CGFloat = 10
+        let spacing: CGFloat = 6
+        let sliderWidth = max(0, width - iconWidth - spacing)
+
+        return HStack(spacing: spacing) {
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.4))
+                .frame(width: iconWidth)
+
+            ZStack {
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(showVolumeSliderDebugBorder ? Color.red.opacity(0.9) : Color.clear, lineWidth: 1)
+
+                Slider(value: value, in: 0...1)
+                    .labelsHidden()
+                    .frame(width: sliderWidth)
             }
-        )) {
-            Section("Standard") {
-                ForEach(TransitionSoundConfig.availableSounds, id: \.self) { Text($0).tag($0) }
-            }
-            if !customSounds.isEmpty {
-                Section("Custom") {
-                    ForEach(customSounds) { entry in
-                        Text(entry.name).tag(entry.name)
+            .frame(width: sliderWidth, height: soundControlHeight)
+        }
+        .frame(width: width, height: soundControlHeight, alignment: .leading)
+    }
+
+    private func speedPicker(value: Binding<Double>) -> some View {
+        Menu {
+            ForEach(AccelerandoConfig.multiplierOptions, id: \.self) { multiplier in
+                Button {
+                    value.wrappedValue = multiplier
+                } label: {
+                    if multiplier == value.wrappedValue {
+                        Label(String(format: "%.1fx", multiplier), systemImage: "checkmark")
+                    } else {
+                        Text(String(format: "%.1fx", multiplier))
                     }
                 }
             }
-            Divider()
-            Text("Import Sound...").tag("__import__")
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "hare.fill")
+                    .font(.system(size: 5))
+                    .foregroundColor(.white.opacity(0.24))
+                    .frame(width: 7)
+
+                Text(String(format: "%.1fx", value.wrappedValue))
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.92))
+                    .lineLimit(1)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .padding(.horizontal, 8)
+            .frame(width: 92, height: soundControlHeight, alignment: .leading)
+            .background(Color.white.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            )
+            .cornerRadius(4)
         }
-        .labelsHidden()
-        .frame(width: 140)
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("Target speed at session end")
     }
 
     // MARK: - Unified Sound Row (for transition sounds)
 
     private struct SoundRowConfig {
+        var enabled: Binding<Bool>
         var sound: Binding<String>
         var volume: Binding<Float>
         var availableSounds: [String]
+        var fallbackSound: String
     }
 
     private func bindingSoundConfig(forTransition keyPath: WritableKeyPath<SessionAwarenessConfig, TransitionSoundConfig>) -> SoundRowConfig {
         SoundRowConfig(
+            enabled: Binding(
+                get: { sessionAwarenessService.config[keyPath: keyPath].enabled },
+                set: { sessionAwarenessService.config[keyPath: keyPath].enabled = $0 }
+            ),
             sound: Binding(
                 get: { sessionAwarenessService.config[keyPath: keyPath].sound },
                 set: { sessionAwarenessService.config[keyPath: keyPath].sound = $0 }
@@ -571,84 +768,110 @@ struct AppSettingsView: View {
                 get: { sessionAwarenessService.config[keyPath: keyPath].volume },
                 set: { sessionAwarenessService.config[keyPath: keyPath].volume = $0 }
             ),
-            availableSounds: TransitionSoundConfig.availableSounds
+            availableSounds: TransitionSoundConfig.availableSounds,
+            fallbackSound: SessionAwarenessConfig.default[keyPath: keyPath].sound == "Off"
+                ? (TransitionSoundConfig.availableSounds.first ?? "Off")
+                : SessionAwarenessConfig.default[keyPath: keyPath].sound
         )
     }
 
     private func soundRow(icon: String, iconColor: Color, label: String, config: SoundRowConfig, isAmbient: Bool) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(iconColor)
-                .frame(width: 16)
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(iconColor)
+                    .frame(width: 16)
 
-            Text(label)
-                .font(.system(size: 13))
-                .frame(width: 70, alignment: .leading)
+                Text(label)
+                    .font(.system(size: 14, weight: .medium))
 
-            Picker("", selection: config.sound) {
-                Section("Standard") {
-                    ForEach(config.availableSounds, id: \.self) { Text($0).tag($0) }
-                }
-                let customSounds = CustomSoundStore.shared.loadEntries()
-                if !customSounds.isEmpty {
-                    Section("Custom") {
-                        ForEach(customSounds) { entry in
-                            Text(entry.name).tag(entry.name)
+                Spacer(minLength: 8)
+
+                Toggle("", isOn: Binding(
+                    get: { config.enabled.wrappedValue },
+                    set: { isEnabled in
+                        config.enabled.wrappedValue = isEnabled
+                        if isEnabled && config.sound.wrappedValue == "Off" {
+                            config.sound.wrappedValue = config.fallbackSound
                         }
                     }
-                }
-                Divider()
-                Text("Import Sound...").tag("__import__")
-            }
-            .labelsHidden()
-            .frame(width: 140)
-            .onChange(of: config.sound.wrappedValue) { _, newValue in
-                if newValue == "__import__" {
-                    // Revert to "Off" and open import
-                    config.sound.wrappedValue = "Off"
-                    showCustomSoundFilePanel()
-                }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
             }
 
-            Slider(value: config.volume, in: 0...1)
-                .frame(maxWidth: .infinity)
-                .opacity(config.sound.wrappedValue == "Off" ? 0 : 1)
-                .disabled(config.sound.wrappedValue == "Off")
+            if config.enabled.wrappedValue {
+                HStack(spacing: 8) {
+                    soundSelectionPicker(selection: config.sound, availableSounds: config.availableSounds, width: nil) {
+                        customSoundImportIsAmbient = isAmbient
+                        showCustomSoundFilePanel()
+                    }
+                    .layoutPriority(1)
 
-            Button {
-                if isAmbient {
-                    previewAmbientSound(config.sound.wrappedValue, volume: config.volume.wrappedValue)
-                } else {
-                    previewTransitionSound(config.sound.wrappedValue, volume: config.volume.wrappedValue)
+                    let previewID = "transition-\(label)"
+                    iconButton(systemName: activePreviewID == previewID ? "stop.fill" : "play.fill", isEnabled: true) {
+                        if activePreviewID == previewID {
+                            stopPreview()
+                        } else if isAmbient {
+                            toggleAmbientPreview(
+                                id: previewID,
+                                sound: config.sound.wrappedValue,
+                                volume: config.volume.wrappedValue
+                            )
+                        } else {
+                            toggleTransitionPreview(
+                                id: previewID,
+                                sound: config.sound.wrappedValue,
+                                volume: config.volume.wrappedValue
+                            )
+                        }
+                    }
+                    .help(activePreviewID == previewID ? "Stop preview" : "Preview")
+
+                    volumeSlider(value: config.volume)
                 }
-            } label: {
-                Image(systemName: "play.fill")
-                    .font(.system(size: 9))
-                    .foregroundColor(.white.opacity(0.6))
-                    .frame(width: 22, height: 22)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(4)
             }
-            .buttonStyle(.plain)
-            .help("Preview")
-            .opacity(config.sound.wrappedValue == "Off" ? 0 : 1)
-            .disabled(config.sound.wrappedValue == "Off")
         }
+        .padding(.vertical, 4)
+    }
+
+    private func iconButton(systemName: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 9))
+                .foregroundColor(isEnabled ? .white.opacity(0.6) : .white.opacity(0.22))
+                .frame(width: soundControlHeight, height: soundControlHeight)
+                .background(Color.white.opacity(isEnabled ? 0.1 : 0.03))
+                .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func accelerandoButton(isEnabled: Bool, isDisabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "waveform.path")
+                .font(.system(size: 9))
+                .foregroundColor(
+                    isDisabled
+                    ? .white.opacity(0.22)
+                    : (isEnabled ? .orange : .white.opacity(0.6))
+                )
+                .frame(width: soundControlHeight, height: soundControlHeight)
+                .background(Color.white.opacity(isDisabled ? 0.03 : 0.1))
+                .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
     }
 
     // MARK: - Custom Sound Import
 
-    private func openCustomSoundImport(for keyPath: WritableKeyPath<SessionAwarenessConfig, SessionSoundConfig>) {
-        // Revert picker to current value
-        let current = sessionAwarenessService.config[keyPath: keyPath].sound
-        sessionAwarenessService.config[keyPath: keyPath].sound = current == "__import__" ? "Off" : current
+    private func openCustomSoundImport(for _: WritableKeyPath<SessionAwarenessConfig, SessionSoundConfig>) {
         showCustomSoundFilePanel()
     }
 
-    private func openTransitionSoundImport(for keyPath: WritableKeyPath<SessionAwarenessConfig, TransitionSoundConfig>) {
-        let current = sessionAwarenessService.config[keyPath: keyPath].sound
-        sessionAwarenessService.config[keyPath: keyPath].sound = current == "__import__" ? "Off" : current
+    private func openTransitionSoundImport(for _: WritableKeyPath<SessionAwarenessConfig, TransitionSoundConfig>) {
         showCustomSoundFilePanel()
     }
 
@@ -680,21 +903,79 @@ struct AppSettingsView: View {
 
     // MARK: - Sound Preview
 
-    private func previewAmbientSound(_ sound: String, volume: Float) {
+    private func stopPreview() {
+        previewResetWorkItem?.cancel()
+        previewResetWorkItem = nil
+        activePreviewID = nil
+        sessionAudioService.resumeAfterPreview()
+    }
+
+    private func schedulePreviewReset(after delay: TimeInterval, id: String) {
+        previewResetWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            if self.activePreviewID == id {
+                self.activePreviewID = nil
+                self.sessionAudioService.resumeAfterPreview()
+            }
+        }
+        previewResetWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+    }
+
+    private func toggleAmbientPreview(id: String, sound: String, volume: Float, accelConfig: AccelerandoConfig? = nil) {
         guard sound != "Off" else { return }
-        let config = SessionSoundConfig(sound: sound, volume: volume)
-        sessionAudioService.playAmbient(config: config)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            if !sessionAwarenessService.isActive {
-                sessionAudioService.stopAmbient()
+        if activePreviewID == id {
+            stopPreview()
+            return
+        }
+        stopPreview()
+        activePreviewID = id
+        previewAmbientSound(sound, volume: volume, accelConfig: accelConfig)
+        schedulePreviewReset(after: previewDuration, id: id)
+    }
+
+    private func toggleTransitionPreview(id: String, sound: String, volume: Float) {
+        guard sound != "Off" else { return }
+        if activePreviewID == id {
+            stopPreview()
+            return
+        }
+        stopPreview()
+        activePreviewID = id
+        previewTransitionSound(sound, volume: volume)
+        schedulePreviewReset(after: transitionPreviewDuration, id: id)
+    }
+
+    private func previewAmbientSound(_ sound: String, volume: Float, accelConfig: AccelerandoConfig? = nil) {
+        guard sound != "Off" else { return }
+        sessionAudioService.pauseForPreview()
+        let config = SessionSoundConfig(sound: sound, volume: volume, enabled: true)
+        sessionAudioService.playAmbient(config: config, ignoreMute: true)
+
+        // Set fixed playback speed from multiplier
+        let multiplier = accelConfig?.maxMultiplier ?? 1.0
+        if multiplier != 1.0 {
+            sessionAudioService.setFixedPlaybackRate(Float(multiplier))
+        }
+
+        // If accelerando enabled, demo the ramp effect over previewDuration seconds
+        if let accel = accelConfig, accel.enabled, accel.maxMultiplier != 1.0 {
+            let steps = 40
+            let stepDuration = previewDuration / Double(steps)
+            for i in 0...steps {
+                let progress = Double(i) / Double(steps)
+                DispatchQueue.main.asyncAfter(deadline: .now() + stepDuration * Double(i)) {
+                    self.sessionAudioService.updatePlaybackRate(progress: progress, accelerando: accel)
+                }
             }
         }
     }
 
     private func previewTransitionSound(_ sound: String, volume: Float) {
         guard sound != "Off" else { return }
-        let config = TransitionSoundConfig(sound: sound, volume: volume)
-        sessionAudioService.playTransition(config: config)
+        sessionAudioService.pauseForPreview()
+        let config = TransitionSoundConfig(sound: sound, volume: volume, enabled: true)
+        sessionAudioService.playTransition(config: config, ignoreMute: true)
     }
 
     // MARK: - Utility
@@ -893,6 +1174,148 @@ extension AppSettingsView {
     }
 }
 
+fileprivate struct SoundSelectionButton: NSViewRepresentable {
+    @Binding var selection: String
+    let availableSounds: [String]
+    let onImport: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeNSView(context: Context) -> SoundSelectionControl {
+        let control = SoundSelectionControl()
+        control.target = context.coordinator
+        control.action = #selector(Coordinator.showMenu(_:))
+        updateNSView(control, context: context)
+        return control
+    }
+
+    func updateNSView(_ control: SoundSelectionControl, context: Context) {
+        context.coordinator.parent = self
+        let displayTitle = selection == "Off"
+            ? (availableSounds.first ?? selection)
+            : selection
+        control.setTitle(displayTitle)
+        control.toolTip = displayTitle
+    }
+
+    final class Coordinator: NSObject {
+        var parent: SoundSelectionButton
+
+        init(_ parent: SoundSelectionButton) {
+            self.parent = parent
+        }
+
+        @objc func showMenu(_ sender: SoundSelectionControl) {
+            let menu = NSMenu()
+            menu.autoenablesItems = false
+
+            addSection(title: "Standard", sounds: parent.availableSounds, to: menu)
+
+            let customSounds = CustomSoundStore.shared.loadEntries()
+            if !customSounds.isEmpty {
+                menu.addItem(.separator())
+                addSection(title: "Custom", sounds: customSounds.map(\.name), to: menu)
+            }
+
+            menu.addItem(.separator())
+
+            let importItem = NSMenuItem(title: "Import Sound...", action: #selector(handleImport), keyEquivalent: "")
+            importItem.target = self
+            menu.addItem(importItem)
+
+            let selectedItem = menu.items.first(where: { ($0.representedObject as? String) == parent.selection })
+            menu.popUp(positioning: selectedItem, at: NSPoint(x: 0, y: sender.bounds.height - 2), in: sender)
+        }
+
+        private func addSection(title: String, sounds: [String], to menu: NSMenu) {
+            let headerItem = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            headerItem.isEnabled = false
+            menu.addItem(headerItem)
+
+            for sound in sounds {
+                let item = NSMenuItem(title: sound, action: #selector(handleSelection(_:)), keyEquivalent: "")
+                item.target = self
+                item.representedObject = sound
+                item.state = sound == parent.selection ? .on : .off
+                menu.addItem(item)
+            }
+        }
+
+        @objc private func handleSelection(_ sender: NSMenuItem) {
+            guard let sound = sender.representedObject as? String else { return }
+            parent.selection = sound
+        }
+
+        @objc private func handleImport() {
+            DispatchQueue.main.async {
+                self.parent.onImport()
+            }
+        }
+    }
+}
+
+fileprivate final class SoundSelectionControl: NSControl {
+    private let titleField = NSTextField(labelWithString: "")
+    private let chevronView = NSImageView()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: NSSize {
+        NSSize(width: 60, height: 22)
+    }
+
+    private func setup() {
+        focusRingType = .none
+        wantsLayer = true
+        setContentHuggingPriority(.defaultLow, for: .horizontal)
+        setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        layer?.cornerRadius = 4
+        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.06).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+
+        titleField.translatesAutoresizingMaskIntoConstraints = false
+        titleField.font = .systemFont(ofSize: 13)
+        titleField.textColor = NSColor.white.withAlphaComponent(0.92)
+        titleField.lineBreakMode = .byTruncatingTail
+        titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        chevronView.translatesAutoresizingMaskIntoConstraints = false
+        chevronView.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "Show sounds")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .medium))
+        chevronView.contentTintColor = NSColor.white.withAlphaComponent(0.5)
+
+        addSubview(titleField)
+        addSubview(chevronView)
+
+        NSLayoutConstraint.activate([
+            titleField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            titleField.centerYAnchor.constraint(equalTo: centerYAnchor),
+            titleField.trailingAnchor.constraint(lessThanOrEqualTo: chevronView.leadingAnchor, constant: -8),
+            chevronView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -8),
+            chevronView.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    func setTitle(_ title: String) {
+        titleField.stringValue = title
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        if let action {
+            NSApp.sendAction(action, to: target, from: self)
+        }
+    }
+}
+
 private struct CalendarReplacementContext: Identifiable {
     let calendar: EKCalendar
     let affectedPresets: [Preset]
@@ -964,3 +1387,4 @@ private struct CalendarReplacementSheet: View {
         .frame(minWidth: 380)
     }
 }
+
