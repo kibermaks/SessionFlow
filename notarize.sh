@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-KEYCHAIN_PROFILE="${2:-TaskScheduler}"
+KEYCHAIN_PROFILE="${2:-SessionFlow}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -13,10 +13,10 @@ NC='\033[0m'
 # Validate arguments
 if [ -z "$1" ]; then
     echo -e "${RED}Usage: ./notarize.sh <path-to-app-or-dmg> [keychain-profile]${NC}"
-    echo "  Default keychain profile: TaskScheduler"
+    echo "  Default keychain profile: SessionFlow"
     echo ""
     echo "  One-time setup:"
-    echo "    xcrun notarytool store-credentials \"TaskScheduler\" \\"
+    echo "    xcrun notarytool store-credentials \"SessionFlow\" \\"
     echo "      --apple-id \"your@email.com\" \\"
     echo "      --team-id \"RGFAX8X946\" \\"
     echo "      --password \"app-specific-password\""

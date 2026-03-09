@@ -41,8 +41,8 @@ final class UpdateService: ObservableObject {
     @Published private(set) var installationStatus: InstallationStatus?
 
     private let repoOwner = "kibermaks"
-    private let repoName = "TaskScheduler"
-    private let lastCheckDefaultsKey = "TaskScheduler.LastUpdateCheckDate"
+    private let repoName = "SessionFlow"
+    private let lastCheckDefaultsKey = "SessionFlow.LastUpdateCheckDate"
     private var periodicTimer: Timer?
     private var hasScheduledChecks = false
     private var installerTask: Task<Void, Never>?
@@ -150,7 +150,7 @@ final class UpdateService: ObservableObject {
         case .orderedDescending:
             let info = UpdateInfo(
                 version: normalizedTag,
-                title: release.name.isEmpty ? "Task Scheduler \(normalizedTag)" : release.name,
+                title: release.name.isEmpty ? "SessionFlow \(normalizedTag)" : release.name,
                 releaseNotes: release.notesPreview,
                 downloadURL: preferredDownloadURL(from: release.assets),
                 pageURL: release.htmlURL
@@ -212,7 +212,7 @@ final class UpdateService: ObservableObject {
         }
         
         let fileManager = FileManager.default
-        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("TaskSchedulerUpdate-\(UUID().uuidString)")
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("SessionFlowUpdate-\(UUID().uuidString)")
         let downloadTarget = tempDir.appendingPathComponent(downloadURL.lastPathComponent)
         var shouldCleanupTempDir = true
         
@@ -256,7 +256,7 @@ final class UpdateService: ObservableObject {
             shouldCleanupTempDir = false
             
             _ = await MainActor.run {
-                setInstallationStatus(.relaunching, message: "Relaunching Task Scheduler...")
+                setInstallationStatus(.relaunching, message: "Relaunching SessionFlow...")
                 NSApp.terminate(nil)
             }
         } catch {
@@ -290,7 +290,7 @@ final class UpdateService: ObservableObject {
     }
     
     private func extractFromDMG(_ dmgURL: URL, workingDirectory: URL) throws -> URL {
-        let mountPoint = "/Volumes/TaskSchedulerUpdate-\(UUID().uuidString)"
+        let mountPoint = "/Volumes/SessionFlowUpdate-\(UUID().uuidString)"
         try runProcess("/usr/bin/hdiutil", arguments: [
             "attach",
             dmgURL.path,
@@ -331,7 +331,7 @@ final class UpdateService: ObservableObject {
             try fileManager.createDirectory(at: destinationDir, withIntermediateDirectories: true, attributes: nil)
         }
         
-        let stagedApp = destinationDir.appendingPathComponent(".TaskSchedulerUpdate-\(UUID().uuidString).app")
+        let stagedApp = destinationDir.appendingPathComponent(".SessionFlowUpdate-\(UUID().uuidString).app")
         if fileManager.fileExists(atPath: stagedApp.path) {
             try fileManager.removeItem(at: stagedApp)
         }
@@ -383,7 +383,7 @@ open "$DEST_APP"
            fileManager.isWritableFile(atPath: parentDir.path) {
             return bundleURL
         }
-        return URL(fileURLWithPath: "/Applications/@My Apps/Task Scheduler.app")
+        return URL(fileURLWithPath: "/Applications/@My Apps/SessionFlow.app")
     }
     
     private func findAppBundle(in directory: URL) throws -> URL? {
@@ -506,7 +506,7 @@ extension UpdateService {
         var errorDescription: String? {
             switch self {
             case .missingAppBundle:
-                return "Downloaded archive did not contain a Task Scheduler app."
+                return "Downloaded archive did not contain a SessionFlow app."
             case .processFailure(let output):
                 if output.isEmpty {
                     return "A helper command failed while installing the update."

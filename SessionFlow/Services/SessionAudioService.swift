@@ -8,7 +8,7 @@ class SessionAudioService: ObservableObject {
     // MARK: - Published state
 
     @Published var isMuted: Bool {
-        didSet { UserDefaults.standard.set(isMuted, forKey: "TaskScheduler.SessionAudioMuted")
+        didSet { UserDefaults.standard.set(isMuted, forKey: "SessionFlow.SessionAudioMuted")
             if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
         }
     }
@@ -68,7 +68,7 @@ class SessionAudioService: ObservableObject {
     // MARK: - Init
 
     init() {
-        self.isMuted = UserDefaults.standard.bool(forKey: "TaskScheduler.SessionAudioMuted")
+        self.isMuted = UserDefaults.standard.bool(forKey: "SessionFlow.SessionAudioMuted")
         setupAmbientEngine()
         refreshOutputDevices()
         observeDeviceChanges()
@@ -546,7 +546,7 @@ class SessionAudioService: ObservableObject {
 
     static func importCustomSound(from sourceURL: URL) -> String? {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let soundsDir = appSupport.appendingPathComponent("TaskScheduler/CustomSounds")
+        let soundsDir = appSupport.appendingPathComponent("SessionFlow/CustomSounds")
 
         do {
             try FileManager.default.createDirectory(at: soundsDir, withIntermediateDirectories: true)

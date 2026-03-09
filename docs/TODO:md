@@ -1,5 +1,22 @@
 # List of tasks I think might be useful to add to the app
 
+## v2.0 — Rename to Sessionflow
+
+- [ ] Rename app from "Task Scheduler" to "Sessionflow" across the entire codebase
+  - Xcode: PRODUCT_NAME, bundle ID (`com.kibermaks.Sessionflow`), xcodeproj, source folder, `TaskSchedulerApp.swift` → `SessionflowApp.swift`
+  - Scripts: build_app.sh, create_dmg.sh (artifact naming)
+  - Docs: README title/badges/clone URL, CHANGELOG, CONTRIBUTING, Agents.md
+  - Code: About view title, window titles, UpdateService repo URL
+  - GitHub: Rename repository (auto-redirects old URL)
+
+## Docs & Screenshots
+
+- [ ] Capture updated Main Screen screenshot (with Tasks + Awareness visible) → `docs/assets/Main Screen.png`
+- [ ] Capture Session Awareness GIF (idle → active session → progress → feedback → badge) → `docs/assets/SessionAwareness.gif`
+- [ ] Capture Tasks Panel screenshot → `docs/assets/TasksPanel.png`
+- [ ] Capture Mini-Player + Menu Bar composite screenshot → `docs/assets/MiniPlayer.png`
+- [ ] Uncomment Session Awareness and Mini-Player sections in README once screenshots are ready
+
 ## 03.03.2026
 
 - [x] Add "⋮" button before Today button to show dropdown of previous days(e.g. Yesterday, 2 days ago, 3 days ago, etc.);

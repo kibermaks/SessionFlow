@@ -1,18 +1,18 @@
 <div align="center">
 
-# Task Scheduler
+# SessionFlow
 
 **Smart scheduling for productive days**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)](https://www.apple.com/macos)
 [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org)
-[![Build](https://github.com/kibermaks/TaskScheduler/actions/workflows/build.yml/badge.svg)](https://github.com/kibermaks/TaskScheduler/actions)
-[![Release](https://img.shields.io/github/v/release/kibermaks/TaskScheduler)](https://github.com/kibermaks/TaskScheduler/releases/latest)
+[![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg)](https://github.com/kibermaks/SessionFlow/actions)
+[![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
 
-Task Scheduler is a native macOS application built with SwiftUI that helps you plan productive days by automatically scheduling work and side sessions around existing calendar events. It features a powerful scheduling engine, preset management, and a beautiful timeline visualization.
+SessionFlow is a native macOS application built with SwiftUI that helps you plan productive days by automatically scheduling work and side sessions around existing calendar events. It features a powerful scheduling engine, preset management, and a beautiful timeline visualization.
 
-[Download Latest Release](https://github.com/kibermaks/TaskScheduler/releases/latest) • [Documentation](#-documentation) • [Contributing](CONTRIBUTING.md)
+[Download Latest Release](https://github.com/kibermaks/SessionFlow/releases/latest) • [Documentation](#-documentation) • [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -45,7 +45,7 @@ Task Scheduler is a native macOS application built with SwiftUI that helps you p
 Timeline, projections, and controls share a single glass panel so you can see inputs and outputs together.
 
 <p align="center">
-  <img src="docs/assets/Main%20Screen.png" alt="Task Scheduler timeline and settings" width="900" />
+  <img src="docs/assets/Main%20Screen.png" alt="SessionFlow timeline and settings" width="900" />
 </p>
 
 ### Dynamic Scheduling
@@ -76,9 +76,9 @@ Summary cards highlight real events, projected work, and when you are supposed t
 
 ### Option 1: Download Pre-built Release (Recommended)
 
-1. Download the latest `TaskScheduler-vX.X.dmg` from [Releases](https://github.com/kibermaks/TaskScheduler/releases/latest)
+1. Download the latest `SessionFlow-vX.X.dmg` from [Releases](https://github.com/kibermaks/SessionFlow/releases/latest)
 2. Open the DMG file
-3. Drag `TaskScheduler.app` to your Applications folder
+3. Drag `SessionFlow.app` to your Applications folder
 4. Launch from Applications or Spotlight
 5. Grant Calendar permissions when prompted
 
@@ -115,7 +115,7 @@ See [Building from Source](#-building-from-source) section below.
 The project follows a modular architecture with clear separation of concerns:
 
 ```code
-TaskScheduler/
+SessionFlow/
 ├── Models/
 │   ├── Session.swift
 │   ├── Preset.swift
@@ -180,7 +180,7 @@ TaskScheduler/
 
 ### Adding New Files
 
-**IMPORTANT**: When adding new Swift files, you **must** manually update `TaskScheduler.xcodeproj/project.pbxproj`:
+**IMPORTANT**: When adding new Swift files, you **must** manually update `SessionFlow.xcodeproj/project.pbxproj`:
 
 - `PBXBuildFile` section
 - `PBXFileReference` section
@@ -212,20 +212,20 @@ See [Agents.md](Agents.md) for detailed instructions.
 - Xcode 15.0 or later
 - macOS 13.0 or later
 - Git
-- Apple Developer Team ID (update the `TEAM_ID="RGFAX8X946"` placeholder in `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
+- Apple Developer Team ID (update the `TEAM_ID="RGFAX8X946"` placeholder in `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
 
 ### Clone and Build
 
 ```bash
 # Clone the repository
-git clone https://github.com/kibermaks/TaskScheduler.git
-cd TaskScheduler
+git clone https://github.com/kibermaks/SessionFlow.git
+cd SessionFlow
 
 # Build using the build script (creates Release build)
 ./build_app.sh
 
 # Or open in Xcode
-open TaskScheduler.xcodeproj
+open SessionFlow.xcodeproj
 ```
 
 ### Build Scripts
@@ -236,7 +236,7 @@ The project includes several convenience scripts:
 
 Builds a Release version of the app with version management.
 
-> ⚠️ Before running, update the `TEAM_ID="RGFAX8X946"` placeholder in both `build_app.sh` and `TaskScheduler.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
+> ⚠️ Before running, update the `TEAM_ID="RGFAX8X946"` placeholder in both `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
 
 ```bash
 # Increment build number only (default)
@@ -276,13 +276,13 @@ Creates a distributable DMG file for the app.
 - Creates Applications folder symlink
 - Adds README with installation instructions
 - Outputs to `./dmg_output/`
-- Names file as `TaskScheduler-vX.Y.dmg`
+- Names file as `SessionFlow-vX.Y.dmg`
 
 ### Development Workflow
 
 ```bash
 # 1. Make your changes in Xcode
-open TaskScheduler.xcodeproj
+open SessionFlow.xcodeproj
 
 # 2. Build and test locally
 ./build_app.sh
@@ -297,7 +297,7 @@ open TaskScheduler.xcodeproj
 
 - [Quick Start Guide](#-quick-start)
 - [Usage Tips](#-usage-tips)
-- [FAQ](https://github.com/kibermaks/TaskScheduler/wiki/FAQ) *(coming soon)*
+- [FAQ](https://github.com/kibermaks/SessionFlow/wiki/FAQ) *(coming soon)*
 
 ### For Developers
 
@@ -330,7 +330,7 @@ Future features and improvements:
 
 ## 🐛 Known Issues
 
-Check the [Issues](https://github.com/kibermaks/TaskScheduler/issues) page for current known issues and feature requests.
+Check the [Issues](https://github.com/kibermaks/SessionFlow/issues) page for current known issues and feature requests.
 
 ## 📄 License
 
@@ -344,8 +344,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 💬 Community & Support
 
-- **Issues**: [GitHub Issues](https://github.com/kibermaks/TaskScheduler/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/kibermaks/TaskScheduler/discussions)
+- **Issues**: [GitHub Issues](https://github.com/kibermaks/SessionFlow/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/kibermaks/SessionFlow/discussions)
 - **GitHub User**: [@kibermaks](https://github.com/kibermaks) *(for security issues only)*
 
 ## ⭐ Star History
@@ -358,6 +358,6 @@ If you find this project useful, please consider giving it a star!
 
 Made with ❤️ for productive Mac users
 
-[Report Bug](https://github.com/kibermaks/TaskScheduler/issues) • [Request Feature](https://github.com/kibermaks/TaskScheduler/issues) • [View Releases](https://github.com/kibermaks/TaskScheduler/releases)
+[Report Bug](https://github.com/kibermaks/SessionFlow/issues) • [Request Feature](https://github.com/kibermaks/SessionFlow/issues) • [View Releases](https://github.com/kibermaks/SessionFlow/releases)
 
 </div>

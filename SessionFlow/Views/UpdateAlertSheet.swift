@@ -75,7 +75,7 @@ struct UpdateAlertSheet: View {
                     Text("Update Available")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(.white)
-                    Text("Task Scheduler \(info.version) is ready to install.")
+                    Text("SessionFlow \(info.version) is ready to install.")
                         .font(.system(size: 13))
                         .foregroundColor(.white.opacity(0.6))
                 }

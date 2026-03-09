@@ -2,13 +2,13 @@
 set -e
 
 # Configuration (overridable via env vars for CI/local parity)
-APP_NAME="${APP_NAME_OVERRIDE:-Task Scheduler}"
+APP_NAME="${APP_NAME_OVERRIDE:-SessionFlow}"
 APP_FILE="${APP_FILE_OVERRIDE:-$APP_NAME.app}"
-DMG_NAME="${DMG_NAME_OVERRIDE:-TaskScheduler}"
+DMG_NAME="${DMG_NAME_OVERRIDE:-SessionFlow}"
 SOURCE_APP="${APP_SOURCE_OVERRIDE:-./$APP_FILE}"
 BUILD_DIR="${BUILD_DIR_OVERRIDE:-./build_output}"
 DMG_DIR="${DMG_DIR_OVERRIDE:-./dmg_output}"
-VOLUME_NAME="${DMG_VOLUME_NAME_OVERRIDE:-Task Scheduler Installer}"
+VOLUME_NAME="${DMG_VOLUME_NAME_OVERRIDE:-SessionFlow Installer}"
 #
 # DMG visuals
 # Finder AppleScript cannot "draw" an arbitrary overlay at coordinates.
@@ -55,7 +55,7 @@ DMG_APPLICATIONS_POS_Y="${DMG_APPLICATIONS_POS_Y_OVERRIDE:-$DMG_DEFAULT_APPLICAT
 
 DMG_WINDOW_RIGHT=$((DMG_WINDOW_LEFT + DMG_WINDOW_WIDTH))
 DMG_WINDOW_BOTTOM=$((DMG_WINDOW_TOP + DMG_WINDOW_HEIGHT))
-REPO_URL="${DMG_REPO_URL_OVERRIDE:-https://github.com/kibermaks/TaskScheduler}"
+REPO_URL="${DMG_REPO_URL_OVERRIDE:-https://github.com/kibermaks/SessionFlow}"
 INCLUDE_README="${DMG_INCLUDE_README_OVERRIDE:-false}"
 
 RED='\033[0;31m'
@@ -75,11 +75,11 @@ cleanup_dmg_mounts() {
 }
 
 get_version() {
-    grep "MARKETING_VERSION =" "TaskScheduler.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
+    grep "MARKETING_VERSION =" "SessionFlow.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
 }
 
 get_build_number() {
-    grep "CURRENT_PROJECT_VERSION =" "TaskScheduler.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
+    grep "CURRENT_PROJECT_VERSION =" "SessionFlow.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
 }
 
 if [ ! -d "$SOURCE_APP" ]; then

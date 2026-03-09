@@ -117,7 +117,7 @@ struct CustomSoundEntry: Codable, Identifiable, Equatable {
 
 class CustomSoundStore {
     static let shared = CustomSoundStore()
-    private static let storageKey = "TaskScheduler.CustomSounds"
+    private static let storageKey = "SessionFlow.CustomSounds"
 
     private init() {}
 
@@ -204,7 +204,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
 
     // MARK: - Persistence
 
-    private static let storageKey = "TaskScheduler.SessionAwarenessConfig"
+    private static let storageKey = "SessionFlow.SessionAwarenessConfig"
 
     static func load() -> SessionAwarenessConfig {
         guard let data = UserDefaults.standard.data(forKey: storageKey),

@@ -22,8 +22,8 @@ final class ChangelogService: ObservableObject {
     @Published private(set) var hasFetched = false
 
     private let repoOwner = "kibermaks"
-    private let repoName = "TaskScheduler"
-    private let cacheKey = "TaskScheduler.CachedChangelog"
+    private let repoName = "SessionFlow"
+    private let cacheKey = "SessionFlow.CachedChangelog"
 
     private lazy var urlSession: URLSession = {
         let config = URLSessionConfiguration.ephemeral

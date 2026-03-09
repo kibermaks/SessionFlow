@@ -7,7 +7,7 @@ class SessionAwarenessService: ObservableObject {
     // MARK: - Published state
 
     @Published var isEnabled: Bool {
-        didSet { UserDefaults.standard.set(isEnabled, forKey: "TaskScheduler.SessionAwarenessEnabled")
+        didSet { UserDefaults.standard.set(isEnabled, forKey: "SessionFlow.SessionAwarenessEnabled")
             if isEnabled {
                 startTimer()
             } else {

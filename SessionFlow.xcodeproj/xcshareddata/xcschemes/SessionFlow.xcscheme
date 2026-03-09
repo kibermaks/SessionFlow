@@ -16,9 +16,9 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "500"
-               BuildableName = "Task Scheduler.app"
-               BlueprintName = "TaskScheduler"
-               ReferencedContainer = "container:TaskScheduler.xcodeproj">
+               BuildableName = "SessionFlow.app"
+               BlueprintName = "SessionFlow"
+               ReferencedContainer = "container:SessionFlow.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -45,9 +45,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "500"
-            BuildableName = "Task Scheduler.app"
-            BlueprintName = "TaskScheduler"
-            ReferencedContainer = "container:TaskScheduler.xcodeproj">
+            BuildableName = "SessionFlow.app"
+            BlueprintName = "SessionFlow"
+            ReferencedContainer = "container:SessionFlow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </LaunchAction>
@@ -62,9 +62,9 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "500"
-            BuildableName = "Task Scheduler.app"
-            BlueprintName = "TaskScheduler"
-            ReferencedContainer = "container:TaskScheduler.xcodeproj">
+            BuildableName = "SessionFlow.app"
+            BlueprintName = "SessionFlow"
+            ReferencedContainer = "container:SessionFlow.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
    </ProfileAction>

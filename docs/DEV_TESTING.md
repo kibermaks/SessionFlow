@@ -30,14 +30,14 @@ When enabled:
 #### Reset Presets
 
 - Button: "Reset Presets"
-- Function: Removes `TaskScheduler.Presets` and `TaskScheduler.LastActivePresetID` from UserDefaults and broadcasts `PresetsReset`
+- Function: Removes `SessionFlow.Presets` and `SessionFlow.LastActivePresetID` from UserDefaults and broadcasts `PresetsReset`
 - Use Case: Validate preset creation logic and ensure calendar assignments are reapplied correctly
 - Effect: All saved presets are removed. Relaunch calendar setup (or create new presets manually) to restore defaults
 
 #### Reset Calendar Permissions
 
 - Button: "Reset Calendar Permissions"
-- Function: Executes `tccutil reset Calendar com.kibermaks.TaskScheduler` and terminates the app
+- Function: Executes `tccutil reset Calendar com.kibermaks.SessionFlow` and terminates the app
 - Use Case: Force macOS to prompt for Calendar access again without digging through System Settings
 - Effect: App quits immediately after issuing the reset; on next launch macOS will prompt for Calendar permissions
 
@@ -47,11 +47,11 @@ When enabled:
 
 ```bash
 # Clear all app preferences
-defaults delete com.kibermaks.TaskScheduler
+defaults delete com.kibermaks.SessionFlow
 
 # Revoke calendar permissions (manual)
 # Go to: System Settings > Privacy & Security > Calendars
-# Remove "Task Scheduler" from the list
+# Remove "SessionFlow" from the list
 ```
 
 ### Expected Flow
@@ -76,7 +76,7 @@ defaults delete com.kibermaks.TaskScheduler
 
 Using Dev Settings:
 
-1. 4-click "Task Scheduler" title
+1. 4-click "SessionFlow" title
 2. Verify version turns green
 3. Scroll to bottom of Settings panel
 4. Click "Reset Calendar Setup"
@@ -85,19 +85,19 @@ Using Dev Settings:
 ## App Bundle ID
 
 ```code
-com.kibermaks.TaskScheduler
+com.kibermaks.SessionFlow
 ```
 
 ## UserDefaults Keys
 
 ### Setup & Permissions
 
-- `TaskScheduler.HasCompletedSetup` - Boolean, tracks if calendar setup is done
+- `SessionFlow.HasCompletedSetup` - Boolean, tracks if calendar setup is done
 - `showDevSettings` - Boolean, tracks if dev settings are enabled
 
 ### Calendars
 
-- `TaskScheduler.SavedState` - JSON, stores current scheduling configuration
+- `SessionFlow.SavedState` - JSON, stores current scheduling configuration
 - Includes: workCalendarName, sideCalendarName, deepSessionConfig.calendarName
 
 ### Guides

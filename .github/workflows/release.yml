@@ -45,13 +45,13 @@ jobs:
       - name: Update version in project
         run: |
           VERSION="${{ steps.version.outputs.version_number }}"
-          sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $VERSION;/g" TaskScheduler.xcodeproj/project.pbxproj
+          sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $VERSION;/g" SessionFlow.xcodeproj/project.pbxproj
           echo "Updated project version to $VERSION"
       
       - name: Build app
         run: |
-          SCHEME="TaskScheduler"
-          PROJECT="TaskScheduler.xcodeproj"
+          SCHEME="SessionFlow"
+          PROJECT="SessionFlow.xcodeproj"
           BUILD_DIR="./build_output"
           
           CURRENT_BUILD=$(grep "CURRENT_PROJECT_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]')

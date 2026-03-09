@@ -4,8 +4,8 @@ import AppKit
 struct AboutView: View {
     private let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     private let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
-    private let repoURL = "https://github.com/kibermaks/TaskScheduler"
-    private let starURL = "https://github.com/kibermaks/TaskScheduler"
+    private let repoURL = "https://github.com/kibermaks/SessionFlow"
+    private let starURL = "https://github.com/kibermaks/SessionFlow"
     private let authorURL = "https://github.com/kibermaks"
 
     var body: some View {
@@ -17,7 +17,7 @@ struct AboutView: View {
                 .frame(width: 80, height: 80)
 
             // App name
-            Text("Task Scheduler")
+            Text("SessionFlow")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundColor(.white)
 

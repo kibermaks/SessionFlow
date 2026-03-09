@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Task Scheduler will be documented in this file.
+All notable changes to SessionFlow will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -51,7 +51,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extended night-owl scheduling beyond midnight (up to +6 h next day) with "+1d" markers on the timeline
 - Deep session "and then..." spacing parameter to control the gap between consecutive deep sessions
 - What's New view that fetches the changelog from GitHub on first launch after an update
-- About Task Scheduler window
+- About SessionFlow window
 - Event locking toggle in the Timeline to prevent accidental drag moves
 - Custom date and time input fields
 
@@ -133,7 +133,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Calendar Filters section in App Settings that lets you uncheck calendars you do not want Task Scheduler to consider
+- Calendar Filters section in App Settings that lets you uncheck calendars you do not want SessionFlow to consider
 - Automatic update checks against GitHub releases plus a “Check for Updates…” menu entry
 
 ### Changed

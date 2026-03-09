@@ -892,9 +892,9 @@ struct NameFieldWithHistory: View {
 class SessionNameHistory: ObservableObject {
     static let shared = SessionNameHistory()
     
-    private let workKey = "TaskScheduler.WorkSessionNames"
-    private let sideKey = "TaskScheduler.SideSessionNames"
-    private let deepKey = "TaskScheduler.DeepSessionNames"
+    private let workKey = "SessionFlow.WorkSessionNames"
+    private let sideKey = "SessionFlow.SideSessionNames"
+    private let deepKey = "SessionFlow.DeepSessionNames"
     
     @Published var workNames: [String] = []
     @Published var sideNames: [String] = []

@@ -8,7 +8,7 @@ struct WelcomeScreen: View {
     let pages = [
         WelcomePage(
             title: "Reclaim Your Day",
-            subtitle: "Task Scheduler transforms your calendar from a list of 'times I'm busy' into a blueprint for precise productivity.",
+            subtitle: "SessionFlow transforms your calendar from a list of 'times I'm busy' into a blueprint for precise productivity.",
             image: "sparkles",
             color: Color(hex: "8B5CF6")
         ),

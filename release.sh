@@ -7,7 +7,7 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-echo -e "${BLUE}🚀 Task Scheduler Release Helper${NC}"
+echo -e "${BLUE}🚀 SessionFlow Release Helper${NC}"
 echo ""
 
 generate_release_notes() {
@@ -32,7 +32,7 @@ generate_release_notes() {
 }
 
 get_version() {
-    grep "MARKETING_VERSION =" "TaskScheduler.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
+    grep "MARKETING_VERSION =" "SessionFlow.xcodeproj/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]'
 }
 
 if [[ -n $(git status -s) ]]; then
@@ -106,9 +106,9 @@ if [ $? -ne 0 ]; then
 fi
 
 NEW_VERSION=$(get_version)
-DMG_FILENAME="TaskScheduler-$NEW_VERSION.dmg"
+DMG_FILENAME="SessionFlow-$NEW_VERSION.dmg"
 DMG_PATH="dmg_output/$DMG_FILENAME"
-ZIP_FILENAME="TaskScheduler-v$NEW_VERSION.zip"
+ZIP_FILENAME="SessionFlow-v$NEW_VERSION.zip"
 ZIP_PATH="$ZIP_FILENAME"
 echo ""
 echo -e "${GREEN}✅ Built version $NEW_VERSION${NC}"
@@ -116,7 +116,7 @@ echo -e "${GREEN}✅ Built version $NEW_VERSION${NC}"
 # Notarize the .app
 echo ""
 echo -e "${BLUE}🔏 Notarizing app...${NC}"
-./notarize.sh "Task Scheduler.app"
+./notarize.sh "SessionFlow.app"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ App notarization failed!${NC}"
@@ -144,14 +144,14 @@ fi
 
 echo ""
 echo -e "${BLUE}🗜  Creating ZIP archive...${NC}"
-if [ ! -d "Task Scheduler.app" ]; then
-    echo -e "${RED}❌ 'Task Scheduler.app' not found in project root. Cannot create ZIP.${NC}"
+if [ ! -d "SessionFlow.app" ]; then
+    echo -e "${RED}❌ 'SessionFlow.app' not found in project root. Cannot create ZIP.${NC}"
     exit 1
 fi
 if [ -f "$ZIP_PATH" ]; then
     rm -f "$ZIP_PATH"
 fi
-zip -r "$ZIP_PATH" "Task Scheduler.app" -q
+zip -r "$ZIP_PATH" "SessionFlow.app" -q
 echo -e "${GREEN}✅ ZIP created: $ZIP_PATH${NC}"
 
 echo ""
@@ -167,7 +167,7 @@ echo ""
 read -p "Create git commit for version $NEW_VERSION? (Y/n): " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-    git add TaskScheduler.xcodeproj/project.pbxproj
+    git add SessionFlow.xcodeproj/project.pbxproj
     git commit -m "chore: bump version to $NEW_VERSION"
     echo -e "${GREEN}✅ Git commit created${NC}"
 fi
@@ -193,10 +193,10 @@ if [ -f "$DMG_PATH" ] && [ -f "$ZIP_PATH" ]; then
         read -p "Upload local DMG/ZIP to GitHub release now? (Y/n): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]] || [[ -z $REPLY ]]; then
-            NOTES_FILE=$(mktemp /tmp/task_scheduler_release_notes.XXXXXX)
+            NOTES_FILE=$(mktemp /tmp/sessionflow_release_notes.XXXXXX)
             generate_release_notes "$NEW_VERSION" "$NOTES_FILE"
             RELEASE_TAG="v$NEW_VERSION"
-            if gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" --title "Task Scheduler $RELEASE_TAG" --notes-file "$NOTES_FILE" --verify-tag; then
+            if gh release create "$RELEASE_TAG" "$DMG_PATH" "$ZIP_PATH" --title "SessionFlow $RELEASE_TAG" --notes-file "$NOTES_FILE" --verify-tag; then
                 echo -e "${GREEN}✅ GitHub release published with local artifacts${NC}"
             else
                 echo -e "${RED}❌ Failed to publish GitHub release via gh.${NC}"

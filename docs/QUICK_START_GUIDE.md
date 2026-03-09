@@ -1,6 +1,6 @@
 # Quick Start Guide for Developers
 
-A cheat sheet for common development tasks with Task Scheduler.
+A cheat sheet for common development tasks with SessionFlow.
 
 ## 🚀 Common Commands
 
@@ -8,7 +8,7 @@ A cheat sheet for common development tasks with Task Scheduler.
 
 ```bash
 # Open in Xcode
-open TaskScheduler.xcodeproj
+open SessionFlow.xcodeproj
 
 # Build and run locally
 ./build_app.sh
@@ -61,14 +61,14 @@ git tag -l
 ## 🏗️ Project Structure
 
 ```code
-TaskScheduler/
-├── TaskScheduler/              # Main source code
+SessionFlow/
+├── SessionFlow/              # Main source code
 │   ├── Models/                 # Data models
 │   ├── Services/               # Business logic
 │   ├── Views/                  # SwiftUI views
 │   └── Assets.xcassets/        # Images/icons
 │
-├── TaskScheduler.xcodeproj/    # Xcode project
+├── SessionFlow.xcodeproj/    # Xcode project
 ├── build_app.sh               # Build script
 ├── deploy_app.sh              # Deployment script
 ├── create_dmg.sh              # DMG creation script
@@ -159,7 +159,7 @@ git push origin v1.1
 **Solution**: Remove quarantine attribute
 
 ```bash
-xattr -cr "/Applications/TaskScheduler.app"
+xattr -cr "/Applications/SessionFlow.app"
 ```
 
 ### New Swift File Not Building
@@ -168,7 +168,7 @@ xattr -cr "/Applications/TaskScheduler.app"
 
 **Solution**: Must update `project.pbxproj` (see Agents.md)
 
-- Or use Xcode: File → Add Files to "TaskScheduler"
+- Or use Xcode: File → Add Files to "SessionFlow"
 
 ## 💡 Tips & Tricks
 
@@ -184,7 +184,7 @@ act push -n  # Dry run
 
 ```bash
 # Built app location
-ls -la ./TaskScheduler.app
+ls -la ./SessionFlow.app
 ls -la ./build_output/
 
 # DMG location
@@ -202,11 +202,11 @@ ls -la ./dmg_output/
 
 Replace `kibermaks` with your GitHub username:
 
-- **Repository**: `https://github.com/kibermaks/TaskScheduler`
-- **Issues**: `https://github.com/kibermaks/TaskScheduler/issues`
-- **Actions**: `https://github.com/kibermaks/TaskScheduler/actions`
-- **Releases**: `https://github.com/kibermaks/TaskScheduler/releases`
-- **Discussions**: `https://github.com/kibermaks/TaskScheduler/discussions`
+- **Repository**: `https://github.com/kibermaks/SessionFlow`
+- **Issues**: `https://github.com/kibermaks/SessionFlow/issues`
+- **Actions**: `https://github.com/kibermaks/SessionFlow/actions`
+- **Releases**: `https://github.com/kibermaks/SessionFlow/releases`
+- **Discussions**: `https://github.com/kibermaks/SessionFlow/discussions`
 
 ## 🎯 Next Steps
 
@@ -216,7 +216,7 @@ Replace `kibermaks` with your GitHub username:
 2. Open in Xcode
 3. Build with `./build_app.sh`
 4. Read [CONTRIBUTING.md](CONTRIBUTING.md)
-5. Check out [Issues](https://github.com/kibermaks/TaskScheduler/issues) for good first issues
+5. Check out [Issues](https://github.com/kibermaks/SessionFlow/issues) for good first issues
 
 ### Making Your First Contribution
 
@@ -240,5 +240,5 @@ Replace `kibermaks` with your GitHub username:
 **Need Help?**
 
 - Check the [documentation](#-documentation-links)
-- Open a [GitHub Discussion](https://github.com/kibermaks/TaskScheduler/discussions)
+- Open a [GitHub Discussion](https://github.com/kibermaks/SessionFlow/discussions)
 - Read [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines

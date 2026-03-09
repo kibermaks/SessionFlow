@@ -11,7 +11,7 @@ struct CalendarDescriptor: Equatable {
 // MARK: - Calendar Service
 /// Manages all interactions with macOS Calendar via EventKit
 class CalendarService: ObservableObject {
-    private static let excludedCalendarsDefaultsKey = "TaskScheduler.ExcludedCalendars"
+    private static let excludedCalendarsDefaultsKey = "SessionFlow.ExcludedCalendars"
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
     private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan", "#break"]

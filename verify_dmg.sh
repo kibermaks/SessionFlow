@@ -56,7 +56,7 @@ if [ -z "$VOLUME" ]; then
 fi
 trap "hdiutil detach '$VOLUME' -force >/dev/null 2>&1 || true" EXIT
 
-APP_PATH="$VOLUME/Task Scheduler.app"
+APP_PATH="$VOLUME/SessionFlow.app"
 CODESIGN_INFO=$(codesign -dvv "$APP_PATH" 2>&1)
 
 echo -e "${BLUE}Structure${NC}"

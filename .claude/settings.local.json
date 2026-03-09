@@ -14,21 +14,21 @@
   "permissions": {
     "allow": [
       "Bash(xcodebuild build:*)",
-      "Bash(xcodebuild -scheme TaskScheduler -destination 'platform=macOS' build)",
+      "Bash(xcodebuild -scheme SessionFlow -destination 'platform=macOS' build)",
       "Bash(git status -u)",
       "Bash(git checkout -b feature/multi-task-sessions)",
-      "Bash(git add TaskScheduler/Models/Session.swift TaskScheduler/Services/SchedulingEngine.swift TaskScheduler/Models/Preset.swift TaskScheduler/Views/SettingsPanel.swift TaskScheduler/Views/TimelineView.swift TaskScheduler/ContentView.swift TaskScheduler/Views/PresetManager.swift)",
+      "Bash(git add SessionFlow/Models/Session.swift SessionFlow/Services/SchedulingEngine.swift SessionFlow/Models/Preset.swift SessionFlow/Views/SettingsPanel.swift SessionFlow/Views/TimelineView.swift SessionFlow/ContentView.swift SessionFlow/Views/PresetManager.swift)",
       "Bash(git commit:*)",
       "Bash(git push -u origin feature/multi-task-sessions)",
       "Bash(gh pr:*)",
-      "Bash(open \"/Users/maks/Library/Developer/Xcode/DerivedData/TaskScheduler-fzedbkizlrkjxdexnrtitzldnwwo/Build/Products/Debug/Task Scheduler.app\")",
+      "Bash(open \"/Users/maks/Library/Developer/Xcode/DerivedData/SessionFlow-fzedbkizlrkjxdexnrtitzldnwwo/Build/Products/Debug/SessionFlow.app\")",
       "Bash(git checkout main)",
-      "Bash(git checkout -- TaskScheduler/Services/SchedulingEngine.swift)",
-      "Bash(xcodebuild -scheme TaskScheduler -configuration Debug build)",
+      "Bash(git checkout -- SessionFlow/Services/SchedulingEngine.swift)",
+      "Bash(xcodebuild -scheme SessionFlow -configuration Debug build)",
       "Bash(swift build)",
       "Bash(./build_app.sh patch)",
       "Bash(./create_dmg.sh)",
-      "Bash(xcodebuild -scheme TaskScheduler -configuration Debug build -derivedDataPath /tmp/TaskSchedulerBuild)"
+      "Bash(xcodebuild -scheme SessionFlow -configuration Debug build -derivedDataPath /tmp/SessionFlowBuild)"
     ]
   }
 }

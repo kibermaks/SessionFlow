@@ -25,8 +25,8 @@ jobs:
       
       - name: Build
         run: |
-          SCHEME="TaskScheduler"
-          PROJECT="TaskScheduler.xcodeproj"
+          SCHEME="SessionFlow"
+          PROJECT="SessionFlow.xcodeproj"
           
           xcodebuild -project "$PROJECT" \
                      -scheme "$SCHEME" \

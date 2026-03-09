@@ -34,8 +34,8 @@ struct CalendarPermissionView: View {
                         .foregroundColor(.white)
                     
                     Text(wasExplicitlyDenied 
-                         ? "You previously denied calendar access. To use Task Scheduler, please enable it in System Settings."
-                         : "Task Scheduler needs access to your calendar to schedule sessions and detect busy time slots.")
+                         ? "You previously denied calendar access. To use SessionFlow, please enable it in System Settings."
+                         : "SessionFlow needs access to your calendar to schedule sessions and detect busy time slots.")
                         .font(.system(size: 16))
                         .foregroundColor(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
@@ -92,8 +92,8 @@ struct CalendarPermissionView: View {
                         )
                         manualPermissionStep(
                             icon: "3.circle.fill",
-                            title: "Enable Task Scheduler",
-                            description: "Toggle on Task Scheduler in the list"
+                            title: "Enable SessionFlow",
+                            description: "Toggle on SessionFlow in the list"
                         )
                         manualPermissionStep(
                             icon: "4.circle.fill",

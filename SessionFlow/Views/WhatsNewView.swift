@@ -35,7 +35,7 @@ struct WhatsNewView: View {
                 Text("What's New")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text("Task Scheduler v\(ChangelogService.currentVersion)")
+                Text("SessionFlow v\(ChangelogService.currentVersion)")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.5))
             }

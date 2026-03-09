@@ -1,6 +1,6 @@
 # Release Process
 
-This document describes the complete release process for Task Scheduler, from preparing a release to publishing it on GitHub.
+This document describes the complete release process for SessionFlow, from preparing a release to publishing it on GitHub.
 
 ## Table of Contents
 
@@ -13,7 +13,7 @@ This document describes the complete release process for Task Scheduler, from pr
 
 ## Overview
 
-Task Scheduler uses a semi-automated release process:
+SessionFlow uses a semi-automated release process:
 
 1. **Local**: Build and version the app, create DMG, commit changes
 2. **GitHub**: Push tag to trigger automated build and release
@@ -93,12 +93,12 @@ Choose the appropriate version increment:
 ./create_dmg.sh
 ```
 
-This creates `dmg_output/TaskScheduler-vX.Y.dmg`.
+This creates `dmg_output/SessionFlow-vX.Y.dmg`.
 
 ### 4. Commit Version Changes
 
 ```bash
-git add TaskScheduler.xcodeproj/project.pbxproj CHANGELOG.md
+git add SessionFlow.xcodeproj/project.pbxproj CHANGELOG.md
 git commit -m "chore: bump version to X.Y"
 ```
 
@@ -121,7 +121,7 @@ Once you push the tag, GitHub Actions will:
 - Generate release notes from CHANGELOG.md
 - Create a GitHub Release with artifacts
 
-Monitor progress at: `https://github.com/kibermaks/TaskScheduler/actions`
+Monitor progress at: `https://github.com/kibermaks/SessionFlow/actions`
 
 ## GitHub Actions Workflow
 
@@ -145,8 +145,8 @@ File: `.github/workflows/release.yml`
 9. Creates GitHub Release with artifacts
 
 **Artifacts:**
-- `TaskScheduler-vX.Y.dmg` - DMG installer
-- `TaskScheduler-vX.Y.zip` - ZIP archive
+- `SessionFlow-vX.Y.dmg` - DMG installer
+- `SessionFlow-vX.Y.zip` - ZIP archive
 
 ### Build Check Workflow
 
@@ -166,7 +166,7 @@ After GitHub Actions completes the release:
 
 ### 1. Review GitHub Release
 
-1. Go to: `https://github.com/kibermaks/TaskScheduler/releases`
+1. Go to: `https://github.com/kibermaks/SessionFlow/releases`
 2. Find the newly created release
 3. Review the auto-generated release notes
 4. Edit if needed to add:
@@ -178,7 +178,7 @@ After GitHub Actions completes the release:
 ### 2. Test Released Artifacts
 
 Download and test the DMG:
-1. Download `TaskScheduler-vX.Y.dmg` from the release
+1. Download `SessionFlow-vX.Y.dmg` from the release
 2. Mount and install the app
 3. Launch and verify it works correctly
 4. Check version number in app header
@@ -216,7 +216,7 @@ If the release includes new features:
 
 **Solutions:**
 - Ensure app was built successfully first
-- Check that `TaskScheduler.app` exists in `./` or `./build_output/`
+- Check that `SessionFlow.app` exists in `./` or `./build_output/`
 - Verify disk space is available
 - Check permissions on temp directories
 
@@ -263,7 +263,7 @@ git push origin vX.Y
 
 ## Version Numbering Guide
 
-Task Scheduler follows [Semantic Versioning](https://semver.org/):
+SessionFlow follows [Semantic Versioning](https://semver.org/):
 
 ### Major Version (X.0)
 Increment for:
@@ -329,4 +329,4 @@ For urgent bug fixes:
 
 ---
 
-Questions about the release process? Open a [GitHub Discussion](https://github.com/kibermaks/TaskScheduler/discussions).
+Questions about the release process? Open a [GitHub Discussion](https://github.com/kibermaks/SessionFlow/discussions).

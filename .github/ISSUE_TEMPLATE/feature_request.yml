@@ -1,5 +1,5 @@
 name: Feature Request
-description: Suggest a new feature or enhancement for Task Scheduler
+description: Suggest a new feature or enhancement for SessionFlow
 title: "[Feature]: "
 labels: ["enhancement", "needs-triage"]
 body:

@@ -993,15 +993,15 @@ struct AppSettingsView: View {
     }
 
     private func resetCalendarSetup() {
-        UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
+        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
     }
 
     private func resetPresets() {
-        UserDefaults.standard.removeObject(forKey: "TaskScheduler.Presets")
-        UserDefaults.standard.removeObject(forKey: "TaskScheduler.LastActivePresetID")
+        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+        UserDefaults.standard.removeObject(forKey: "SessionFlow.LastActivePresetID")
         timelineIntroBarDismissed = false
-        UserDefaults.standard.set(false, forKey: "TaskScheduler.HasCompletedSetup")
+        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
         NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
         if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {

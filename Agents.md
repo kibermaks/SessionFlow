@@ -1,12 +1,12 @@
 # Agent Knowledge Base & Precautions
 
-This file serves as a dedicated knowledge repository for AI agents working on the Task Scheduler project. Read this file before making any structural or logic changes.
+This file serves as a dedicated knowledge repository for AI agents working on the SessionFlow project. Read this file before making any structural or logic changes.
 
 ## ⚠️ CRITICAL PRECAUTIONS
 
 ### 1. Xcode Project Structure
 
-This is a standard Xcode project. **Adding a new file to the filesystem is NOT enough.** You must manually edit `TaskScheduler.xcodeproj/project.pbxproj` to register new files in the following sections:
+This is a standard Xcode project. **Adding a new file to the filesystem is NOT enough.** You must manually edit `SessionFlow.xcodeproj/project.pbxproj` to register new files in the following sections:
 
 - `PBXBuildFile` (for the actual compilation)
 - `PBXFileReference` (for the file location)

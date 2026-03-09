@@ -211,9 +211,9 @@ struct TasksPanel: View {
 class TaskLineHistory: ObservableObject {
     static let shared = TaskLineHistory()
 
-    private let workKey = "TaskScheduler.WorkTaskLines"
-    private let sideKey = "TaskScheduler.SideTaskLines"
-    private let deepKey = "TaskScheduler.DeepTaskLines"
+    private let workKey = "SessionFlow.WorkTaskLines"
+    private let sideKey = "SessionFlow.SideTaskLines"
+    private let deepKey = "SessionFlow.DeepTaskLines"
 
     @Published private(set) var workLines: [String] = []
     @Published private(set) var sideLines: [String] = []

@@ -4,14 +4,14 @@ Short version: keep the Xcode project tidy, test your change, ship it.
 
 ## Non‑negotiables
 
-- New Swift files must be registered manually in `TaskScheduler.xcodeproj/project.pbxproj` (PBXBuildFile, PBXFileReference, PBXGroup, PBXSourcesBuildPhase).
+- New Swift files must be registered manually in `SessionFlow.xcodeproj/project.pbxproj` (PBXBuildFile, PBXFileReference, PBXGroup, PBXSourcesBuildPhase).
 - Only use “Deep” wording (never “Extra”); file names mirror their primary type names.
 - Follow the existing session hashtag contract (`#work`, `#side`, `#deep`, `#plan`) so counting stays accurate.
 
 ## Setup
 
 - macOS 13+, Xcode 15+, Git installed.
-- Clone, `open TaskScheduler.xcodeproj`, or run `./build_app.sh` (`major|minor|patch` bump) for command‑line builds. `deploy_app.sh` and `create_dmg.sh` exist for release flows.
+- Clone, `open SessionFlow.xcodeproj`, or run `./build_app.sh` (`major|minor|patch` bump) for command‑line builds. `deploy_app.sh` and `create_dmg.sh` exist for release flows.
 
 ## Workflow
 

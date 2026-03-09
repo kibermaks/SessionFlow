@@ -65,7 +65,7 @@ class MenuBarController: ObservableObject {
 
         let appName = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String
-            ?? "Task Scheduler"
+            ?? "SessionFlow"
         let headerItem = NSMenuItem(title: appName, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)

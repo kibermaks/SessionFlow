@@ -78,7 +78,7 @@ struct ContentView: View {
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
-    @AppStorage("TaskScheduler.LastSeenVersion") private var lastSeenVersion = ""
+    @AppStorage("SessionFlow.LastSeenVersion") private var lastSeenVersion = ""
     @State private var copyToast: CopyToastInfo? = nil
 
     enum DateSelection: String, CaseIterable {
@@ -134,7 +134,7 @@ struct ContentView: View {
             calendarService.checkAuthorizationStatus()
             
             // Check if setup was completed
-            hasCompletedSetup = UserDefaults.standard.bool(forKey: "TaskScheduler.HasCompletedSetup")
+            hasCompletedSetup = UserDefaults.standard.bool(forKey: "SessionFlow.HasCompletedSetup")
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SetupCompleted"))) { _ in
             // Update setup completion status
@@ -745,7 +745,7 @@ struct HeaderView: View {
     private var appTitle: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("Task Scheduler")
+                Text("SessionFlow")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
                 Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")")

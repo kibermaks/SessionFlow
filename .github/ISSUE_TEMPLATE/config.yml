@@ -1,8 +1,8 @@
 blank_issues_enabled: true
 contact_links:
   - name: General Questions
-    url: https://github.com/kibermaks/TaskScheduler/discussions
+    url: https://github.com/kibermaks/SessionFlow/discussions
     about: Ask questions and discuss ideas with the community
   - name: Documentation
-    url: https://github.com/kibermaks/TaskScheduler#readme
+    url: https://github.com/kibermaks/SessionFlow#readme
     about: Read the documentation and user guides

@@ -5,8 +5,8 @@ set -e
 BUILD_START_TIME=$(date +%s)
 
 # Configuration
-SCHEME="TaskScheduler"
-PROJECT="TaskScheduler.xcodeproj"
+SCHEME="SessionFlow"
+PROJECT="SessionFlow.xcodeproj"
 BUILD_DIR="./build_output"
 # Team ID found in project.pbxproj
 TEAM_ID="RGFAX8X946"

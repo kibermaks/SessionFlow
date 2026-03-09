@@ -83,7 +83,7 @@ struct SessionFeedbackEntry: Codable, Identifiable, Equatable {
 
 class SessionFeedbackStore {
     static let shared = SessionFeedbackStore()
-    private static let storageKey = "TaskScheduler.SessionFeedbackLog"
+    private static let storageKey = "SessionFlow.SessionFeedbackLog"
 
     private init() {}
 

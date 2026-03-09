@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		001 /* TaskSchedulerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* TaskSchedulerApp.swift */; };
+		001 /* SessionFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* SessionFlowApp.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		003 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Session.swift */; };
 		004 /* SchedulePattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* SchedulePattern.swift */; };
@@ -67,8 +67,8 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		100 /* Task Scheduler.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Task Scheduler.app"; sourceTree = BUILT_PRODUCTS_DIR; };
-		101 /* TaskSchedulerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskSchedulerApp.swift; sourceTree = "<group>"; };
+		100 /* SessionFlow.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "SessionFlow.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		101 /* SessionFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		104 /* SchedulePattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulePattern.swift; sourceTree = "<group>"; };
@@ -79,7 +79,7 @@
 		109 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		110 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
-		202 /* TaskScheduler.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TaskScheduler.entitlements; sourceTree = "<group>"; };
+		202 /* SessionFlow.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SessionFlow.entitlements; sourceTree = "<group>"; };
 		2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditor.swift; sourceTree = "<group>"; };
 		2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksPanel.swift; sourceTree = "<group>"; };
 		2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -142,31 +142,31 @@
 		400 = {
 			isa = PBXGroup;
 			children = (
-				401 /* TaskScheduler */,
+				401 /* SessionFlow */,
 				402 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		401 /* TaskScheduler */ = {
+		401 /* SessionFlow */ = {
 			isa = PBXGroup;
 			children = (
-				101 /* TaskSchedulerApp.swift */,
+				101 /* SessionFlowApp.swift */,
 				102 /* ContentView.swift */,
 				403 /* Models */,
 				404 /* Views */,
 				405 /* Services */,
 				C8C8050EED40EF171CC2784D /* Resources */,
 				2DEBECAA2EF4136C002A9D7C /* Icon.icon */,
-				202 /* TaskScheduler.entitlements */,
+				202 /* SessionFlow.entitlements */,
 				2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */,
 			);
-			path = TaskScheduler;
+			path = SessionFlow;
 			sourceTree = "<group>";
 		};
 		402 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				100 /* Task Scheduler.app */,
+				100 /* SessionFlow.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -263,9 +263,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		500 /* TaskScheduler */ = {
+		500 /* SessionFlow */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 600 /* Build configuration list for PBXNativeTarget "TaskScheduler" */;
+			buildConfigurationList = 600 /* Build configuration list for PBXNativeTarget "SessionFlow" */;
 			buildPhases = (
 				501 /* Sources */,
 				300 /* Frameworks */,
@@ -275,9 +275,9 @@
 			);
 			dependencies = (
 			);
-			name = TaskScheduler;
-			productName = TaskScheduler;
-			productReference = 100 /* Task Scheduler.app */;
+			name = SessionFlow;
+			productName = SessionFlow;
+			productReference = 100 /* SessionFlow.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -295,7 +295,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 701 /* Build configuration list for PBXProject "TaskScheduler" */;
+			buildConfigurationList = 701 /* Build configuration list for PBXProject "SessionFlow" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -308,7 +308,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				500 /* TaskScheduler */,
+				500 /* SessionFlow */,
 			);
 		};
 /* End PBXProject section */
@@ -345,7 +345,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				001 /* TaskSchedulerApp.swift in Sources */,
+				001 /* SessionFlowApp.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Session.swift in Sources */,
 				004 /* SchedulePattern.swift in Sources */,
@@ -520,10 +520,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = Icon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 504;
+				CURRENT_PROJECT_VERSION = 514;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -533,18 +533,18 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
-				INFOPLIST_KEY_CFBundleDisplayName = "Task Scheduler";
-				INFOPLIST_KEY_CFBundleName = "Task Scheduler";
+				INFOPLIST_KEY_CFBundleDisplayName = SessionFlow;
+				INFOPLIST_KEY_CFBundleName = SessionFlow;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsUsageDescription = "Task Scheduler needs access to your calendars to read existing events and schedule new sessions.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "SessionFlow needs access to your calendars to read existing events and schedule new sessions.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.15;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
-				PRODUCT_NAME = "Task Scheduler";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
+				PRODUCT_NAME = SessionFlow;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -557,10 +557,10 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = Icon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = NO;
-				CODE_SIGN_ENTITLEMENTS = TaskScheduler/TaskScheduler.entitlements;
+				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 504;
+				CURRENT_PROJECT_VERSION = 514;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -570,18 +570,18 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_CFBundleVersion = "$(CURRENT_PROJECT_VERSION)";
-				INFOPLIST_KEY_CFBundleDisplayName = "Task Scheduler";
-				INFOPLIST_KEY_CFBundleName = "Task Scheduler";
+				INFOPLIST_KEY_CFBundleDisplayName = SessionFlow;
+				INFOPLIST_KEY_CFBundleName = SessionFlow;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
-				INFOPLIST_KEY_NSCalendarsUsageDescription = "Task Scheduler needs access to your calendars to read existing events and schedule new sessions.";
+				INFOPLIST_KEY_NSCalendarsUsageDescription = "SessionFlow needs access to your calendars to read existing events and schedule new sessions.";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
 				MARKETING_VERSION = 1.15;
-				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.TaskScheduler;
-				PRODUCT_NAME = "Task Scheduler";
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
+				PRODUCT_NAME = SessionFlow;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
@@ -591,7 +591,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		600 /* Build configuration list for PBXNativeTarget "TaskScheduler" */ = {
+		600 /* Build configuration list for PBXNativeTarget "SessionFlow" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				802 /* Debug */,
@@ -600,7 +600,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		701 /* Build configuration list for PBXProject "TaskScheduler" */ = {
+		701 /* Build configuration list for PBXProject "SessionFlow" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				800 /* Debug */,

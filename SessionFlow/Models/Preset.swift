@@ -590,8 +590,8 @@ extension Preset {
 // MARK: - Preset Storage Manager
 class PresetStorage {
     static let shared = PresetStorage()
-    private let presetsKey = "TaskScheduler.Presets"
-    private let lastActivePresetKey = "TaskScheduler.LastActivePresetID"
+    private let presetsKey = "SessionFlow.Presets"
+    private let lastActivePresetKey = "SessionFlow.LastActivePresetID"
     
     private init() {}
     

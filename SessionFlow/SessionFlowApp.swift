@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 @main
-struct TaskSchedulerApp: App {
+struct SessionFlowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.openWindow) private var openWindow
     @StateObject private var calendarService = CalendarService()
@@ -35,7 +35,7 @@ struct TaskSchedulerApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
-                Button("About Task Scheduler") {
+                Button("About SessionFlow") {
                     openWindow(id: "about")
                 }
                 Button("Check for Updates...") {
@@ -44,7 +44,7 @@ struct TaskSchedulerApp: App {
                 .disabled(updateService.isChecking)
             }
             CommandGroup(replacing: .help) {
-                Button("Task Scheduler Readme") {
+                Button("SessionFlow Readme") {
                     openProjectReadme()
                 }
                 .keyboardShortcut("?", modifiers: .command)
@@ -75,7 +75,7 @@ struct TaskSchedulerApp: App {
             }
         }
         
-        Window("About Task Scheduler", id: "about") {
+        Window("About SessionFlow", id: "about") {
             AboutView()
         }
         .defaultSize(width: 320, height: 420)
@@ -99,14 +99,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-private extension TaskSchedulerApp {
+private extension SessionFlowApp {
     func openProjectReadme() {
-        guard let url = URL(string: "https://github.com/kibermaks/TaskScheduler#readme") else { return }
+        guard let url = URL(string: "https://github.com/kibermaks/SessionFlow#readme") else { return }
         NSWorkspace.shared.open(url)
     }
 
     func openGitHubRepo() {
-        guard let url = URL(string: "https://github.com/kibermaks/TaskScheduler") else { return }
+        guard let url = URL(string: "https://github.com/kibermaks/SessionFlow") else { return }
         NSWorkspace.shared.open(url)
     }
 }
