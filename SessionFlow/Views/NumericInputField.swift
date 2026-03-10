@@ -23,6 +23,7 @@ struct NumericInputField: View {
                     .frame(width: 20, height: 20)
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(4)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(value <= range.lowerBound)
@@ -75,6 +76,7 @@ struct NumericInputField: View {
                     .frame(width: 20, height: 20)
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(4)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(value >= range.upperBound)

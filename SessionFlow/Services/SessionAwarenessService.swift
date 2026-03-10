@@ -275,13 +275,14 @@ class SessionAwarenessService: ObservableObject {
             .sorted { $0.startTime < $1.startTime }
 
         if let next = upcoming.first {
-            nextSessionTitle = next.title
-            nextSessionType = CalendarService.sessionType(fromNotes: next.notes)
-            nextSessionStartTime = next.startTime
+            let type = CalendarService.sessionType(fromNotes: next.notes)
+            if nextSessionTitle != next.title { nextSessionTitle = next.title }
+            if nextSessionType != type { nextSessionType = type }
+            if nextSessionStartTime != next.startTime { nextSessionStartTime = next.startTime }
         } else {
-            nextSessionTitle = nil
-            nextSessionType = nil
-            nextSessionStartTime = nil
+            if nextSessionTitle != nil { nextSessionTitle = nil }
+            if nextSessionType != nil { nextSessionType = nil }
+            if nextSessionStartTime != nil { nextSessionStartTime = nil }
         }
     }
 
@@ -290,26 +291,30 @@ class SessionAwarenessService: ObservableObject {
     private func activateSession(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool, at now: Date) {
         let isNewSession = currentEventId != slot.id
 
-        currentEventId = slot.id
-        currentSessionTitle = slot.title
-        currentSessionType = sessionType
-        currentEventNotes = slot.notes
-        sessionStartTime = slot.startTime
-        sessionEndTime = slot.endTime
-        isBusySlotMode = isBusySlot
-        busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
-        busySlotCalendarName = isBusySlot ? slot.calendarName : nil
+        // Only update identity properties when session changes (avoids redundant @Published writes)
+        if isNewSession {
+            currentEventId = slot.id
+            currentSessionTitle = slot.title
+            currentSessionType = sessionType
+            currentEventNotes = slot.notes
+            sessionStartTime = slot.startTime
+            sessionEndTime = slot.endTime
+            isBusySlotMode = isBusySlot
+            busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
+            busySlotCalendarName = isBusySlot ? slot.calendarName : nil
+        }
 
+        // Time values change every tick — update directly
         let total = slot.endTime.timeIntervalSince(slot.startTime)
         elapsed = now.timeIntervalSince(slot.startTime)
         remaining = slot.endTime.timeIntervalSince(now)
         progress = total > 0 ? min(1.0, max(0.0, elapsed / total)) : 0
 
         let wasActiveBeforeThisTick = isActive
-        isActive = true
+        if !isActive { isActive = true }
 
         // Dismiss any pending feedback
-        sessionFeedbackPending = nil
+        if sessionFeedbackPending != nil { sessionFeedbackPending = nil }
         feedbackDismissTimer?.invalidate()
 
         // Audio: start sound + ambient on new session
@@ -351,19 +356,19 @@ class SessionAwarenessService: ObservableObject {
     }
 
     private func clearActiveState() {
-        isActive = false
-        currentSessionTitle = ""
-        currentSessionType = nil
-        currentEventId = nil
-        currentEventNotes = nil
-        sessionStartTime = nil
-        sessionEndTime = nil
-        elapsed = 0
-        remaining = 0
-        progress = 0
-        isBusySlotMode = false
-        busySlotCalendarColor = nil
-        busySlotCalendarName = nil
+        if isActive { isActive = false }
+        if !currentSessionTitle.isEmpty { currentSessionTitle = "" }
+        if currentSessionType != nil { currentSessionType = nil }
+        if currentEventId != nil { currentEventId = nil }
+        if currentEventNotes != nil { currentEventNotes = nil }
+        if sessionStartTime != nil { sessionStartTime = nil }
+        if sessionEndTime != nil { sessionEndTime = nil }
+        if elapsed != 0 { elapsed = 0 }
+        if remaining != 0 { remaining = 0 }
+        if progress != 0 { progress = 0 }
+        if isBusySlotMode { isBusySlotMode = false }
+        if busySlotCalendarColor != nil { busySlotCalendarColor = nil }
+        if busySlotCalendarName != nil { busySlotCalendarName = nil }
         lastPresenceReminderTime = nil
         hasPlayedEndingSoon = false
     }

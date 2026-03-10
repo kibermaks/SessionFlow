@@ -654,7 +654,8 @@ struct SettingsChangeModifier: ViewModifier {
     @Binding var selectedDate: Date
     let autoPreview: Bool
     let updatePreview: () -> Void
-    
+    @State private var debounceWork: DispatchWorkItem?
+
     func body(content: Content) -> some View {
         content
             .onChange(of: engine.workSessions) { _, _ in trigger() }
@@ -711,7 +712,10 @@ struct SettingsChangeModifier: ViewModifier {
     }
 
     private func trigger() {
-        if autoPreview { updatePreview() }
+        debounceWork?.cancel()
+        let work = DispatchWorkItem { if autoPreview { updatePreview() } }
+        debounceWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: work)
     }
 }
 
@@ -787,6 +791,7 @@ struct HeaderView: View {
                     .background(Color.white.opacity(0.1))
                     .foregroundColor(.white)
                     .cornerRadius(8)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .focusEffectDisabled()
@@ -802,6 +807,7 @@ struct HeaderView: View {
                         .background(dateSelection == sel ? Color(hex: "8B5CF6") : Color.white.opacity(0.1))
                         .foregroundColor(.white)
                         .cornerRadius(8)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .focusEffectDisabled()
@@ -1023,11 +1029,12 @@ struct LeftPanel: View {
                         Text(tab.rawValue)
                             .font(.system(size: 13, weight: selectedTab == tab ? .bold : .medium))
                             .foregroundColor(selectedTab == tab ? .white : .white.opacity(0.5))
-                        
+
                         Rectangle()
                             .fill(selectedTab == tab ? Color(hex: "8B5CF6") : Color.clear)
                             .frame(height: 2)
                     }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .frame(maxWidth: .infinity)
@@ -1465,6 +1472,7 @@ struct RightPanel: View {
                     HStack { Image(systemName: "calendar.badge.plus"); Text("Schedule Sessions") }
                         .font(.system(size: 15, weight: .semibold))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .disabled(disabled)
@@ -1502,6 +1510,7 @@ struct RightPanel: View {
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .background(Color.red.opacity(0.2)).foregroundColor(.red).cornerRadius(8)
                     .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(Color.red.opacity(0.3), lineWidth: 1))
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .help("Remove scheduled sessions for the selected day")

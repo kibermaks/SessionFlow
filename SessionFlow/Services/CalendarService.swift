@@ -45,11 +45,12 @@ class CalendarService: ObservableObject {
     /// Calculates effective end-of-day for a given date, respecting scheduleEndHour.
     private func effectiveEndOfDay(for date: Date) -> Date {
         let calendar = Calendar.current
-        let nextMidnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: date)!)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: date) else { return date }
+        let nextMidnight = calendar.startOfDay(for: nextDay)
         if scheduleEndHour <= 24 {
             return nextMidnight
         }
-        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight)!
+        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight) ?? nextMidnight
     }
     
     init() {
@@ -364,8 +365,10 @@ class CalendarService: ObservableObject {
         }
 
         let calendar = Calendar.current
-        let sourceStart = source.startDate!
-        let sourceEnd = source.endDate!
+        guard let sourceStart = source.startDate, let sourceEnd = source.endDate else {
+            errorMessage = "Event has no start/end date"
+            return (false, nil, nil)
+        }
         let duration = sourceEnd.timeIntervalSince(sourceStart)
 
         let startComps = calendar.dateComponents([.hour, .minute, .second], from: sourceStart)

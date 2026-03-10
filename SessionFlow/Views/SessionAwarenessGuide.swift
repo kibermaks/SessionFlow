@@ -1,13 +1,15 @@
 import SwiftUI
-import Combine
 
 struct SessionAwarenessGuide: View {
     @Environment(\.dismiss) var dismiss
     @State private var currentPage = 0
-    @State private var remainingMinutes: Int = 40
-    @State private var countdownCancellable: AnyCancellable?
+    @State private var remainingMinutes: Int = Self.demoSessionMinutes
+    @State private var countdownActive = false
     @State private var soundWavePhase: CGFloat = 0
     @State private var selectedFeedback: String? = nil
+
+    private static let demoSessionMinutes = 40
+    private let countdownTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     private let pages: [(title: String, subtitle: String, icon: String, color: Color)] = [
         (
@@ -147,25 +149,25 @@ struct SessionAwarenessGuide: View {
         .frame(width: 500, height: 620)
         .focusable()
         .focusEffectDisabled()
-        .onChange(of: currentPage) { _, newPage in
-            if newPage == 0 {
-                startCountdown()
+        .onReceive(countdownTimer) { _ in
+            guard countdownActive else { return }
+            if remainingMinutes > 0 {
+                remainingMinutes -= 1
             } else {
-                countdownCancellable?.cancel()
-                countdownCancellable = nil
+                remainingMinutes = Self.demoSessionMinutes
+            }
+        }
+        .onChange(of: currentPage) { _, newPage in
+            countdownActive = newPage == 0
+            if newPage == 0 {
+                remainingMinutes = Self.demoSessionMinutes
             }
             if newPage == 2 {
                 selectedFeedback = nil
             }
         }
         .onAppear {
-            if currentPage == 0 {
-                startCountdown()
-            }
-        }
-        .onDisappear {
-            countdownCancellable?.cancel()
-            countdownCancellable = nil
+            countdownActive = currentPage == 0
         }
     }
 
@@ -224,7 +226,7 @@ struct SessionAwarenessGuide: View {
 
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color(hex: "8B5CF6"))
-                        .frame(width: geo.size.width * (1 - CGFloat(remainingMinutes) / 40))
+                        .frame(width: geo.size.width * (1 - CGFloat(remainingMinutes) / CGFloat(Self.demoSessionMinutes)))
                         .animation(.linear(duration: 1), value: remainingMinutes)
                 }
             }
@@ -239,20 +241,6 @@ struct SessionAwarenessGuide: View {
 
     private var timeRemainingText: String {
         "\(remainingMinutes)m left"
-    }
-
-    private func startCountdown() {
-        countdownCancellable?.cancel()
-        remainingMinutes = 40
-        countdownCancellable = Timer.publish(every: 1, on: .main, in: .common)
-            .autoconnect()
-            .sink { _ in
-                if remainingMinutes > 0 {
-                    remainingMinutes -= 1
-                } else {
-                    remainingMinutes = 40
-                }
-            }
     }
 
     // MARK: - Page 2: Sound Waves

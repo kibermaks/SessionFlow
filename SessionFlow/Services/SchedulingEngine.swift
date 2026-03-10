@@ -113,7 +113,7 @@ class SchedulingEngine: ObservableObject {
     // MARK: - Apply Preset
     
     func applyPreset(_ preset: Preset) {
-        // Temporarily disable save to avoid multiple writes? optional.
+        isBatchingUpdates = true
         workSessions = preset.workSessionCount
         sideSessions = preset.sideSessionCount
         workSessionName = preset.workSessionName
@@ -122,7 +122,7 @@ class SchedulingEngine: ObservableObject {
         sideSessionDuration = preset.sideSessionDuration
         planningDuration = preset.planningDuration
         restDuration = preset.restDuration
-        
+
         // New params
         sideRestDuration = preset.sideRestDuration
         deepRestDuration = preset.deepRestDuration
@@ -139,9 +139,9 @@ class SchedulingEngine: ObservableObject {
         sideCalendarName = preset.calendarMapping.sideCalendarName
         workCalendarIdentifier = preset.calendarMapping.workCalendarIdentifier
         sideCalendarIdentifier = preset.calendarMapping.sideCalendarIdentifier
-        
-        
+
         currentPresetId = preset.id
+        isBatchingUpdates = false
         saveState()
     }
     
@@ -183,11 +183,12 @@ class SchedulingEngine: ObservableObject {
     /// If scheduleEndHour > 24, extends into the next calendar day (e.g. 26 = 2 AM next day).
     func effectiveEndOfDay(for baseDate: Date) -> Date {
         let calendar = Calendar.current
-        let nextMidnight = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: baseDate)!)
+        guard let nextDay = calendar.date(byAdding: .day, value: 1, to: baseDate) else { return baseDate }
+        let nextMidnight = calendar.startOfDay(for: nextDay)
         if scheduleEndHour <= 24 {
             return nextMidnight
         }
-        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight)!
+        return calendar.date(byAdding: .hour, value: scheduleEndHour - 24, to: nextMidnight) ?? nextMidnight
     }
 
     // MARK: - Core Scheduling Algorithm
@@ -962,9 +963,10 @@ class SchedulingEngine: ObservableObject {
     // MARK: - State Persistence
     
     private var isLoadingState = false
-    
+    private var isBatchingUpdates = false
+
     private func saveState() {
-        guard !isLoadingState else { return }
+        guard !isLoadingState && !isBatchingUpdates else { return }
         
         let state = Preset(
             id: UUID(), // Dummy ID

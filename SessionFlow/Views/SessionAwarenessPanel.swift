@@ -107,6 +107,7 @@ struct SessionAwarenessPanel: View {
                 .frame(width: 28, height: 28)
                 .background(Color.white.opacity(0.06))
                 .cornerRadius(5)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help("Detach mini-player")
@@ -417,6 +418,7 @@ struct SessionAwarenessPanel: View {
                             .font(.system(size: 12))
                             .foregroundColor(.white.opacity(0.3))
                             .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .help("Dismiss")
@@ -458,6 +460,7 @@ struct SessionAwarenessPanel: View {
                     RoundedRectangle(cornerRadius: 6)
                         .stroke(color.opacity(0.2), lineWidth: 1)
                 )
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(rating.label)
@@ -499,6 +502,7 @@ struct SessionAwarenessPanel: View {
                 .frame(width: 32, height: 32)
                 .background(Color.white.opacity(0.06))
                 .cornerRadius(6)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .help(audioService.isMuted ? "Unmute" : "Mute")

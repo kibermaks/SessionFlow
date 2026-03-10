@@ -13,6 +13,7 @@ class DockProgressController {
                 awarenessService.$currentSessionType,
                 awarenessService.$isBusySlotMode
             )
+            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isActive, progress, sessionType, isBusySlot in
                 let enabled = awarenessService.config.showDockProgress

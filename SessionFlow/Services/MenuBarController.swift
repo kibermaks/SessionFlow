@@ -5,6 +5,7 @@ import SwiftUI
 class MenuBarController: ObservableObject {
     private var statusItem: NSStatusItem?
     private var cancellables = Set<AnyCancellable>()
+    private var flashGeneration = 0
     private weak var awarenessService: SessionAwarenessService?
 
     func setup(awarenessService: SessionAwarenessService) {
@@ -97,17 +98,18 @@ class MenuBarController: ObservableObject {
 
     private func flashStatusItem(type: SessionAwarenessService.FlashType) {
         guard let button = statusItem?.button else { return }
+        flashGeneration += 1
+        let gen = flashGeneration
+        button.contentTintColor = nil
+
         let color = type == .endingSoon ? NSColor.systemRed : NSColor.orange
-        // Flash 1
-        button.contentTintColor = color
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-            button.contentTintColor = nil
-            // Flash 2
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                button.contentTintColor = color
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
-                    button.contentTintColor = nil
-                }
+        let steps: [(TimeInterval, NSColor?)] = [
+            (0, color), (0.55, nil), (0.65, color), (1.2, nil),
+        ]
+        for (delay, tint) in steps {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard self?.flashGeneration == gen else { return }
+                button.contentTintColor = tint
             }
         }
     }
