@@ -92,6 +92,7 @@ struct TimelineView: View {
     @State private var isShiftHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
     @State private var keyDownMonitor: Any? = nil
+    @State private var mouseDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
     @State private var eventsLocked: Bool = false
     @State private var showingUnfreezeConfirmation: Bool = false
@@ -196,6 +197,20 @@ struct TimelineView: View {
                     }
                     return nil
                 }
+                // Restore window focus after context menu / popover / sheet dismissal.
+                // macOS SwiftUI can leave the responder chain in a broken state,
+                // blocking gestures and button clicks until the app is restarted.
+                mouseDownMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { event in
+                    if let window = event.window, !window.isKeyWindow {
+                        window.makeKeyAndOrderFront(nil)
+                    }
+                    // Clear stuck drag state (context menu can interrupt a gesture
+                    // so .onEnded never fires, leaving dragMode stuck)
+                    if dragMode != .none, event.type == .leftMouseDown {
+                        resetDragState()
+                    }
+                    return event
+                }
             }
             .onDisappear {
                 if let monitor = flagsMonitor {
@@ -205,6 +220,10 @@ struct TimelineView: View {
                 if let monitor = keyDownMonitor {
                     NSEvent.removeMonitor(monitor)
                     keyDownMonitor = nil
+                }
+                if let monitor = mouseDownMonitor {
+                    NSEvent.removeMonitor(monitor)
+                    mouseDownMonitor = nil
                 }
             }
             .onChange(of: geo.size.width) { _, newWidth in
@@ -508,7 +527,7 @@ struct TimelineView: View {
                         .foregroundColor(.white)
                         .lineLimit(1)
                     if blockHeight > 30 {
-                        Text(timeRangeString(start: newStart, end: newEnd))
+                        Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white.opacity(0.9))
                     }
@@ -521,7 +540,7 @@ struct TimelineView: View {
         .position(x: centerX, y: centerY)
         .allowsHitTesting(false)
     }
-    
+
     private var nextDayLabel: String {
         let cal = Calendar.current
         if let nextDay = cal.date(byAdding: .day, value: 1, to: selectedDate) {
@@ -979,12 +998,12 @@ extension TimelineView {
                     .fixedSize(horizontal: false, vertical: true)
 
                 if height > 25 {
-                    Text(timeRangeString(start: slot.startTime, end: slot.endTime))
+                    Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.7))
                 }
 
-                if let url = slot.url, height > 40 {
+                if let url = slot.url, height > 35 {
                     Text(url.absoluteString)
                         .font(.system(size: 9))
                         .foregroundColor(Color(hex: "3B82F6"))
@@ -1215,15 +1234,9 @@ extension TimelineView {
                     }
                     .foregroundColor(.white)
                     
-                    Text(timeRangeString(start: session.startTime, end: session.endTime))
+                    Text(startAndDurationString(start: session.startTime, end: session.endTime))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))
-                    
-                    if height > 65 {
-                        Text("\(session.durationMinutes) min")
-                            .font(.system(size: 9))
-                            .foregroundColor(.white.opacity(0.7))
-                    }
                 }
                 .padding(4)
             }
@@ -1804,6 +1817,14 @@ extension TimelineView {
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+    }
+
+    private func startAndDurationString(start: Date, end: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let durationMinutes = Int(end.timeIntervalSince(start) / 60)
+        return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
     }
     
     // MARK: - Feedback Badge
@@ -2401,7 +2422,7 @@ extension TimelineView {
                     }
                     .foregroundColor(.white)
                     if blockHeight > 30 {
-                        Text(timeRangeString(start: newStart, end: newEnd))
+                        Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
                             .foregroundColor(.white.opacity(0.9))
                     }

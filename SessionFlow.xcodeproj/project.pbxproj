@@ -18,6 +18,7 @@
 		009 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* TimelineView.swift */; };
 		010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* SettingsPanel.swift */; };
 		011 /* PresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* PresetManager.swift */; };
+		A1B2C3D4E5F60718293A4B5D /* ProductivityCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5C /* ProductivityCard.swift */; };
 		2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */; };
 		2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */; };
 		2DC4CFEA2EFA8E8700F7A35D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2DC4CFE92EFA8E8700F7A35D /* Assets.xcassets */; };
@@ -79,6 +80,7 @@
 		109 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		110 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5C /* ProductivityCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductivityCard.swift; sourceTree = "<group>"; };
 		202 /* SessionFlow.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SessionFlow.entitlements; sourceTree = "<group>"; };
 		2DC4CFE52EFA885900F7A35D /* TaskEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskEditor.swift; sourceTree = "<group>"; };
 		2DC4CFE62EFA885900F7A35D /* TasksPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksPanel.swift; sourceTree = "<group>"; };
@@ -206,6 +208,7 @@
 				126 /* WhatsNewView.swift */,
 				127 /* UpdateAlertSheet.swift */,
 				1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */,
+				A1B2C3D4E5F60718293A4B5C /* ProductivityCard.swift */,
 				2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */,
 				E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */,
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* MiniPlayerView.swift */,
@@ -380,6 +383,7 @@
 				698E3B36A45C17FF134EEE52 /* SessionAwarenessService.swift in Sources */,
 				7720F7D61A0294F1C9C3877D /* SessionAudioService.swift in Sources */,
 				876B4DD1E37960D23C5EB40F /* SessionAwarenessPanel.swift in Sources */,
+				A1B2C3D4E5F60718293A4B5D /* ProductivityCard.swift in Sources */,
 				8B24F98B098D2F129A31E399 /* SessionAwarenessGuide.swift in Sources */,
 				D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */,
 				D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */,
@@ -523,7 +527,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 542;
+				CURRENT_PROJECT_VERSION = 561;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -542,7 +546,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -560,7 +564,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 542;
+				CURRENT_PROJECT_VERSION = 561;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -579,7 +583,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2.0;
+				MARKETING_VERSION = 2.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_EMIT_LOC_STRINGS = YES;

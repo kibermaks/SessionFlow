@@ -88,22 +88,42 @@ struct MiniPlayerView: View {
         HStack(spacing: 10) {
             expandButton
 
-            if let type = awarenessService.nextSessionType {
+            if awarenessService.nextSessionIsBusySlot {
+                Image(systemName: "calendar")
+                    .font(.system(size: 13))
+                    .foregroundColor((awarenessService.nextSessionCalendarColor ?? .white).opacity(0.6))
+            } else if let type = awarenessService.nextSessionType {
                 Image(systemName: type.icon)
                     .font(.system(size: 13))
                     .foregroundColor(type.color.opacity(0.6))
             }
 
-            Text("Next: \(awarenessService.nextSessionTitle ?? "")")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.5))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Next: \(awarenessService.nextSessionTitle ?? "")")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.white.opacity(0.5))
+                    .lineLimit(1)
+
+                if let start = awarenessService.nextSessionStartTime,
+                   let end = awarenessService.nextSessionEndTime {
+                    Text(nextSessionTimeString(start: start, end: end))
+                        .font(.system(size: 10))
+                        .foregroundColor(.white.opacity(0.35))
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
             if let startTime = awarenessService.nextSessionStartTime {
                 let minutesUntil = Int(startTime.timeIntervalSince(awarenessService.currentTime) / 60)
-                if minutesUntil > 0 {
+                if minutesUntil >= 60 {
+                    let h = minutesUntil / 60
+                    let m = minutesUntil % 60
+                    Text(m > 0 ? "in \(h)h \(m)m" : "in \(h)h")
+                        .font(.system(size: 12, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.4))
+                } else if minutesUntil > 0 {
                     Text("in \(minutesUntil) min")
                         .font(.system(size: 12, design: .monospaced))
                         .foregroundColor(.white.opacity(0.4))
@@ -498,5 +518,13 @@ struct MiniPlayerView: View {
             return String(format: "%d:%02d:%02d", hours, minutes, seconds)
         }
         return String(format: "%02d:%02d", minutes, seconds)
+    }
+
+    private func nextSessionTimeString(start: Date, end: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        let durationMinutes = Int(end.timeIntervalSince(start) / 60)
+        return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
     }
 }

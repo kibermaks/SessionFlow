@@ -305,8 +305,8 @@ class CalendarService: ObservableObject {
     
     /// Fetch events around now: any currently active event plus upcoming events until end of day.
     /// Used by SessionAwarenessService to always track the current session regardless of selected day.
-    func fetchNowSlots() -> [BusyTimeSlot] {
-        let now = Date()
+    func fetchNowSlots(referenceTime: Date? = nil) -> [BusyTimeSlot] {
+        let now = referenceTime ?? Date()
         // Look back 12 hours to catch events that started earlier and are still running
         let windowStart = now.addingTimeInterval(-12 * 3600)
         let endOfDay = effectiveEndOfDay(for: now)

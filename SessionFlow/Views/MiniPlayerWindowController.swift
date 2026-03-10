@@ -40,11 +40,12 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         let hostingView = NSHostingView(rootView: miniView)
 
         let defaultWidth: CGFloat = 620
-        let defaultHeight: CGFloat = 80
+        let defaultHeight: CGFloat = 110
 
         let panelRect: NSRect
         if let saved = awarenessService.config.miniPlayerFrame {
-            panelRect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
+            // Always use fixed height; preserve saved position and width
+            panelRect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: defaultHeight)
         } else {
             let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600)
             panelRect = NSRect(
@@ -65,7 +66,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         newPanel.isMovableByWindowBackground = true
         newPanel.backgroundColor = .clear
         newPanel.isOpaque = false
-        newPanel.hasShadow = true
+        newPanel.hasShadow = false  // Use SwiftUI shadow only (rounded); window shadow is square
         newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         newPanel.contentView = hostingView
         newPanel.delegate = self

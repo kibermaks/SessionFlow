@@ -119,3 +119,16 @@ dev/
 .derived_data/
 SessionFlow.xcodeproj/project.xcworkspace/xcuserdata/maks.xcuserdatad/UserInterfaceState.xcuserstate
 SessionFlow.xcodeproj/project.xcworkspace/xcuserdata/maks.xcuserdatad/UserInterfaceState.xcuserstate
+.derivedData/info.plist
+.derivedData/CompilationCache.noindex/generic/lock
+.derivedData/CompilationCache.noindex/generic/v1.1/v3.actions
+.derivedData/CompilationCache.noindex/generic/v1.1/v3.actions.shared
+.derivedData/CompilationCache.noindex/generic/v1.1/v8.data
+.derivedData/CompilationCache.noindex/generic/v1.1/v8.data.shared
+.derivedData/CompilationCache.noindex/generic/v1.1/v8.index
+.derivedData/CompilationCache.noindex/generic/v1.1/v8.index.shared
+.derivedData/Logs/Launch/LogStoreManifest.plist
+.derivedData/Logs/Localization/LogStoreManifest.plist
+.derivedData/Logs/Package/LogStoreManifest.plist
+.derivedData/Logs/Test/LogStoreManifest.plist
+.derivedData/ModuleCache.noindex/Session.modulevalidation

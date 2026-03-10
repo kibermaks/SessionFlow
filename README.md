@@ -31,6 +31,9 @@ SessionFlow is a native macOS application built with SwiftUI that helps you plan
 - **↩️ Undo/Redo**: Full history for event moves and projected session edits
 - **🔄 Auto-Updates**: Automatic update checks with self-install from GitHub Releases, plus a What's New changelog viewer
 - **🌑 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
+- **👁 Session Awareness**: Tracks active calendar events tagged with session hashtags (#work, #deep, #break, etc.), with ambient sounds, progress display, and gentle reminders as sessions approach end
+- **🪟 Mini-Player**: Compact floating window (or menu bar popover) that shows session status at a glance—collapse the main window and keep awareness in a small footprint
+- **📈 Productivity Tracking**: Daily productivity card and monthly calendar view that summarize feedback on your sessions (rocket/completed/partial/skipped), highlight unrated blocks, and compute weighted focus time so you can see how each day and month actually felt.
 
 ## 🖼 Visual Walkthrough
 
@@ -45,12 +48,12 @@ SessionFlow is a native macOS application built with SwiftUI that helps you plan
 Timeline, projections, and controls share a single glass panel so you can see inputs and outputs together.
 
 <p align="center">
-  <img src="docs/assets/Main%20Screen.png" alt="SessionFlow timeline and settings" width="900" />
+  <img src="docs/assets/Main%20Screen.jpg" alt="SessionFlow timeline and settings" width="900" />
 </p>
 
-### Dynamic Scheduling
+### Dynamic Scheduling + Drag & Drop
 
-Sessions flow around existing events instantly as you tweak durations or presets.
+Sessions flow around existing events instantly as you tweak durations or presets. You can also drag and drop events to change their time and duration.
 
 <p align="center">
   <img src="docs/assets/DynamicNature.gif" alt="Animated view showing sessions adapting on the timeline" width="900" />
@@ -61,7 +64,7 @@ Sessions flow around existing events instantly as you tweak durations or presets
 Workday, Focus, Weekend, or any custom preset stays one click away.
 
 <p align="center">
-  <img src="docs/assets/Presets.png" alt="Preset manager UI and quick switching controls" width="900" />
+  <img src="docs/assets/Presets.png" alt="Preset manager UI and quick switching controls" width="400" />
 </p>
 
 ### Availability Insights
@@ -69,7 +72,23 @@ Workday, Focus, Weekend, or any custom preset stays one click away.
 Summary cards highlight real events, projected work, and when you are supposed to be free.
 
 <p align="center">
-  <img src="docs/assets/Projected%20+%20Availability%20Cards.png" alt="Projected sessions and availability cards" width="900" />
+  <img src="docs/assets/Projected%20+%20Availability%20Cards.png" alt="Projected sessions and availability cards" width="400" />
+</p>
+
+### Session Awareness & Mini-Player
+
+The bottom panel lets you track your current session in real time: when you’re in a tagged event (#work, #side, #deep, #plan, #break), it displays elapsed time, progress, and remaining time. Ambient sounds and visual cues help keep you in flow, with gentle alerts as the session nears its end. Quick prompts let you rate how the session went. For a more compact experience, a floating Mini-Player window provides the same awareness—showing idle, next-up, active, and feedback states in a small footprint. You can expand back to the full app anytime.
+
+<p align="center">
+  <img src="docs/assets/SessionAwareness.gif" alt="Session Awareness: idle, active session, progress, feedback" width="900" />
+</p>
+
+### Productivity Tracking
+
+The right side of the window can show a **Productivity** card once you start leaving feedback on sessions. It aggregates how many rocket/completed/partial/skipped blocks you had today, how many are still unrated, and computes a weighted **Focus Time** score based on both duration and rating. From there, a calendar button opens a monthly productivity view with a compact calendar: each day shows colored dots for rated sessions and a tiny focus-time label, making it easy to spot your strongest days and streaks at a glance.
+
+<p align="center">
+  <img src="docs/assets/ProductivityTracking.png" alt="Productivity Tracking" width="400" />
 </p>
 
 ## 🚀 Installation

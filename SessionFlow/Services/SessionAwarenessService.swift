@@ -39,6 +39,9 @@ class SessionAwarenessService: ObservableObject {
     @Published var nextSessionTitle: String? = nil
     @Published var nextSessionType: SessionType? = nil
     @Published var nextSessionStartTime: Date? = nil
+    @Published var nextSessionEndTime: Date? = nil
+    @Published var nextSessionIsBusySlot: Bool = false
+    @Published var nextSessionCalendarColor: Color? = nil
 
     // Feedback
     @Published var sessionFeedbackPending: SessionFeedback? = nil
@@ -103,6 +106,18 @@ class SessionAwarenessService: ObservableObject {
     private var lastSlotsFetch: Date = .distantPast
     private let slotsFetchInterval: TimeInterval = 30
     private var calendarCancellable: AnyCancellable?
+
+    /// Returns the demo-override time if enabled, otherwise real Date()
+    private var effectiveNow: Date {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(forKey: "devNowLineOverrideEnabled") else { return Date() }
+        let hour = defaults.integer(forKey: "devNowLineOverrideHour")
+        let minute = defaults.integer(forKey: "devNowLineOverrideMinute")
+        let cal = Calendar.current
+        let dayStart = cal.startOfDay(for: Date())
+        return cal.date(byAdding: .hour, value: hour, to: dayStart)
+            .flatMap { cal.date(byAdding: .minute, value: minute, to: $0) } ?? Date()
+    }
 
     // MARK: - Init
 
@@ -177,7 +192,7 @@ class SessionAwarenessService: ObservableObject {
     // MARK: - Core tick
 
     private func tick() {
-        let now = Date()
+        let now = effectiveNow
         currentTime = now
 
         guard let calendarService = calendarService else {
@@ -187,7 +202,7 @@ class SessionAwarenessService: ObservableObject {
 
         // Refresh cached slots every 30s (not every tick)
         if now.timeIntervalSince(lastSlotsFetch) >= slotsFetchInterval {
-            cachedNowSlots = calendarService.fetchNowSlots()
+            cachedNowSlots = calendarService.fetchNowSlots(referenceTime: now)
             lastSlotsFetch = now
         }
         let todaySlots = cachedNowSlots
@@ -286,18 +301,29 @@ class SessionAwarenessService: ObservableObject {
     private func updateNextSession(in slots: [BusyTimeSlot], at now: Date) {
         let upcoming = slots
             .filter { $0.startTime > now }
-            .filter { CalendarService.sessionType(fromNotes: $0.notes) != nil }
+            .filter { slot in
+                // Include tagged sessions always; include untagged events when trackOtherEvents is on
+                CalendarService.sessionType(fromNotes: slot.notes) != nil || config.trackOtherEvents
+            }
             .sorted { $0.startTime < $1.startTime }
 
         if let next = upcoming.first {
             let type = CalendarService.sessionType(fromNotes: next.notes)
+            let isBusy = type == nil
             if nextSessionTitle != next.title { nextSessionTitle = next.title }
             if nextSessionType != type { nextSessionType = type }
             if nextSessionStartTime != next.startTime { nextSessionStartTime = next.startTime }
+            if nextSessionEndTime != next.endTime { nextSessionEndTime = next.endTime }
+            if nextSessionIsBusySlot != isBusy { nextSessionIsBusySlot = isBusy }
+            let calColor = isBusy ? next.calendarColor : nil
+            if nextSessionCalendarColor != calColor { nextSessionCalendarColor = calColor }
         } else {
             if nextSessionTitle != nil { nextSessionTitle = nil }
             if nextSessionType != nil { nextSessionType = nil }
             if nextSessionStartTime != nil { nextSessionStartTime = nil }
+            if nextSessionEndTime != nil { nextSessionEndTime = nil }
+            if nextSessionIsBusySlot != false { nextSessionIsBusySlot = false }
+            if nextSessionCalendarColor != nil { nextSessionCalendarColor = nil }
         }
     }
 
@@ -312,12 +338,14 @@ class SessionAwarenessService: ObservableObject {
             currentSessionTitle = slot.title
             currentSessionType = sessionType
             currentEventNotes = slot.notes
-            sessionStartTime = slot.startTime
-            sessionEndTime = slot.endTime
             isBusySlotMode = isBusySlot
             busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
             busySlotCalendarName = isBusySlot ? slot.calendarName : nil
         }
+
+        // Start/end times may change if the event is dragged — always keep in sync
+        if sessionStartTime != slot.startTime { sessionStartTime = slot.startTime }
+        if sessionEndTime != slot.endTime { sessionEndTime = slot.endTime }
 
         // Time values change every tick — update directly
         let total = slot.endTime.timeIntervalSince(slot.startTime)
