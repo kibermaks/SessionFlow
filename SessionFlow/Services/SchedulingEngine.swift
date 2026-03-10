@@ -86,7 +86,6 @@ class SchedulingEngine: ObservableObject {
     // MARK: - Scheduling Settings
     private let existingEventBuffer: Int = 10 // minutes
     private let roundingInterval: Int = 5 // Changed to 5 minutes for better precision
-    private let maxSchedulingHour: Int = 24
     
     // MARK: - Scheduled Output
     @Published var projectedSessions: [ScheduledSession] = []

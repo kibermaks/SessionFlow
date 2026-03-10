@@ -126,14 +126,11 @@ class MenuBarController: ObservableObject {
 
             // Time text
             let time: TimeInterval
-            let suffix: String
             switch service.timeDisplayMode {
             case .remaining:
                 time = service.remaining
-                suffix = ""
             case .elapsed:
                 time = service.elapsed
-                suffix = ""
             }
             let totalSeconds = max(0, Int(time))
             let hours = totalSeconds / 3600
@@ -143,7 +140,7 @@ class MenuBarController: ObservableObject {
                 ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
                 : String(format: "%02d:%02d", minutes, seconds)
             let attributed = NSAttributedString(
-                string: " \(timeStr)\(suffix)",
+                string: " \(timeStr)",
                 attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)]
             )
             button.attributedTitle = attributed

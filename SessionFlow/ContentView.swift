@@ -76,7 +76,6 @@ struct ContentView: View {
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
     @State private var showingSessionAwarenessGuide = false
-    @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
     @AppStorage("SessionFlow.LastSeenVersion") private var lastSeenVersion = ""

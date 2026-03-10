@@ -5,7 +5,6 @@ struct SessionAwarenessGuide: View {
     @State private var currentPage = 0
     @State private var remainingMinutes: Int = Self.demoSessionMinutes
     @State private var countdownActive = false
-    @State private var soundWavePhase: CGFloat = 0
     @State private var selectedFeedback: String? = nil
 
     private static let demoSessionMinutes = 40
