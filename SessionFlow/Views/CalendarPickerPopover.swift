@@ -15,15 +15,16 @@ struct CalendarPickerPopover: View {
             pickerLabel
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.12)
         .focusable(false)
         .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
             popoverContent
         }
     }
-    
+
     private var pickerLabel: some View {
         let calendarInfo = calendars.first { $0.name == selectedCalendar }
-        
+
         return HStack(spacing: 10) {
             if !selectedCalendar.isEmpty, let info = calendarInfo {
                 Circle()
@@ -95,9 +96,10 @@ struct CalendarPickerPopover: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.1)
                 .focusable(false)
                 .disabled(info.isExcluded)
-                
+
                 if info.id != calendars.last?.id {
                     Divider()
                         .padding(.horizontal, 10)
@@ -125,12 +127,13 @@ struct CalendarPickerCompact: View {
             compactLabel
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.12)
         .focusable(false)
         .popover(isPresented: $showingPopover, arrowEdge: .bottom) {
             popoverContent
         }
     }
-    
+
     private var isSelectedCalendarHidden: Bool {
         guard let info = calendars.first(where: { $0.name == selectedCalendar }) else { return false }
         return info.isExcluded
@@ -213,9 +216,10 @@ struct CalendarPickerCompact: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.1)
                 .focusable(false)
                 .disabled(info.isExcluded)
-                
+
                 if info.id != calendars.last?.id {
                     Divider()
                         .padding(.horizontal, 10)

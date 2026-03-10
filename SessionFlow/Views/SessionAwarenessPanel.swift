@@ -110,6 +110,7 @@ struct SessionAwarenessPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
         .help("Detach mini-player")
     }
 
@@ -154,6 +155,7 @@ struct SessionAwarenessPanel: View {
                                 .foregroundColor(.white.opacity(0.5))
                         }
                         .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.3)
                         .popover(isPresented: $showingEventInfo) {
                             eventInfoPopover
                         }
@@ -442,6 +444,7 @@ struct SessionAwarenessPanel: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
                     .help("Dismiss")
                 }
             }
@@ -485,6 +488,7 @@ struct SessionAwarenessPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
         .help(rating.label)
     }
 
@@ -527,6 +531,7 @@ struct SessionAwarenessPanel: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
         .help(audioService.isMuted ? "Unmute" : "Mute")
     }
 

@@ -19,12 +19,14 @@
       "Bash(xcodebuild -scheme SessionFlow -configuration Debug build -derivedDataPath /tmp/SessionFlowBuild)",
       "Bash(for file in *)",
       "Bash(do echo \"=== $file ===\")",
-      "Read(//Users/maks/Code-Projects/Antigravity - Task Scheduler/TaskScheduler/**)",
+      "Read(//Users/maks/Code-Projects/SessionFlow/**)",
       "Bash(done)",
       "Bash(printf \"File\\\\t\\\\t\\\\t\\\\t\\\\tSize\\\\t\\\\tFormat\\\\n\")",
       "Bash(ls -1 *.wav)",
       "Bash(ls -1 *.mp3)",
-      "Bash(ls -1 *.aiff)"
+      "Bash(ls -1 *.aiff)",
+      "Bash(/tmp/button_search.txt:*)",
+      "Read(//tmp/**)"
     ]
   },
   "hooks": {

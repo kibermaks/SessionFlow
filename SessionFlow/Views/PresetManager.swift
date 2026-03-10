@@ -178,6 +178,7 @@ struct PresetCard: View {
                             .foregroundColor(.red)
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
                 }
             }
             
@@ -217,6 +218,7 @@ struct PresetCard: View {
                     .cornerRadius(6)
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.12)
         }
         .padding(12)
         .background(Color.white.opacity(isHovered ? 0.08 : 0.05))

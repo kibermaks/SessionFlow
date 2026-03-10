@@ -60,6 +60,7 @@ struct ProductivityCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .help("Monthly overview")
             }
 
@@ -216,6 +217,7 @@ struct MonthlyStatsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .focusable(false)
             }
             .padding(.horizontal, 20)
@@ -233,6 +235,7 @@ struct MonthlyStatsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .focusable(false)
 
                 Spacer()
@@ -250,6 +253,7 @@ struct MonthlyStatsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: isCurrentMonth ? 0 : 0.2)
                 .focusable(false)
                 .disabled(isCurrentMonth)
             }

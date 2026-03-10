@@ -48,6 +48,7 @@ struct PatternsGuide: View {
                             .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.2)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 24)
@@ -93,8 +94,9 @@ struct PatternsGuide: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(brightness: 0.15)
                         }
-                        
+
                         Button {
                             handleNext()
                         } label: {
@@ -110,6 +112,7 @@ struct PatternsGuide: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.12)
                         .keyboardShortcut(.defaultAction)
                     }
                 }

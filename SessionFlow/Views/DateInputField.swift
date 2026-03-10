@@ -46,7 +46,8 @@ struct DateInputField: View {
                         .frame(width: 20, height: 14)
                 }
                 .buttonStyle(.plain)
-                
+                .hoverEffect(brightness: 0.25)
+
                 Button {
                     step(up: false)
                 } label: {
@@ -56,6 +57,7 @@ struct DateInputField: View {
                         .frame(width: 20, height: 14)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.25)
             }
         }
     }

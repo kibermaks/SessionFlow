@@ -26,6 +26,7 @@ struct NumericInputField: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.25)
             .disabled(value <= range.lowerBound)
             
             // Text field
@@ -79,6 +80,7 @@ struct NumericInputField: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.25)
             .disabled(value >= range.upperBound)
             
             if !unit.isEmpty {

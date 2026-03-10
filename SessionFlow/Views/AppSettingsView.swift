@@ -131,6 +131,7 @@ struct AppSettingsView: View {
             )
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: isSelected ? 0 : 0.15)
         .focusable(false)
     }
 
@@ -875,6 +876,7 @@ struct AppSettingsView: View {
                 .cornerRadius(4)
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.25)
     }
 
     private func accelerandoButton(isEnabled: Bool, isDisabled: Bool, action: @escaping () -> Void) -> some View {
@@ -891,6 +893,7 @@ struct AppSettingsView: View {
                 .cornerRadius(4)
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.25)
         .disabled(isDisabled)
     }
 

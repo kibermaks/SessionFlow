@@ -128,6 +128,7 @@ struct TasksPanel: View {
                         .animation(.easeInOut(duration: 0.15), value: isConfirming)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .disabled(!hasText && !isConfirming)
                 .help(isConfirming ? "Click again to confirm" : "Clear all tasks")
 
@@ -202,6 +203,7 @@ struct TasksPanel: View {
                 .cornerRadius(4)
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.25)
         .disabled(!isEnabled)
     }
 }

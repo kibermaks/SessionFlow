@@ -108,6 +108,7 @@ struct CalendarSetupView: View {
                                     .cornerRadius(6)
                                 }
                                 .buttonStyle(.plain)
+                                .hoverEffect(brightness: 0.15)
                                 .focusable(false)
                                 .disabled(isReloading)
                                 .help("Reload after adding new calendars in Calendar.app")
@@ -199,6 +200,7 @@ struct CalendarSetupView: View {
                         .opacity(canComplete ? 1.0 : 0.5)
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: canComplete ? 0.1 : 0)
                     .disabled(!canComplete || isCompleting)
                     .padding(.horizontal, 32)
                 }

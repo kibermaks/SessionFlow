@@ -370,6 +370,7 @@ struct TimelineView: View {
                     .padding(6)
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.3)
             .help("Dismiss this hint")
         }
         .padding(.vertical, 8)
@@ -665,6 +666,7 @@ struct TimelineView: View {
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.15)
                 .popover(isPresented: $showingLegendPopover, arrowEdge: .bottom) {
                     legendPopoverContent
                 }
@@ -676,7 +678,7 @@ struct TimelineView: View {
                     }
                 }
             }
-            
+
             // Lock/unlock event dragging
             Button {
                 withAnimation { eventsLocked.toggle() }
@@ -690,6 +692,7 @@ struct TimelineView: View {
                     .foregroundColor(eventsLocked ? .white.opacity(0.35) : .white)
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
             .help(eventsLocked ? "Unlock dragging & resizing events and sessions" : "Lock all event and session positions")
 
             // Toggle night button
@@ -705,6 +708,7 @@ struct TimelineView: View {
                     .cornerRadius(6)
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
             .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
         }
     }
@@ -1449,10 +1453,11 @@ extension TimelineView {
                         .foregroundColor(.white.opacity(0.5))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
             }
-            
+
             Divider().background(Color.white.opacity(0.1))
-            
+
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: "clock")
@@ -1529,6 +1534,7 @@ extension TimelineView {
                         .foregroundColor(.white.opacity(0.5))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
             }
             
             Divider().background(Color.white.opacity(0.1))
@@ -1853,6 +1859,7 @@ extension TimelineView {
             }
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
         .popover(isPresented: isShowingPopover, arrowEdge: .trailing) {
             feedbackPopoverContent(for: slot, existingRating: rating)
         }
@@ -1911,6 +1918,7 @@ extension TimelineView {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.15)
                     .foregroundColor(ratingColor(rating))
                 }
             }
@@ -1957,6 +1965,7 @@ extension TimelineView {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
             .help("Not set")
 
             ForEach(SessionRating.allCases, id: \.rawValue) { rating in
@@ -1982,6 +1991,7 @@ extension TimelineView {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .help(rating.label)
             }
         }

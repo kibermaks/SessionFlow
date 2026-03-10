@@ -52,6 +52,7 @@ struct WhatsNewView: View {
                     .background(Circle().fill(Color.white.opacity(0.1)))
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
             .keyboardShortcut(.escape, modifiers: [])
         }
         .padding(.horizontal, 28)

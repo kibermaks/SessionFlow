@@ -224,6 +224,7 @@ struct SettingsPanel: View {
                             .foregroundColor(.white.opacity(0.4))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
                     .popover(isPresented: $showingPlanningHelp) {
                         Text(planningHelpText)
                             .font(.system(size: 13))
@@ -304,6 +305,7 @@ struct SettingsPanel: View {
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .popover(isPresented: isShowingHelp) {
                     Text(helpText)
                         .font(.system(size: 13))
@@ -409,6 +411,7 @@ struct SettingsPanel: View {
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .popover(isPresented: $showingPatternHelp) {
                     Text(patternHelpText)
                         .font(.system(size: 13))
@@ -459,6 +462,7 @@ struct SettingsPanel: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.12)
                 .padding(.vertical, 8)
             } else {
                 VStack(alignment: .leading, spacing: 12) {
@@ -532,6 +536,7 @@ struct SettingsPanel: View {
                                     .foregroundColor(.white.opacity(0.4))
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(brightness: 0.3)
                             .popover(isPresented: $showingFlexibleSideHelp) {
                                 Text(flexibleSideHelpText)
                                     .font(.system(size: 13))
@@ -581,6 +586,7 @@ struct SettingsPanel: View {
                             .foregroundColor(.white.opacity(0.4))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
                     .popover(isPresented: $showingDeepHelp) {
                         Text(deepHelpText)
                             .font(.system(size: 13))
@@ -700,6 +706,7 @@ struct SettingsPanel: View {
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .popover(isPresented: $showingRestHelp) {
                     Text(restHelpText)
                         .font(.system(size: 13))
@@ -766,6 +773,7 @@ struct SettingsPanel: View {
                             .foregroundColor(.white.opacity(0.4))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
                     .popover(isPresented: $showingBigRestHelp) {
                         Text("A longer rest period injected after sustained focus time. Helps prevent burnout during long work days. The break appears as a gap between calendar events — it won't create an event itself.")
                             .font(.system(size: 13))
@@ -845,6 +853,7 @@ struct SectionExpandButton: View {
                 .animation(.easeInOut(duration: 0.2), value: isExpanded)
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.3)
         .focusable(false)
         .disabled(false)
         .help(isExpanded ? "" : tooltip)
@@ -1193,6 +1202,7 @@ fileprivate struct SuggestionView<V: Equatable>: View {
                         .foregroundColor(isSelected ? .white.opacity(0.9) : .white.opacity(0.7))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .padding(.leading, 8)
             }
         }

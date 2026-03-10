@@ -786,6 +786,7 @@ struct HeaderView: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
             .help("App Settings")
         }
         .padding(.horizontal, 24)
@@ -835,6 +836,7 @@ struct HeaderView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.15)
             .focusEffectDisabled()
 
             ForEach(ContentView.DateSelection.allCases, id: \.self) { sel in
@@ -851,6 +853,7 @@ struct HeaderView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: dateSelection == sel ? 0 : 0.15)
                 .focusEffectDisabled()
             }
             if dateSelection == .custom {
@@ -921,6 +924,7 @@ struct HeaderView: View {
                             .frame(width: 80, alignment: .leading)
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.2)
                     .help("Click to set a custom start time")
                 }
             }
@@ -1028,6 +1032,7 @@ struct LeftPanel: View {
                             .cornerRadius(8)
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.12)
                     .help(isConfirmingReset ? "Click again to confirm" : "Reset manual alignment")
                     .animation(.easeInOut(duration: 0.15), value: isConfirmingReset)
                 }
@@ -1084,6 +1089,7 @@ struct LeftPanel: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: selectedTab == tab ? 0 : 0.15)
                 .frame(maxWidth: .infinity)
             }
         }
@@ -1294,6 +1300,7 @@ struct RightPanel: View {
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .popover(isPresented: $showingAvailabilityHelp) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(availabilityHelpBase)
@@ -1373,6 +1380,7 @@ struct RightPanel: View {
                         .foregroundColor(.white.opacity(0.4))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
                 .popover(isPresented: $showingProjectionHelp) {
                     Text(projectionHelp)
                         .font(.system(size: 13))
@@ -1454,7 +1462,10 @@ struct RightPanel: View {
                 }
             }
             if let last = sessions.last {
-                let isNextDay = !Calendar.current.isDate(last.endTime, inSameDayAs: selectedDate)
+                let cal = Calendar.current
+                let comps = cal.dateComponents([.hour, .minute], from: last.endTime)
+                let isMidnight = comps.hour == 0 && comps.minute == 0
+                let isNextDay = !isMidnight && !cal.isDate(last.endTime, inSameDayAs: selectedDate)
                 HStack {
                     Text("Done by:").foregroundColor(Color(hex: "10B981"))
                     Spacer()
@@ -1515,7 +1526,7 @@ struct RightPanel: View {
     }
     
     private var actionButtons: some View {
-        let neutral = Color(hex: "6B7280")
+        let accent = Color(hex: "6366F1")
         let disabled = schedulingEngine.projectedSessions.isEmpty
 
         return VStack(spacing: 12) {
@@ -1559,9 +1570,10 @@ struct RightPanel: View {
                 .help("More scheduling options")
             }
             .frame(height: 44)
-            .background(disabled ? Color.gray.opacity(0.3) : neutral)
+            .background(disabled ? Color.gray.opacity(0.3) : accent)
             .foregroundColor(.white)
             .cornerRadius(10)
+            .hoverEffect(brightness: disabled ? 0 : 0.12)
 
             Button(action: { deletePastSessions = false; showingDeleteConfirmation = true }) {
                 HStack { Image(systemName: "trash"); Text("Delete Day's Sessions") }
@@ -1572,6 +1584,7 @@ struct RightPanel: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.15)
             .help("Remove scheduled sessions for the selected day")
         }
     }
@@ -1693,9 +1706,10 @@ private struct DidYouKnowCard: View {
                 )
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: disabled ? 0 : 0.2)
         .disabled(disabled)
     }
-    
+
     private func restartTimer() {
         stopTimer()
         startTimer()

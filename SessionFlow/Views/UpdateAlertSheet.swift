@@ -54,6 +54,7 @@ struct UpdateAlertSheet: View {
                         .background(Circle().fill(Color.white.opacity(0.1)))
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .keyboardShortcut(.escape, modifiers: [])
             }
             .padding(.horizontal, 24)
@@ -96,12 +97,14 @@ struct UpdateAlertSheet: View {
                     dismiss()
                 }
                 .buttonStyle(SecondaryButtonStyle())
+                .hoverEffect(brightness: 0.15)
 
                 Button("Install Update") {
                     updateService.installLatestUpdate(info)
                     dismiss()
                 }
                 .buttonStyle(PrimaryButtonStyle())
+                .hoverEffect(brightness: 0.1)
                 .keyboardShortcut(.defaultAction)
             }
             .padding(.horizontal, 24)
@@ -178,6 +181,7 @@ struct UpdateAlertSheet: View {
                 dismiss()
             }
             .buttonStyle(PrimaryButtonStyle())
+            .hoverEffect(brightness: 0.1)
             .keyboardShortcut(.defaultAction)
         }
         .padding(32)

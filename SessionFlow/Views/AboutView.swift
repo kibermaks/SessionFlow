@@ -73,5 +73,6 @@ struct AboutView: View {
             .cornerRadius(8)
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.12)
     }
 }

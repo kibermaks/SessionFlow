@@ -58,7 +58,7 @@ struct WelcomeScreen: View {
                 // Header
                 HStack {
                     Spacer()
-                    Button { 
+                    Button {
                         handleClose()
                     } label: {
                         Image(systemName: "xmark")
@@ -68,6 +68,7 @@ struct WelcomeScreen: View {
                             .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.2)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 24)
@@ -136,8 +137,9 @@ struct WelcomeScreen: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(brightness: 0.15)
                         }
-                        
+
                         Button {
                             handleNext()
                         } label: {
@@ -153,6 +155,7 @@ struct WelcomeScreen: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.12)
                         .keyboardShortcut(.defaultAction)
                     }
                 }

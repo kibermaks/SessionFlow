@@ -170,3 +170,27 @@ extension Color {
         )
     }
 }
+
+// MARK: - Hover Effect Modifier
+
+struct HoverEffect: ViewModifier {
+    var brightness: Double
+
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .brightness(isHovered ? brightness : 0)
+            .onHover { hovering in
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    isHovered = hovering
+                }
+            }
+    }
+}
+
+extension View {
+    func hoverEffect(brightness: Double = 0.1) -> some View {
+        modifier(HoverEffect(brightness: brightness))
+    }
+}

@@ -146,6 +146,7 @@ struct CalendarPermissionView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.12)
                     .padding(.bottom, 40)
                 } else {
                     Button {
@@ -170,6 +171,7 @@ struct CalendarPermissionView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.12)
                     .disabled(isRequesting)
                     .padding(.bottom, 40)
                 }

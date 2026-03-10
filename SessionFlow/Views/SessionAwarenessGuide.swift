@@ -55,6 +55,7 @@ struct SessionAwarenessGuide: View {
                             .background(Circle().fill(Color.white.opacity(0.1)))
                     }
                     .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.2)
                     .keyboardShortcut(.escape, modifiers: [])
                 }
                 .padding(.horizontal, 24)
@@ -119,6 +120,7 @@ struct SessionAwarenessGuide: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .hoverEffect(brightness: 0.15)
                         }
 
                         Button {
@@ -140,6 +142,7 @@ struct SessionAwarenessGuide: View {
                                 )
                         }
                         .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.12)
                         .keyboardShortcut(.defaultAction)
                     }
                 }
@@ -333,6 +336,7 @@ struct SessionAwarenessGuide: View {
             )
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.15)
     }
 
     private func badgeIcon(for feedback: String) -> String {
