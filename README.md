@@ -10,7 +10,7 @@
 [![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg)](https://github.com/kibermaks/SessionFlow/actions)
 [![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
 
-SessionFlow is a native macOS application built with SwiftUI that helps you plan productive days by automatically scheduling work and side sessions around existing calendar events. It features a powerful scheduling engine, preset management, and a beautiful timeline visualization.
+SessionFlow is a native macOS app that helps you plan, execute, and reflect on productive days. It automatically schedules work, side, and deep sessions around your existing calendar events, tracks them in real time with ambient sounds and progress indicators, and captures feedback so you can see how your time actually felt.
 
 [Download Latest Release](https://github.com/kibermaks/SessionFlow/releases/latest) • [Documentation](#-documentation) • [Contributing](CONTRIBUTING.md)
 
@@ -20,20 +20,31 @@ SessionFlow is a native macOS application built with SwiftUI that helps you plan
 
 ## ✨ Key Features
 
-- **🧠 Smart Scheduling**: Automatically fits work, side and deep sessions into available gaps in your macOS Calendar
+### Plan
+
+- **🧠 Smart Scheduling**: Automatically fits work, side, and deep sessions into available gaps in your macOS Calendar
 - **🔄 Dynamic Patterns**: Choose from multiple scheduling patterns (Alternating, All Work First, All Side First, Custom Ratio)
-- **💾 Preset Management**: Save and quickly apply different configurations for Workdays, Focus Days, or Weekends
+- **💾 Preset Management**: Save and quickly switch between configurations for Workdays, Focus Days, Weekends, or any custom mix
+- **📅 Calendar Integration**: Read from and write directly to macOS Calendar with per-calendar filtering and replacement controls
+- **⚙️ Customizable Sessions**: Configure names, durations, and target calendars for each session type (Work, Side, Planning, Deep Work)
+- **🎯 Hashtag System**: Add `#work`, `#side`, `#deep`, `#plan`, or `#break` to event notes so existing sessions are recognized automatically
+
+### Execute
+
 - **📊 Interactive Timeline**: Drag-and-drop events, resize sessions, lock layout, and freeze projections for manual fine-tuning
-- **📅 Calendar Integration**: Read from and write directly to macOS Calendar calendars with per-calendar filtering and replacement controls
-- **⚙️ Customizable Sessions**: Configure names, durations, and target calendars for different session types (Work, Side, Planning, Deep Work)
-- **🎯 Hashtag System**: Track existing sessions with hashtags (#work, #side, #deep, #plan)
+- **👁 Session Awareness**: Tracks active calendar events—both tagged sessions and your regular calendar events—with ambient sounds, a progress bar, and gentle reminders as sessions approach their end. A progress donut on the dock icon and an optional menu-bar timer let you glance at remaining time without switching windows
+- **🪟 Mini-Player**: Compact floating window that shows session status at a glance—collapse the main window and keep awareness in a small footprint. Displays idle, next-up, active, and feedback states with the same progress and time info as the full panel
 - **🌙 Night-Owl Mode**: Schedule beyond midnight with +1d markers on the timeline (up to 6 am next day)
 - **↩️ Undo/Redo**: Full history for event moves and projected session edits
-- **🔄 Auto-Updates**: Automatic update checks with self-install from GitHub Releases, plus a What's New changelog viewer
+
+### Reflect
+
+- **📈 Productivity Tracking**: After each session ends you get a quick feedback prompt (rocket/completed/partial/skipped). A daily productivity card and monthly calendar view summarize your ratings, highlight unrated blocks, and compute weighted focus time so you can see how each day and month actually felt
+
+### Polish
+
 - **🌑 Beautiful UI**: Dark-themed glassmorphic design with intuitive controls
-- **👁 Session Awareness**: Tracks active calendar events tagged with session hashtags (#work, #deep, #break, etc.), with ambient sounds, progress display, and gentle reminders as sessions approach end
-- **🪟 Mini-Player**: Compact floating window (or menu bar popover) that shows session status at a glance—collapse the main window and keep awareness in a small footprint
-- **📈 Productivity Tracking**: Daily productivity card and monthly calendar view that summarize feedback on your sessions (rocket/completed/partial/skipped), highlight unrated blocks, and compute weighted focus time so you can see how each day and month actually felt.
+- **🔃 Auto-Updates**: Automatic update checks with self-install from GitHub Releases, plus a What's New changelog viewer
 
 ## 🖼 Visual Walkthrough
 
@@ -77,7 +88,7 @@ Summary cards highlight real events, projected work, and when you are supposed t
 
 ### Session Awareness & Mini-Player
 
-The bottom panel lets you track your current session in real time: when you’re in a tagged event (#work, #side, #deep, #plan, #break), it displays elapsed time, progress, and remaining time. Ambient sounds and visual cues help keep you in flow, with gentle alerts as the session nears its end. Quick prompts let you rate how the session went. For a more compact experience, a floating Mini-Player window provides the same awareness—showing idle, next-up, active, and feedback states in a small footprint. You can expand back to the full app anytime.
+The bottom panel tracks your current session in real time—whether it’s a tagged event (#work, #side, #deep, #plan, #break) or any regular calendar event—displaying elapsed time, a progress bar, and remaining time. Ambient sounds and visual cues keep you in flow, with gentle alerts as the session nears its end. Progress also appears as a donut overlay on the dock icon and as a live timer in the menu bar, so you always know where you stand without switching windows. When a session ends, a quick prompt lets you rate how it went. For a more compact experience, the floating Mini-Player provides the same awareness in a small footprint. You can expand back to the full app anytime.
 
 <p align="center">
   <img src="docs/assets/SessionAwareness.gif" alt="Session Awareness: idle, active session, progress, feedback" width="900" />
@@ -107,10 +118,11 @@ See [Building from Source](#-building-from-source) section below.
 
 ## 🎯 Quick Start
 
-1. Launch the app, grant Calendar access, and pick calendars.
-2. Enter target counts/durations for Work, Side, Deep, and Planning.
-3. Pick a pattern or preset and review the timeline.
+1. Launch the app, grant Calendar access, and pick your calendars.
+2. Set target counts and durations for Work, Side, Deep, and Planning sessions.
+3. Pick a scheduling pattern or load a preset, then review the timeline.
 4. Press **Schedule Sessions** when the layout looks right.
+5. As sessions begin, the bottom panel (or Mini-Player) tracks your progress with ambient sounds, a dock icon donut, and an optional menu-bar timer. Rate each session when it ends to build your productivity history.
 
 ## 🔒 Privacy & Local Processing
 
@@ -120,14 +132,18 @@ See [Building from Source](#-building-from-source) section below.
 
 ## 💡 Usage Tips
 
-- **Hashtags**: Add `#work`, `#side`, `#deep`, or `#plan` to event notes so existing sessions are detected automatically.
-- **Visual Language**: Solid borders mark real events; dashed borders are projections.
+- **Hashtags**: Add `#work`, `#side`, `#deep`, `#plan`, or `#break` to event notes so existing sessions are detected automatically.
+- **Visual Language**: Solid borders mark real events; dashed borders with diagonal stripes are projections.
 - **Presets**: Save Workday, Focus, Weekend, or any custom mix for instant reuse.
 - **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
+- **Track Other Events**: Enable “Awareness of your other calendar events” to also track regular (untagged) calendar events with timer, progress, and ambient sound.
+- **Dock & Menu Bar**: Enable the dock progress donut and menu-bar timer in Session Awareness settings so you can monitor remaining time from anywhere.
+- **Mini-Player**: Click the collapse button on the bottom panel to detach a floating mini-player; expand back anytime.
 - **Freeze & Adjust**: After scheduling, freeze projections and drag/resize them by hand for pixel-perfect layouts.
 - **Copy Events**: Right-click any timeline event and use “Copy to...” to duplicate it to a nearby day.
 - **Lock Dragging**: Toggle the lock icon to prevent accidental event moves while reviewing your schedule.
 - **Night Scheduling**: Extend the schedule end hour past midnight to plan late-night sessions with clear +1d markers.
+- **Rate Sessions**: After each session ends, use the quick feedback prompt to rate it—these ratings feed into the Productivity card and monthly view.
 
 ## 🏗 Architecture & Key Elements
 
@@ -138,19 +154,29 @@ SessionFlow/
 ├── Models/
 │   ├── Session.swift
 │   ├── Preset.swift
-│   └── SchedulePattern.swift
+│   ├── SchedulePattern.swift
+│   ├── SessionAwarenessConfig.swift
+│   └── SessionFeedback.swift
 │
 ├── Services/
 │   ├── SchedulingEngine.swift
 │   ├── CalendarService.swift
 │   ├── AvailabilityCalculator.swift
-│   └── EventUndoManager.swift
+│   ├── EventUndoManager.swift
+│   ├── SessionAwarenessService.swift
+│   ├── SessionAudioService.swift
+│   ├── DockProgressController.swift
+│   ├── MenuBarController.swift
+│   └── UpdateService.swift
 │
 └── Views/
     ├── ContentView.swift
     ├── TimelineView.swift
     ├── SettingsPanel.swift
     ├── PresetManager.swift
+    ├── SessionAwarenessPanel.swift
+    ├── MiniPlayerView.swift
+    ├── ProductivityCard.swift
     ├── WhatsNewView.swift
     ├── AboutView.swift
     └── [other views...]
@@ -163,6 +189,8 @@ SessionFlow/
 - **`Session.swift`**: Defines `SessionType` enum (Work, Side, Deep, Planning) and `ScheduledSession` data structure
 - **`Preset.swift`**: Handles preset configuration and persistence via `UserDefaults`
 - **`SchedulePattern.swift`**: Generates session orders based on patterns (Alternating, All Work First, etc.)
+- **`SessionAwarenessConfig.swift`**: Configuration for session tracking, sounds, dock progress, and menu-bar timer
+- **`SessionFeedback.swift`**: `SessionRating` enum and feedback storage via calendar event notes
 
 #### Services
 
@@ -170,6 +198,10 @@ SessionFlow/
 - **`CalendarService.swift`**: EventKit wrapper for reading/writing calendar events with per-calendar filtering
 - **`AvailabilityCalculator.swift`**: Identifies free time slots between existing events
 - **`EventUndoManager.swift`**: Custom undo/redo stack for calendar event and projected session changes
+- **`SessionAwarenessService.swift`**: Tracks active and upcoming sessions, manages progress, and triggers feedback prompts
+- **`SessionAudioService.swift`**: Ambient sound playback, transition sounds, and accelerando during sessions
+- **`DockProgressController.swift`**: Renders the progress donut overlay on the dock icon
+- **`MenuBarController.swift`**: Manages the optional menu-bar status item with live timer
 
 #### Views
 
@@ -177,6 +209,9 @@ SessionFlow/
 - **`TimelineView.swift`**: Interactive timeline with drag-and-drop, resize, locking, and freeze mode for both events and projected sessions
 - **`SettingsPanel.swift`**: Configuration controls (session counts, durations, patterns)
 - **`PresetManager.swift`**: Preset saving, loading, and management UI
+- **`SessionAwarenessPanel.swift`**: Bottom panel showing active session, next-up, and feedback states
+- **`MiniPlayerView.swift`**: Compact floating window mirroring the awareness panel
+- **`ProductivityCard.swift`**: Daily summary and monthly calendar view of session feedback
 - **`WhatsNewView.swift`**: Fetches and displays the changelog from GitHub after updates
 - **`AboutView.swift`**: About window with version and build info
 
@@ -344,7 +379,6 @@ Future features and improvements:
 - [ ] Recurring session templates
 - [ ] iCloud sync for presets
 - [ ] Custom session colors and icons
-- [ ] Statistics and productivity insights
 - [ ] Calendar widget support
 
 ## 🐛 Known Issues

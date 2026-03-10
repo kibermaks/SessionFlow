@@ -1254,7 +1254,7 @@ struct RightPanel: View {
                     availabilityCard
                     sessionsSummaryCard
                     if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlots.contains(where: { SessionRating.fromNotes($0.notes) != nil }) {
-                        ProductivityCard(selectedDate: selectedDate)
+                        ProductivityCard()
                     }
                     if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
                         DidYouKnowCard(

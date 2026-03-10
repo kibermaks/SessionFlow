@@ -218,7 +218,7 @@ class SessionAwarenessService: ObservableObject {
         }
         // 3. No active session
         else {
-            if wasActive, let prevId = previousEventId {
+            if wasActive, let prevId = previousEventId, let start = sessionStartTime, let end = sessionEndTime {
                 // Save tracking state so we can restore if same event reappears (calendar refresh gap)
                 lastEndedEventId = currentEventId
                 savedPresenceReminderTime = lastPresenceReminderTime
@@ -226,8 +226,15 @@ class SessionAwarenessService: ObservableObject {
 
                 // Only play end sound + feedback if the session ended naturally
                 // (Now passed the end time), not if event was moved away
-                let isNaturalEnd = previousSessionEndTime.map { now >= $0 } ?? false
-                triggerSessionEnd(eventId: prevId, isNaturalEnd: isNaturalEnd)
+                let isNaturalEnd = now >= end
+                triggerSessionEnd(
+                    eventId: prevId,
+                    sessionTitle: currentSessionTitle,
+                    sessionType: currentSessionType,
+                    startTime: start,
+                    endTime: end,
+                    isNaturalEnd: isNaturalEnd
+                )
             }
             clearActiveState()
         }
@@ -418,7 +425,14 @@ class SessionAwarenessService: ObservableObject {
 
     // MARK: - Session transitions
 
-    private func triggerSessionEnd(eventId: String, isNaturalEnd: Bool) {
+    private func triggerSessionEnd(
+        eventId: String,
+        sessionTitle: String,
+        sessionType: SessionType?,
+        startTime: Date,
+        endTime: Date,
+        isNaturalEnd: Bool
+    ) {
         audioService?.stopAmbient()
 
         // Only play end sound if session ended naturally (Now passed end time)
@@ -426,19 +440,19 @@ class SessionAwarenessService: ObservableObject {
             audioService?.playTransition(config: config.endSound)
         }
 
-        // Create feedback prompt from the session that just ended (only for natural ends)
-        // For non-session events, only prompt if trackOtherEvents is enabled
+        // Create feedback prompt from the session that just ended (only for natural ends).
+        // Use in-memory state—do NOT lookup in busySlots; that is scoped to the selected date,
+        // while sessions are tracked from cachedNowSlots (current date). If user views another
+        // date, busySlots would not contain today's event and feedback would silently fail.
         if isNaturalEnd,
            config.productivityEnabled,
-           let calendarService = calendarService,
-           let slot = calendarService.busySlots.first(where: { $0.id == eventId }),
-           CalendarService.sessionType(fromNotes: slot.notes) != nil || config.trackOtherEvents {
+           sessionType != nil || config.trackOtherEvents {
             sessionFeedbackPending = SessionFeedback(
-                eventId: slot.id,
-                sessionTitle: slot.title,
-                sessionType: CalendarService.sessionType(fromNotes: slot.notes),
-                startTime: slot.startTime,
-                endTime: slot.endTime
+                eventId: eventId,
+                sessionTitle: sessionTitle,
+                sessionType: sessionType,
+                startTime: startTime,
+                endTime: endTime
             )
 
             // Auto-dismiss feedback after 15 seconds

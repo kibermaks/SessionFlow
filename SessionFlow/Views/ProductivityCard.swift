@@ -2,8 +2,6 @@ import SwiftUI
 
 struct ProductivityCard: View {
     @EnvironmentObject var calendarService: CalendarService
-    let selectedDate: Date
-
     @State private var showingMonthly = false
 
     /// Reactive: derived from calendarService.busySlots (which is @Published)
