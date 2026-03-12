@@ -561,7 +561,7 @@ class CalendarService: ObservableObject {
     }
 
     /// Returns per-day feedback stats for a given month
-    func monthlyFeedbackStats(year: Int, month: Int, weights: FocusWeights = .init()) -> [Int: DayFeedbackStats] {
+    func monthlyFeedbackStats(year: Int, month: Int, weights: FocusWeights = .init(), sessionType: SessionType? = nil) -> [Int: DayFeedbackStats] {
         let cal = Calendar.current
         guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
               let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) else { return [:] }
@@ -574,7 +574,14 @@ class CalendarService: ObservableObject {
 
         // Filter out all-day events
         let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
-        let events = allEvents.filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+        var events = allEvents.filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+
+        // Filter by session type if specified
+        if let sessionType = sessionType {
+            events = events.filter { event in
+                CalendarService.sessionType(fromNotes: event.notes) == sessionType
+            }
+        }
 
         var result: [Int: DayFeedbackStats] = [:]
         for event in events {
@@ -584,6 +591,29 @@ class CalendarService: ObservableObject {
                 result[day, default: DayFeedbackStats()].counts[rating, default: 0] += 1
                 let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
                 result[day, default: DayFeedbackStats()].focusMinutes += minutes * weights.multiplier(for: rating)
+            }
+        }
+        return result
+    }
+
+    /// Returns per-session-type event counts for a given month
+    func monthlySessionTypeCounts(year: Int, month: Int) -> [SessionType: Int] {
+        let cal = Calendar.current
+        guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
+              let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) else { return [:] }
+
+        let calendars = includedEventCalendars()
+        guard !calendars.isEmpty else { return [:] }
+
+        let predicate = eventStore.predicateForEvents(withStart: monthStart, end: monthEnd, calendars: calendars)
+        let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+        let events = eventStore.events(matching: predicate)
+            .filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
+
+        var result: [SessionType: Int] = [:]
+        for event in events {
+            if let type = CalendarService.sessionType(fromNotes: event.notes) {
+                result[type, default: 0] += 1
             }
         }
         return result

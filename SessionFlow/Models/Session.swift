@@ -40,6 +40,9 @@ enum SessionType: String, Codable, CaseIterable, Identifiable {
         case .bigRest: return "pause.circle.fill"
         }
     }
+
+    /// Session types available for productivity filtering (excludes bigRest)
+    static let filterableTypes: [SessionType] = [.work, .side, .deep, .planning]
 }
 
 // MARK: - Scheduled Session

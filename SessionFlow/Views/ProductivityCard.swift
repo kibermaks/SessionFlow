@@ -6,11 +6,24 @@ struct ProductivityCard: View {
     @Environment(\.openSettings) private var openSettings
     @State private var showingMonthly = false
     @State private var showingHelp = false
+    @State private var selectedSessionType: SessionType? = nil
 
-    /// Reactive: derived from calendarService.busySlots (which is @Published)
+    private var isFiltering: Bool {
+        selectedSessionType != nil
+    }
+
+    /// Busy slots filtered by selected session type (passthrough when nil)
+    private var filteredSlots: [BusyTimeSlot] {
+        guard let selectedType = selectedSessionType else { return calendarService.busySlots }
+        return calendarService.busySlots.filter { slot in
+            CalendarService.sessionType(fromNotes: slot.notes) == selectedType
+        }
+    }
+
+    /// Reactive: derived from filteredSlots
     private var todayCounts: [SessionRating: Int] {
         var counts: [SessionRating: Int] = [:]
-        for slot in calendarService.busySlots {
+        for slot in filteredSlots {
             if let rating = SessionRating.fromNotes(slot.notes) {
                 counts[rating, default: 0] += 1
             }
@@ -18,18 +31,18 @@ struct ProductivityCard: View {
         return counts
     }
 
-    /// Count of past events without feedback
+    /// Count of past events without feedback (filtered)
     private var unratedCount: Int {
-        calendarService.busySlots.filter {
+        filteredSlots.filter {
             $0.endTime < Date() && SessionRating.fromNotes($0.notes) == nil
         }.count
     }
 
-    /// Focus time: weighted sum of rated session durations
+    /// Focus time: weighted sum of rated session durations (filtered)
     private var focusTimeMinutes: Int {
         let weights = sessionAwarenessService.config.focusWeights
         var total: Double = 0
-        for slot in calendarService.busySlots {
+        for slot in filteredSlots {
             guard let rating = SessionRating.fromNotes(slot.notes) else { continue }
             let minutes = slot.endTime.timeIntervalSince(slot.startTime) / 60
             total += minutes * weights.multiplier(for: rating)
@@ -129,6 +142,33 @@ struct ProductivityCard: View {
                     .frame(width: 340)
                 }
 
+                // Session type filter
+                Menu {
+                    Button("All Types") { selectedSessionType = nil }
+                    Divider()
+                    ForEach(SessionType.filterableTypes, id: \.self) { type in
+                        Button(action: { selectedSessionType = type }) {
+                            Label(type.rawValue, systemImage: type.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 13))
+                        if let type = selectedSessionType {
+                            Image(systemName: type.icon)
+                                .font(.system(size: 10))
+                                .foregroundColor(type.color)
+                        }
+                    }
+                    .foregroundColor(isFiltering ? .accentColor : .white.opacity(0.4))
+                    .frame(height: 24)
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .help("Filter by session type")
+
                 Button {
                     showingMonthly = true
                 } label: {
@@ -143,11 +183,38 @@ struct ProductivityCard: View {
                 .help("Monthly overview")
             }
 
+            // Active filter indicator
+            if let type = selectedSessionType {
+                HStack(spacing: 6) {
+                    Image(systemName: type.icon)
+                        .font(.system(size: 10))
+                        .foregroundColor(type.color)
+                    Text(type.rawValue)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(type.color)
+                    Button {
+                        selectedSessionType = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.3))
+                    }
+                    .buttonStyle(.plain)
+                    .focusable(false)
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(type.color.opacity(0.15))
+                )
+            }
+
             // Today's stats
             todayStats
 
             // Focus time
-            if focusTimeMinutes > 0 {
+            if focusTimeMinutes > 0 || isFiltering {
                 HStack(spacing: 6) {
                     Image(systemName: "target")
                         .font(.system(size: 12))
@@ -172,7 +239,7 @@ struct ProductivityCard: View {
                 )
         )
         .sheet(isPresented: $showingMonthly) {
-            MonthlyStatsView()
+            MonthlyStatsView(selectedSessionType: $selectedSessionType)
                 .environmentObject(calendarService)
                 .environmentObject(sessionAwarenessService)
         }
@@ -234,9 +301,12 @@ struct MonthlyStatsView: View {
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @Environment(\.dismiss) private var dismiss
 
+    @Binding var selectedSessionType: SessionType?
+
     @State private var year: Int = Calendar.current.component(.year, from: Date())
     @State private var month: Int = Calendar.current.component(.month, from: Date())
     @State private var dayStats: [Int: CalendarService.DayFeedbackStats] = [:]
+    @State private var typeCounts: [SessionType: Int] = [:]
 
     private var monthName: String {
         let formatter = DateFormatter()
@@ -285,12 +355,55 @@ struct MonthlyStatsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Title bar
+            // Title bar with filter
             HStack {
-                Text("Productivity")
+                Text("Productivity Calendar")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.primary)
+
                 Spacer()
+
+                Menu {
+                    Button("All Types") { selectedSessionType = nil }
+                    Divider()
+                    ForEach(SessionType.filterableTypes, id: \.self) { type in
+                        let count = typeCounts[type] ?? 0
+                        Button(action: { selectedSessionType = type }) {
+                            Label("\(type.rawValue) (\(count))", systemImage: type.icon)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 11))
+                        if let type = selectedSessionType {
+                            HStack(spacing: 3) {
+                                Image(systemName: type.icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(type.color)
+                                Text(type.rawValue)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                        } else {
+                            Text("All Types")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .semibold))
+                    }
+                    .foregroundColor(.primary.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.06))
+                    )
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .focusable(false)
+
                 Button { dismiss() } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 18))
@@ -365,8 +478,9 @@ struct MonthlyStatsView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
         }
-        .frame(width: 400, height: 470)
+        .frame(width: 400, height: 480)
         .onAppear { loadData() }
+        .onChange(of: selectedSessionType) { _, _ in loadData() }
     }
 
     // MARK: - Calendar grid
@@ -479,15 +593,15 @@ struct MonthlyStatsView: View {
         let rated = totals.counts.values.reduce(0, +)
         let unrated = totals.totalEvents - rated
 
-        return HStack(spacing: 8) {
+        return HStack(spacing: 10) {
             ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                 let count = totals.counts[rating] ?? 0
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     Image(systemName: rating.icon)
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .foregroundColor(ratingColor(rating))
                     Text("\(count)")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
                         .foregroundColor(count > 0 ? .primary : .secondary.opacity(0.4))
                 }
             }
@@ -495,30 +609,30 @@ struct MonthlyStatsView: View {
             Spacer()
 
             // Unrated
-            HStack(spacing: 2) {
+            HStack(spacing: 3) {
                 Image(systemName: "questionmark.circle")
-                    .font(.system(size: 10))
+                    .font(.system(size: 12))
                     .foregroundColor(.secondary.opacity(0.5))
                 Text("\(unrated)")
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(unrated > 0 ? .primary.opacity(0.6) : .secondary.opacity(0.4))
             }
 
-            Divider().frame(height: 14)
+            Divider().frame(height: 18)
 
             Text("\(totals.totalEvents)")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                .font(.system(size: 14, weight: .semibold, design: .monospaced))
                 .foregroundColor(.primary.opacity(0.5))
 
             if totals.focusMinutes > 0 {
-                Divider().frame(height: 14)
+                Divider().frame(height: 18)
 
-                HStack(spacing: 2) {
+                HStack(spacing: 3) {
                     Image(systemName: "target")
-                        .font(.system(size: 10))
+                        .font(.system(size: 12))
                         .foregroundColor(.green)
                     Text(formatFocusTime(totals.focusMinutes))
-                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(.green)
                 }
             }
@@ -539,7 +653,12 @@ struct MonthlyStatsView: View {
     }
 
     private func loadData() {
-        dayStats = calendarService.monthlyFeedbackStats(year: year, month: month, weights: sessionAwarenessService.config.focusWeights)
+        dayStats = calendarService.monthlyFeedbackStats(
+            year: year, month: month,
+            weights: sessionAwarenessService.config.focusWeights,
+            sessionType: selectedSessionType
+        )
+        typeCounts = calendarService.monthlySessionTypeCounts(year: year, month: month)
     }
 
     private func formatFocusTime(_ minutes: Int) -> String {
@@ -559,4 +678,5 @@ struct MonthlyStatsView: View {
         case .skipped: return .red
         }
     }
+
 }
