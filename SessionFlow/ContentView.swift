@@ -795,6 +795,25 @@ struct HeaderView: View {
         .background(Color.black.opacity(0.2))
     }
     
+    #if DEBUG
+    private static let gitBranch: String? = {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
+        process.currentDirectoryURL = Bundle.main.bundleURL.deletingLastPathComponent()
+        let pipe = Pipe()
+        process.standardOutput = pipe
+        process.standardError = FileHandle.nullDevice
+        try? process.run()
+        process.waitUntilExit()
+        guard let data = try? pipe.fileHandleForReading.readDataToEndOfFile(),
+              let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !branch.isEmpty, branch != "main"
+        else { return nil }
+        return branch
+    }()
+    #endif
+
     private var appTitle: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -804,6 +823,16 @@ struct HeaderView: View {
                 Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0").\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0")")
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
+                #if DEBUG
+                if let branch = Self.gitBranch {
+                    Text(branch)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(.orange.opacity(0.7))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(RoundedRectangle(cornerRadius: 4).fill(Color.orange.opacity(0.15)))
+                }
+                #endif
             }
             Text("Plan your productive day")
                 .font(.subheadline)
