@@ -8,7 +8,13 @@ struct NumericInputField: View {
     
     @State private var textValue: String = ""
     @FocusState private var isFocused: Bool
-    
+
+    /// Width sized to fit the widest possible value
+    private var fieldWidth: CGFloat {
+        let maxDigits = "\(range.upperBound)".count
+        return CGFloat(max(maxDigits, 2)) * 12 + 6
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
             // Decrement button
@@ -30,28 +36,28 @@ struct NumericInputField: View {
             .disabled(value <= range.lowerBound)
             
             // Text field
-            ZStack(alignment: .center) {
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
-                    )
-                    .frame(width: 36, height: 24)
-                
-                TextField("", text: $textValue)
-                    .textFieldStyle(.plain)
-                    .multilineTextAlignment(.center)
-                    .lineLimit(1)
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
-                    .foregroundColor(.white)
-                    .focused($isFocused)
-                    .frame(width: 36, height: 24)
-                    .padding(.horizontal, 2)
-                    .onSubmit {
-                        validateAndSet()
-                    }
-            }
+            TextField("", text: $textValue)
+                .textFieldStyle(.plain)
+                .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .font(.system(size: 14, weight: .bold, design: .monospaced))
+                .foregroundColor(.white)
+                .focused($isFocused)
+                .padding(0)
+                .labelsHidden()
+                .frame(width: fieldWidth, height: 24)
+                .fixedSize(horizontal: true, vertical: true)
+                .onSubmit {
+                    validateAndSet()
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                        )
+                )
             .onChange(of: textValue) { _, newValue in
                 if let intValue = Int(newValue.filter { "0123456789".contains($0) }) {
                     if range.contains(intValue) {
@@ -89,6 +95,8 @@ struct NumericInputField: View {
                     .foregroundColor(.white.opacity(0.5))
             }
         }
+        .padding(0)
+        .contentMargins(0)
         .onAppear {
             textValue = "\(value)"
         }

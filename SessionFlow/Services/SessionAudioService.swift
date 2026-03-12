@@ -30,6 +30,7 @@ class SessionAudioService: ObservableObject {
     // Preview pause/resume state
     private var previewPausedConfig: SessionSoundConfig?
     private var previewPausedShouldPlay = false
+    private var previewPausedRate: Float = 1.0
 
     private var deviceListenerBlock: AudioObjectPropertyListenerBlock?
 
@@ -265,20 +266,26 @@ class SessionAudioService: ObservableObject {
         if previewPausedConfig == nil {
             previewPausedConfig = currentAmbientConfig
             previewPausedShouldPlay = shouldBePlayingAmbient
+            previewPausedRate = varispeedNode.rate
         }
         stopAmbientInternal()
     }
 
     /// Resume session ambient after demo preview ends
     func resumeAfterPreview() {
+        // No preview was started — don't touch the active session audio
+        guard previewPausedConfig != nil else { return }
+
         stopAmbientInternal()
         stopTransition()
         varispeedNode.rate = 1.0
 
         let config = previewPausedConfig
         let wasPlaying = previewPausedShouldPlay
+        let savedRate = previewPausedRate
         previewPausedConfig = nil
         previewPausedShouldPlay = false
+        previewPausedRate = 1.0
 
         // Reset flags left over from preview playback
         shouldBePlayingAmbient = false
@@ -290,6 +297,7 @@ class SessionAudioService: ObservableObject {
         shouldBePlayingAmbient = true
         if !isMuted {
             playAmbient(config: config)
+            varispeedNode.rate = savedRate
         }
     }
 

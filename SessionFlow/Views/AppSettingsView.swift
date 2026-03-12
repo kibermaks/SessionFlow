@@ -17,12 +17,15 @@ struct AppSettingsView: View {
     @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
+    @State private var focusWeightsExpanded = false
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
     @State private var pendingReplacementContext: CalendarReplacementContext?
     @State private var selectedReplacementCalendarId: String = ""
     @State private var replacementErrorMessage: String?
     @State private var selectedSettingsTab: SettingsTab = .general
+
+    static let switchToAwarenessTab = Notification.Name("AppSettingsView.switchToAwarenessTab")
     @State private var activePreviewID: String? = nil
     @State private var previewResetWorkItem: DispatchWorkItem? = nil
     private let ambientVolumeSliderWidth: CGFloat = 132
@@ -105,6 +108,9 @@ struct AppSettingsView: View {
         }
         .onDisappear {
             stopPreview()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Self.switchToAwarenessTab)) { _ in
+            selectedSettingsTab = .awareness
         }
     }
 
@@ -395,6 +401,19 @@ struct AppSettingsView: View {
                     .foregroundColor(.secondary)
 
                 if sessionAwarenessService.config.enabled {
+                    Toggle("Awareness of your other calendar events", isOn: Binding(
+                        get: { sessionAwarenessService.config.trackOtherEvents },
+                        set: { sessionAwarenessService.config.trackOtherEvents = $0 }
+                    ))
+
+                    Text("Tracking with timer, progress, and ambient sound.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if sessionAwarenessService.config.enabled {
+                Section {
                     Toggle("Productivity Feedback", isOn: Binding(
                         get: { sessionAwarenessService.config.productivityEnabled },
                         set: { sessionAwarenessService.config.productivityEnabled = $0 }
@@ -403,9 +422,73 @@ struct AppSettingsView: View {
                     Text("Rate sessions after they end. Shows productivity stats in the right panel.")
                         .font(.caption)
                         .foregroundColor(.secondary)
+
+                    if sessionAwarenessService.config.productivityEnabled {
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    focusWeightsExpanded.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                        .rotationEffect(.degrees(focusWeightsExpanded ? 90 : 0))
+                                        .animation(.easeInOut(duration: 0.2), value: focusWeightsExpanded)
+                                    Text("Focus Time Weights")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                            if focusWeightsExpanded {
+                                Button {
+                                    sessionAwarenessService.config.focusWeights = .init()
+                                } label: {
+                                    Text("Reset")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .hoverEffect(brightness: 0.3)
+                            }
+                        }
+
+                        if focusWeightsExpanded {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("How much each rating contributes to your Focus Time. A 1h event rated at 80% adds 48 min.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                focusWeightRow(label: "Fire", icon: "flame.fill", color: .orange,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.rocketPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.rocketPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Done", icon: "checkmark.circle.fill", color: .green,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.completedPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.completedPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Partly", icon: "circle.lefthalf.filled", color: .yellow,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.partialPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.partialPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Skipped", icon: "xmark.circle.fill", color: .red,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.skippedPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.skippedPercent = $0 }
+                                               ))
+                            }
+                        }
+                    }
                 }
 
-                if sessionAwarenessService.config.enabled {
+                Section {
                     HStack(spacing: 10) {
                         Image(systemName: "speaker.wave.3.fill")
                             .font(.system(size: 12))
@@ -428,15 +511,6 @@ struct AppSettingsView: View {
                             .foregroundColor(.white.opacity(0.5))
                             .frame(width: 38, alignment: .trailing)
                     }
-
-                    Toggle("Awareness of your other calendar events", isOn: Binding(
-                        get: { sessionAwarenessService.config.trackOtherEvents },
-                        set: { sessionAwarenessService.config.trackOtherEvents = $0 }
-                    ))
-
-                    Text("Tracking with timer, progress, and ambient sound.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
             }
 
@@ -803,6 +877,20 @@ struct AppSettingsView: View {
                 ? (TransitionSoundConfig.availableSounds.first ?? "Off")
                 : SessionAwarenessConfig.default[keyPath: keyPath].sound
         )
+    }
+
+    private func focusWeightRow(label: String, icon: String, color: Color, value: Binding<Int>) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 12))
+                .foregroundColor(color)
+                .frame(width: 16)
+            Text(label)
+                .font(.system(size: 13))
+                .frame(width: 55, alignment: .leading)
+            Spacer()
+            NumericInputField(value: value, range: 0...200, step: 5, unit: "%")
+        }
     }
 
     private func soundRow(icon: String, iconColor: Color, label: String, config: SoundRowConfig, isAmbient: Bool) -> some View {

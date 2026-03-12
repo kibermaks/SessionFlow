@@ -2,7 +2,10 @@ import SwiftUI
 
 struct ProductivityCard: View {
     @EnvironmentObject var calendarService: CalendarService
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
+    @Environment(\.openSettings) private var openSettings
     @State private var showingMonthly = false
+    @State private var showingHelp = false
 
     /// Reactive: derived from calendarService.busySlots (which is @Published)
     private var todayCounts: [SessionRating: Int] {
@@ -24,11 +27,12 @@ struct ProductivityCard: View {
 
     /// Focus time: weighted sum of rated session durations
     private var focusTimeMinutes: Int {
+        let weights = sessionAwarenessService.config.focusWeights
         var total: Double = 0
         for slot in calendarService.busySlots {
             guard let rating = SessionRating.fromNotes(slot.notes) else { continue }
             let minutes = slot.endTime.timeIntervalSince(slot.startTime) / 60
-            total += minutes * rating.focusMultiplier
+            total += minutes * weights.multiplier(for: rating)
         }
         return Int(total)
     }
@@ -49,6 +53,81 @@ struct ProductivityCard: View {
                     .foregroundColor(.white)
 
                 Spacer()
+
+                Button {
+                    showingHelp.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
+                .popover(isPresented: $showingHelp) {
+                    let w = sessionAwarenessService.config.focusWeights
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Your daily focus summary")
+                            .font(.system(size: 13, weight: .semibold))
+
+                        Text("Rate your calendar events after they end to track how your day went. Each event gets a rating that reflects your focus quality.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        Text("How Focus Time works")
+                            .font(.system(size: 12, weight: .semibold))
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
+                                .foregroundColor(.orange)
+                            Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
+                                .foregroundColor(.green)
+                            Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
+                                .foregroundColor(.yellow)
+                            Label("Skipped — counts \(w.skippedPercent)%", systemImage: "xmark.circle.fill")
+                                .foregroundColor(.red)
+                        }
+                        .font(.system(size: 12))
+
+                        Text("For example, a 1-hour event rated Done adds \(w.completedPercent * 60 / 100) min of focus time.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .italic()
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        Label("Use the calendar button to see your monthly overview with per-day breakdowns.", systemImage: "calendar")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Divider()
+
+                        HStack {
+                            Spacer()
+                            Button {
+                                showingHelp = false
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                    openSettings()
+                                    NotificationCenter.default.post(name: AppSettingsView.switchToAwarenessTab, object: nil)
+                                }
+                            } label: {
+                                Label("Adjust in Settings", systemImage: "gearshape")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary)
+                            }
+                            .buttonStyle(.plain)
+                            .hoverEffect(brightness: 0.3)
+                            .focusable(false)
+                            Spacer()
+                        }
+                    }
+                    .padding(14)
+                    .frame(width: 340)
+                }
 
                 Button {
                     showingMonthly = true
@@ -95,6 +174,7 @@ struct ProductivityCard: View {
         .sheet(isPresented: $showingMonthly) {
             MonthlyStatsView()
                 .environmentObject(calendarService)
+                .environmentObject(sessionAwarenessService)
         }
     }
 
@@ -151,6 +231,7 @@ struct ProductivityCard: View {
 
 struct MonthlyStatsView: View {
     @EnvironmentObject var calendarService: CalendarService
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @Environment(\.dismiss) private var dismiss
 
     @State private var year: Int = Calendar.current.component(.year, from: Date())
@@ -458,7 +539,7 @@ struct MonthlyStatsView: View {
     }
 
     private func loadData() {
-        dayStats = calendarService.monthlyFeedbackStats(year: year, month: month)
+        dayStats = calendarService.monthlyFeedbackStats(year: year, month: month, weights: sessionAwarenessService.config.focusWeights)
     }
 
     private func formatFocusTime(_ minutes: Int) -> String {

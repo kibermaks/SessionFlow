@@ -152,6 +152,24 @@ class CustomSoundStore {
     }
 }
 
+// MARK: - Focus weights (percentage each rating contributes to focus time)
+
+struct FocusWeights: Codable, Equatable {
+    var rocketPercent: Int = 100   // Fire
+    var completedPercent: Int = 80 // Done
+    var partialPercent: Int = 50   // Partly
+    var skippedPercent: Int = 0    // Skipped
+
+    func multiplier(for rating: SessionRating) -> Double {
+        switch rating {
+        case .rocket: return Double(rocketPercent) / 100.0
+        case .completed: return Double(completedPercent) / 100.0
+        case .partial: return Double(partialPercent) / 100.0
+        case .skipped: return Double(skippedPercent) / 100.0
+        }
+    }
+}
+
 // MARK: - Main config
 
 struct SessionAwarenessConfig: Codable, Equatable {
@@ -194,6 +212,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
 
     // Productivity feedback
     var productivityEnabled: Bool = true
+    var focusWeights: FocusWeights = .init()
 
     // Phase 5: Menu bar & Dock
     var showMenuBarItem: Bool = true
@@ -257,6 +276,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         otherEventsSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .otherEventsSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
 
         productivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .productivityEnabled) ?? true
+        focusWeights = try c.decodeIfPresent(FocusWeights.self, forKey: .focusWeights) ?? .init()
         showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)
