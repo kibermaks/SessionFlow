@@ -806,8 +806,8 @@ struct HeaderView: View {
         process.standardError = FileHandle.nullDevice
         try? process.run()
         process.waitUntilExit()
-        guard let data = try? pipe.fileHandleForReading.readDataToEndOfFile(),
-              let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        guard let branch = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
               !branch.isEmpty, branch != "main"
         else { return nil }
         return branch

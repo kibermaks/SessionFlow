@@ -171,21 +171,14 @@ struct FocusWeights: Codable, Equatable {
     }
 }
 
-// MARK: - Mute mode
-
-enum MuteMode: String, Codable, CaseIterable {
-    case off = "off"        // Sounds play normally
-    case auto = "auto"      // Mute while mic is active
-    case on = "on"          // Always muted
-}
-
 // MARK: - Main config
 
 struct SessionAwarenessConfig: Codable, Equatable {
     var enabled: Bool = true
     var masterVolume: Float = 1.0           // 0.0–1.0, scales all audio output
     var outputDeviceUID: String? = nil      // nil = system default
-    var muteMode: MuteMode = .off
+    var muteEnabled: Bool = false           // Manual mute (always mute)
+    var micAwareEnabled: Bool = true        // Auto-mute while mic is active
 
     // Per-type ambient sound settings
     var workSound: SessionSoundConfig = .init(sound: "Clock Ticking", volume: 0.6)
@@ -252,6 +245,60 @@ struct SessionAwarenessConfig: Codable, Equatable {
         }
     }
 
+    // MARK: - Coding keys (includes legacy muteMode for migration)
+
+    private enum CodingKeys: String, CodingKey {
+        case enabled, masterVolume, outputDeviceUID
+        case muteEnabled, micAwareEnabled
+        case muteMode // legacy — decoded for migration, never encoded
+        case workSound, sideSound, deepSound, planningSound, breakSound
+        case trackOtherEvents, otherEventsSound
+        case startSound, endSound
+        case timeDisplayMode, endingSoonSound
+        case presenceReminderEnabled, presenceReminderIntervalMinutes, presenceReminderSound
+        case workSoundAccelerando, sideSoundAccelerando, deepSoundAccelerando
+        case planningSoundAccelerando, otherEventsSoundAccelerando
+        case productivityEnabled, focusWeights
+        case showMenuBarItem, showDockProgress
+        case miniPlayerFrame, mainWindowFrame
+    }
+
+    // MARK: - Encoding (excludes legacy muteMode)
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(enabled, forKey: .enabled)
+        try c.encode(masterVolume, forKey: .masterVolume)
+        try c.encodeIfPresent(outputDeviceUID, forKey: .outputDeviceUID)
+        try c.encode(muteEnabled, forKey: .muteEnabled)
+        try c.encode(micAwareEnabled, forKey: .micAwareEnabled)
+        try c.encode(workSound, forKey: .workSound)
+        try c.encode(sideSound, forKey: .sideSound)
+        try c.encode(deepSound, forKey: .deepSound)
+        try c.encode(planningSound, forKey: .planningSound)
+        try c.encode(breakSound, forKey: .breakSound)
+        try c.encode(trackOtherEvents, forKey: .trackOtherEvents)
+        try c.encode(otherEventsSound, forKey: .otherEventsSound)
+        try c.encode(startSound, forKey: .startSound)
+        try c.encode(endSound, forKey: .endSound)
+        try c.encode(timeDisplayMode, forKey: .timeDisplayMode)
+        try c.encode(endingSoonSound, forKey: .endingSoonSound)
+        try c.encode(presenceReminderEnabled, forKey: .presenceReminderEnabled)
+        try c.encode(presenceReminderIntervalMinutes, forKey: .presenceReminderIntervalMinutes)
+        try c.encode(presenceReminderSound, forKey: .presenceReminderSound)
+        try c.encode(workSoundAccelerando, forKey: .workSoundAccelerando)
+        try c.encode(sideSoundAccelerando, forKey: .sideSoundAccelerando)
+        try c.encode(deepSoundAccelerando, forKey: .deepSoundAccelerando)
+        try c.encode(planningSoundAccelerando, forKey: .planningSoundAccelerando)
+        try c.encode(otherEventsSoundAccelerando, forKey: .otherEventsSoundAccelerando)
+        try c.encode(productivityEnabled, forKey: .productivityEnabled)
+        try c.encode(focusWeights, forKey: .focusWeights)
+        try c.encode(showMenuBarItem, forKey: .showMenuBarItem)
+        try c.encode(showDockProgress, forKey: .showDockProgress)
+        try c.encodeIfPresent(miniPlayerFrame, forKey: .miniPlayerFrame)
+        try c.encodeIfPresent(mainWindowFrame, forKey: .mainWindowFrame)
+    }
+
     // MARK: - Backward-compatible decoding
 
     init(from decoder: Decoder) throws {
@@ -259,7 +306,14 @@ struct SessionAwarenessConfig: Codable, Equatable {
         enabled = try c.decodeIfPresent(Bool.self, forKey: .enabled) ?? true
         masterVolume = try c.decodeIfPresent(Float.self, forKey: .masterVolume) ?? 1.0
         outputDeviceUID = try c.decodeIfPresent(String.self, forKey: .outputDeviceUID)
-        muteMode = try c.decodeIfPresent(MuteMode.self, forKey: .muteMode) ?? .off
+        // Backward compat: migrate old muteMode enum to new booleans
+        if let legacy = try? c.decodeIfPresent(String.self, forKey: .muteMode) {
+            muteEnabled = (legacy == "on")
+            micAwareEnabled = (legacy == "auto")
+        } else {
+            muteEnabled = try c.decodeIfPresent(Bool.self, forKey: .muteEnabled) ?? false
+            micAwareEnabled = try c.decodeIfPresent(Bool.self, forKey: .micAwareEnabled) ?? true
+        }
 
         workSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .workSound) ?? .init(sound: "Clock Ticking", volume: 0.6)
         sideSound = try c.decodeIfPresent(SessionSoundConfig.self, forKey: .sideSound) ?? .init(sound: "Clock Ticking", volume: 0.4)

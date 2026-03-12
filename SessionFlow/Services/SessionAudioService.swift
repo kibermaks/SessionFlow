@@ -12,8 +12,11 @@ class SessionAudioService: ObservableObject {
     @Published var isPlaying: Bool = false
     @Published var availableOutputDevices: [AudioOutputDevice] = []
 
-    @Published var muteMode: MuteMode = .off {
-        didSet { applyMuteMode() }
+    @Published var muteEnabled: Bool = false {
+        didSet { applyMuteState() }
+    }
+    @Published var micAwareEnabled: Bool = false {
+        didSet { applyMuteState() }
     }
 
     let micMonitor = MicrophoneMonitor()
@@ -81,34 +84,21 @@ class SessionAudioService: ObservableObject {
 
         micCancellable = micMonitor.$isMicActive
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in self?.applyMuteMode() }
+            .sink { [weak self] _ in self?.applyMuteState() }
     }
 
-    // MARK: - Mute Mode Logic
+    // MARK: - Mute Logic
 
-    private func applyMuteMode() {
-        let shouldMute: Bool
-        switch muteMode {
-        case .on:    shouldMute = true
-        case .auto:  shouldMute = micMonitor.isMicActive
-        case .off:   shouldMute = false
-        }
-
+    private func applyMuteState() {
+        let shouldMute = muteEnabled || (micAwareEnabled && micMonitor.isMicActive)
         guard shouldMute != isMuted else { return }
         isMuted = shouldMute
         if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
     }
 
-    /// Toggle mute from panel buttons. Preserves auto mode when unmuting.
-    private(set) var muteModeBeforeManualMute: MuteMode = .off
-
+    /// Toggle manual mute from panel buttons.
     func toggleMute() {
-        if muteMode == .on {
-            muteMode = muteModeBeforeManualMute
-        } else {
-            muteModeBeforeManualMute = muteMode
-            muteMode = .on
-        }
+        muteEnabled.toggle()
     }
 
     deinit {

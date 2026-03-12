@@ -489,55 +489,81 @@ struct AppSettingsView: View {
                 }
 
                 Section {
-                    HStack(spacing: 10) {
-                        Image(systemName: "speaker.wave.3.fill")
-                            .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
-                            .frame(width: 16)
+                    HStack(spacing: 6) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "speaker.wave.2.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.white.opacity(0.5))
 
-                        Text("Master Volume")
-                            .font(.system(size: 14, weight: .medium))
+                            Text("Master Volume")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(sessionAudioService.muteEnabled ? .secondary : .primary)
+                        }
+                        .fixedSize()
 
                         Slider(value: Binding(
-                            get: { sessionAwarenessService.config.masterVolume },
+                            get: {
+                                sessionAudioService.muteEnabled ? 0 : sessionAwarenessService.config.masterVolume
+                            },
                             set: { newValue in
+                                // Dragging while muted → unmute and set volume
+                                if sessionAudioService.muteEnabled {
+                                    sessionAwarenessService.config.muteEnabled = false
+                                    sessionAudioService.muteEnabled = false
+                                }
                                 sessionAwarenessService.config.masterVolume = newValue
                                 sessionAudioService.setMasterVolume(newValue)
                             }
                         ), in: 0...1)
+                        .controlSize(.mini)
+                        .layoutPriority(1)
 
-                        Text("\(Int(sessionAwarenessService.config.masterVolume * 100))%")
+                        Button {
+                            let newValue = !sessionAwarenessService.config.muteEnabled
+                            sessionAwarenessService.config.muteEnabled = newValue
+                            sessionAudioService.muteEnabled = newValue
+                        } label: {
+                            Image(systemName: sessionAudioService.muteEnabled ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(sessionAudioService.muteEnabled ? .red : .primary)
+                                .frame(width: 28, height: 22)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .fill(sessionAudioService.muteEnabled ? Color.red.opacity(0.15) : Color.white.opacity(0.06))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 5)
+                                        .strokeBorder(sessionAudioService.muteEnabled ? Color.red.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .help(sessionAudioService.muteEnabled ? "Unmute" : "Mute")
+
+                        Text("\(Int((sessionAudioService.muteEnabled ? 0 : sessionAwarenessService.config.masterVolume) * 100))%")
                             .font(.system(size: 12, design: .monospaced))
                             .foregroundColor(.white.opacity(0.5))
                             .frame(width: 38, alignment: .trailing)
                     }
 
                     HStack(spacing: 10) {
-                        muteModeIconView
+                        micAwareIconView
                             .frame(width: 16)
 
-                        Text("Mute")
-                            .font(.system(size: 14, weight: .medium))
-
-                        Spacer()
-
-                        Picker("", selection: Binding(
-                            get: { sessionAwarenessService.config.muteMode },
+                        Toggle("Mic Aware", isOn: Binding(
+                            get: { sessionAwarenessService.config.micAwareEnabled },
                             set: { newValue in
-                                sessionAwarenessService.config.muteMode = newValue
-                                sessionAudioService.muteMode = newValue
+                                sessionAwarenessService.config.micAwareEnabled = newValue
+                                sessionAudioService.micAwareEnabled = newValue
                             }
-                        )) {
-                            Text("Off").tag(MuteMode.off)
-                            Text("Auto (mic)").tag(MuteMode.auto)
-                            Text("On").tag(MuteMode.on)
-                        }
-                        .frame(width: 130)
+                        ))
+                        .font(.system(size: 14, weight: .medium))
                     }
 
-                    Text(muteModeDescription)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if sessionAwarenessService.config.micAwareEnabled {
+                        Text("Auto-mutes while your microphone is in use.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
             }
 
@@ -762,37 +788,24 @@ struct AppSettingsView: View {
         .padding(.vertical, 4)
     }
 
-    // MARK: - Mute mode helpers
+    // MARK: - Mic aware icon
 
     @ViewBuilder
-    private var muteModeIconView: some View {
-        switch sessionAwarenessService.config.muteMode {
-        case .off:
-            Image(systemName: "speaker.wave.2.fill")
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.5))
-        case .auto:
+    private var micAwareIconView: some View {
+        if sessionAwarenessService.config.micAwareEnabled {
             ZStack(alignment: .bottomTrailing) {
-                Image(systemName: sessionAudioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
+                Image(systemName: sessionAudioService.micMonitor.isMicActive ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(sessionAudioService.isMuted ? .orange.opacity(0.7) : .white.opacity(0.5))
+                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? .orange.opacity(0.7) : .white.opacity(0.5))
                 Text("A")
                     .font(.system(size: 6, weight: .heavy, design: .rounded))
-                    .foregroundColor(sessionAudioService.isMuted ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? .orange.opacity(0.7) : .green.opacity(0.7))
                     .offset(x: 2, y: 2)
             }
-        case .on:
-            Image(systemName: "speaker.slash.fill")
+        } else {
+            Image(systemName: "mic.slash")
                 .font(.system(size: 12))
-                .foregroundColor(.red.opacity(0.6))
-        }
-    }
-
-    private var muteModeDescription: String {
-        switch sessionAwarenessService.config.muteMode {
-        case .off:  return "Sounds play normally."
-        case .auto: return "Sounds mute automatically while your microphone is in use (calls, meetings, recordings) and resume when it stops."
-        case .on:   return "All sounds are muted."
+                .foregroundColor(.white.opacity(0.3))
         }
     }
 
@@ -851,15 +864,10 @@ struct AppSettingsView: View {
                 .foregroundColor(.white.opacity(0.4))
                 .frame(width: iconWidth)
 
-            ZStack {
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(showVolumeSliderDebugBorder ? Color.red.opacity(0.9) : Color.clear, lineWidth: 1)
-
-                Slider(value: value, in: 0...1)
-                    .labelsHidden()
-                    .frame(width: sliderWidth)
-            }
-            .frame(width: sliderWidth, height: soundControlHeight)
+            Slider(value: value, in: 0...1)
+                .labelsHidden()
+                .controlSize(.mini)
+                .frame(width: sliderWidth)
         }
         .frame(width: width, height: soundControlHeight, alignment: .leading)
     }

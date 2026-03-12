@@ -83,11 +83,13 @@ struct AwarenessMuteButton: View {
 
     @ViewBuilder
     private var iconView: some View {
-        if audioService.muteMode == .on {
+        if audioService.muteEnabled {
+            // Manually muted
             Image(systemName: "speaker.slash.fill")
                 .font(.system(size: 14))
                 .foregroundColor(.red.opacity(0.6))
-        } else if audioService.muteMode == .auto {
+        } else if audioService.micAwareEnabled {
+            // Mic-aware mode
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 14))
@@ -98,6 +100,7 @@ struct AwarenessMuteButton: View {
                     .offset(x: 3, y: 3)
             }
         } else {
+            // Normal
             Image(systemName: "speaker.wave.2.fill")
                 .font(.system(size: 14))
                 .foregroundColor(.white.opacity(0.5))
@@ -105,10 +108,12 @@ struct AwarenessMuteButton: View {
     }
 
     private var helpText: String {
-        switch audioService.muteMode {
-        case .off:  return "Mute all sounds"
-        case .auto: return audioService.isMuted ? "Auto-muted (mic in use) — click to force mute" : "Auto-mute active — click to mute"
-        case .on:   return "Unmute sounds\(audioService.muteModeBeforeManualMute == .auto ? " (auto-mute)" : "")"
+        if audioService.muteEnabled {
+            return "Unmute sounds"
+        } else if audioService.micAwareEnabled && audioService.isMuted {
+            return "Auto-muted (mic in use)"
+        } else {
+            return "Mute all sounds"
         }
     }
 }
