@@ -28,7 +28,9 @@
       "Bash(/tmp/button_search.txt:*)",
       "Read(//tmp/**)",
       "Bash(./build_app.sh --release minor)",
-      "Bash(find /Users/maks/Code-Projects/SessionFlow -name *.plist -type f)"
+      "Bash(find /Users/maks/Code-Projects/SessionFlow -name *.plist -type f)",
+      "Bash(brew list:*)",
+      "WebSearch"
     ]
   },
   "hooks": {
