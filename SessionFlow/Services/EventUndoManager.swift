@@ -19,9 +19,16 @@ struct EventDeleteSnapshot: Equatable {
 /// Custom class to avoid conflicts with SwiftUI's text field UndoManager.
 class EventUndoManager: ObservableObject {
 
+    /// Snapshot for undoing a batch schedule (create → delete on undo, restore on redo).
+    struct ScheduleSnapshot: Equatable {
+        let eventIds: [String]
+        let sessions: [ScheduledSession]  // projected sessions to restore on undo
+    }
+
     enum UndoableChange: Equatable {
         case time(EventTimeChange)
         case delete(EventDeleteSnapshot)
+        case schedule(ScheduleSnapshot)
     }
 
     struct EventTimeChange: Equatable {
@@ -95,6 +102,15 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    func recordSchedule(_ snapshot: ScheduleSnapshot) {
+        undoStack.append(.schedule(snapshot))
+        if undoStack.count > maxStackSize {
+            undoStack.removeFirst()
+        }
+        redoStack.removeAll()
+        updateState()
+    }
+
     /// Returns the change to apply for undo, or nil if stack is empty.
     func undo() -> UndoableChange? {
         guard let change = undoStack.popLast() else { return nil }
@@ -103,6 +119,8 @@ class EventUndoManager: ObservableObject {
             redoStack.append(change)
         case .delete:
             break  // Caller will push redo after restore (needs new eventId)
+        case .schedule:
+            redoStack.append(change)
         }
         updateState()
         switch change {
@@ -129,6 +147,8 @@ class EventUndoManager: ObservableObject {
             ))
         case .delete(let snap):
             return .delete(snap)
+        case .schedule(let snap):
+            return .schedule(snap)
         }
     }
 
@@ -147,6 +167,18 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    /// After undoing a schedule, caller provides new event IDs from re-creating sessions.
+    func pushRedoForScheduleUndo(_ snapshot: ScheduleSnapshot) {
+        // Replace the redo entry with updated event IDs
+        if let idx = redoStack.lastIndex(where: {
+            if case .schedule = $0 { return true }
+            return false
+        }) {
+            redoStack[idx] = .schedule(snapshot)
+        }
+        updateState()
+    }
+
     /// Returns the change to re-apply, or nil if stack is empty.
     func redo() -> UndoableChange? {
         guard let change = redoStack.popLast() else { return nil }
@@ -157,6 +189,8 @@ class EventUndoManager: ObservableObject {
             return change
         case .delete(let snap):
             return .delete(snap)
+        case .schedule(let snap):
+            return .schedule(snap)
         }
     }
 

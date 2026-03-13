@@ -354,6 +354,37 @@ class CalendarService: ObservableObject {
         }
     }
 
+    /// Creates a calendar event and returns its identifier, or nil on failure.
+    func createEventReturningId(
+        title: String,
+        startDate: Date,
+        endDate: Date,
+        calendar: CalendarDescriptor,
+        notes: String? = nil,
+        url: URL? = nil
+    ) -> String? {
+        guard let destination = self.calendar(from: calendar) else {
+            errorMessage = "Calendar '\(calendar.name)' not found"
+            return nil
+        }
+
+        let event = EKEvent(eventStore: eventStore)
+        event.title = title
+        event.startDate = startDate
+        event.endDate = endDate
+        event.calendar = destination
+        event.notes = notes
+        event.url = url
+
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return event.eventIdentifier
+        } catch {
+            errorMessage = "Failed to create event: \(error.localizedDescription)"
+            return nil
+        }
+    }
+
     /// Restores a deleted event from snapshot. Returns new event identifier on success.
     func restoreEvent(_ snapshot: EventDeleteSnapshot) -> String? {
         guard let destination = calendar(from: CalendarDescriptor(name: snapshot.calendarName, identifier: snapshot.calendarIdentifier)) else {
@@ -434,13 +465,14 @@ class CalendarService: ObservableObject {
         }
     }
 
-    func createSessions(_ sessions: [ScheduledSession]) -> (success: Int, failed: Int) {
+    func createSessions(_ sessions: [ScheduledSession]) -> (success: Int, failed: Int, eventIds: [String]) {
         var successCount = 0
         var failCount = 0
+        var eventIds: [String] = []
         var savedNames: Set<String> = [] // Track unique names saved per type
-        
+
         for session in sessions {
-            if createEvent(
+            if let eventId = createEventReturningId(
                 title: session.title,
                 startDate: session.startTime,
                 endDate: session.endTime,
@@ -451,6 +483,7 @@ class CalendarService: ObservableObject {
                 notes: session.notes
             ) {
                 successCount += 1
+                eventIds.append(eventId)
                 // Save session name to history when successfully created (only once per unique name per batch)
                 let nameKey = "\(session.type.rawValue):\(session.title)"
                 if !savedNames.contains(nameKey) {
@@ -461,8 +494,8 @@ class CalendarService: ObservableObject {
                 failCount += 1
             }
         }
-        
-        return (successCount, failCount)
+
+        return (successCount, failCount, eventIds)
     }
     
     // MARK: - Event Update

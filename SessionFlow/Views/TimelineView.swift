@@ -1367,6 +1367,13 @@ extension TimelineView {
                 } label: {
                     Label("Schedule Session", systemImage: "calendar.badge.plus")
                 }
+                Button {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        scheduleProjectedSessionsUpTo(session)
+                    }
+                } label: {
+                    Label("Schedule All Up to Here", systemImage: "calendar.badge.checkmark")
+                }
                 Divider()
                 Button {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
@@ -1421,16 +1428,46 @@ extension TimelineView {
     private func scheduleProjectedSession(_ session: ScheduledSession) {
         let result = calendarService.createSessions([session])
         if result.success > 0 {
-            schedulingEngine.schedulingMessage = "Scheduled \(session.title) -> \(session.calendarName)"
+            eventUndoManager.recordSchedule(EventUndoManager.ScheduleSnapshot(
+                eventIds: result.eventIds,
+                sessions: [session]
+            ))
             schedulingEngine.projectedSessions.removeAll { $0.id == session.id }
             if selectedSession?.id == session.id {
                 selectedSession = nil
             }
+            onModeToast?("Scheduled \(session.title)")
             Task {
                 await calendarService.fetchEvents(for: selectedDate)
             }
         } else {
-            schedulingEngine.schedulingMessage = "Failed to schedule \(session.title)."
+            onModeToast?("Failed to schedule \(session.title)")
+        }
+    }
+
+    private func scheduleProjectedSessionsUpTo(_ session: ScheduledSession) {
+        let sessionsToSchedule = schedulingEngine.projectedSessions.filter {
+            $0.type != .bigRest && $0.startTime <= session.startTime
+        }
+        guard !sessionsToSchedule.isEmpty else { return }
+
+        let result = calendarService.createSessions(sessionsToSchedule)
+        if result.success > 0 {
+            eventUndoManager.recordSchedule(EventUndoManager.ScheduleSnapshot(
+                eventIds: result.eventIds,
+                sessions: sessionsToSchedule
+            ))
+            let scheduledIds = Set(sessionsToSchedule.map { $0.id })
+            schedulingEngine.projectedSessions.removeAll { scheduledIds.contains($0.id) }
+            if let sel = selectedSession, scheduledIds.contains(sel.id) {
+                selectedSession = nil
+            }
+            onModeToast?("Scheduled \(result.success) session\(result.success == 1 ? "" : "s")")
+            Task {
+                await calendarService.fetchEvents(for: selectedDate)
+            }
+        } else {
+            onModeToast?("Failed to schedule sessions")
         }
     }
     
@@ -2479,6 +2516,14 @@ extension TimelineView {
                 eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
+        case .schedule(let snap):
+            // Undo: delete created events, restore projected sessions
+            for eventId in snap.eventIds {
+                _ = calendarService.deleteEvent(identifier: eventId)
+            }
+            schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
+            schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
+            Task { await calendarService.fetchEvents(for: selectedDate) }
         }
     }
 
@@ -2510,6 +2555,18 @@ extension TimelineView {
             }
         case .delete(let snap):
             if calendarService.deleteEvent(identifier: snap.eventId) {
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
+        case .schedule(let snap):
+            // Redo: re-create the sessions and remove them from projected
+            let result = calendarService.createSessions(snap.sessions)
+            if result.success > 0 {
+                let scheduledIds = Set(snap.sessions.map { $0.id })
+                schedulingEngine.projectedSessions.removeAll { scheduledIds.contains($0.id) }
+                eventUndoManager.pushRedoForScheduleUndo(EventUndoManager.ScheduleSnapshot(
+                    eventIds: result.eventIds,
+                    sessions: snap.sessions
+                ))
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
         }
