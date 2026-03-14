@@ -68,6 +68,8 @@
 		D3C3D4E5F6A7B8C9D0E1F2A3 /* MiniPlayerWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */; };
 		D4D4E5F6A7B8C9D0E1F2A3B4 /* MiniPlayerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4F5A6B7C8D9E0F1A2B3C4D5 /* MiniPlayerView.swift */; };
 		E5E5F6A7B8C9D0E1F2A3B4C5 /* SharedAwarenessComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E6 /* SharedAwarenessComponents.swift */; };
+		A1B1C1D1E1F10001A2B2C2D1 /* ShortcutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */; };
+		A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -134,6 +136,8 @@
 		E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerWindowController.swift; sourceTree = "<group>"; };
 		E4F5A6B7C8D9E0F1A2B3C4D5 /* MiniPlayerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniPlayerView.swift; sourceTree = "<group>"; };
 		F5A6B7C8D9E0F1A2B3C4D5E6 /* SharedAwarenessComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedAwarenessComponents.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutService.swift; sourceTree = "<group>"; };
+		A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowIntents.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -155,6 +159,14 @@
 			);
 			sourceTree = "<group>";
 		};
+			A1B1C1D1E1F10005A2B2C2D1 /* AppIntents */ = {
+			isa = PBXGroup;
+			children = (
+				A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */,
+			);
+			path = AppIntents;
+			sourceTree = "<group>";
+		};
 		401 /* SessionFlow */ = {
 			isa = PBXGroup;
 			children = (
@@ -163,6 +175,7 @@
 				403 /* Models */,
 				404 /* Views */,
 				405 /* Services */,
+				A1B1C1D1E1F10005A2B2C2D1 /* AppIntents */,
 				C8C8050EED40EF171CC2784D /* Resources */,
 				2DEBECAA2EF4136C002A9D7C /* Icon.icon */,
 				202 /* SessionFlow.entitlements */,
@@ -237,6 +250,7 @@
 				F1A2B3C4D5E6F7081929A0B2 /* MicrophoneMonitor.swift */,
 				E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */,
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */,
+				A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -401,6 +415,8 @@
 				D3C3D4E5F6A7B8C9D0E1F2A3 /* MiniPlayerWindowController.swift in Sources */,
 				D4D4E5F6A7B8C9D0E1F2A3B4 /* MiniPlayerView.swift in Sources */,
 				E5E5F6A7B8C9D0E1F2A3B4C5 /* SharedAwarenessComponents.swift in Sources */,
+				A1B1C1D1E1F10001A2B2C2D1 /* ShortcutService.swift in Sources */,
+				A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -539,7 +555,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 658;
+				CURRENT_PROJECT_VERSION = 665;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -576,7 +592,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 658;
+				CURRENT_PROJECT_VERSION = 665;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

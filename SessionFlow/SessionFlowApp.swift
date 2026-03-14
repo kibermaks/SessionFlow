@@ -26,6 +26,8 @@ struct SessionFlowApp: App {
                 .onAppear {
                     updateService.startAutomaticChecks()
                     sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
+                    SessionFlowAppState.awarenessService = sessionAwarenessService
+                    SessionFlowAppState.calendarService = calendarService
                     menuBarController.setup(awarenessService: sessionAwarenessService)
                     miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
                     dockProgressController.setup(awarenessService: sessionAwarenessService)

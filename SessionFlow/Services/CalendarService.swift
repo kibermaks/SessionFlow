@@ -629,6 +629,17 @@ class CalendarService: ObservableObject {
         return result
     }
 
+    /// Returns today's feedback stats (total events + focus minutes)
+    func todayFeedbackStats(weights: FocusWeights = .init()) -> DayFeedbackStats {
+        let cal = Calendar.current
+        let now = Date()
+        let year = cal.component(.year, from: now)
+        let month = cal.component(.month, from: now)
+        let day = cal.component(.day, from: now)
+        let stats = monthlyFeedbackStats(year: year, month: month, weights: weights)
+        return stats[day] ?? DayFeedbackStats()
+    }
+
     /// Returns per-session-type event counts for a given month
     func monthlySessionTypeCounts(year: Int, month: Int) -> [SessionType: Int] {
         let cal = Calendar.current

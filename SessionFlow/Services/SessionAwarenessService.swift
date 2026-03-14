@@ -8,14 +8,21 @@ class SessionAwarenessService: ObservableObject {
 
     @Published var isEnabled: Bool {
         didSet { UserDefaults.standard.set(isEnabled, forKey: "SessionFlow.SessionAwarenessEnabled")
-            if isEnabled {
+            if isEnabled || hasActiveShortcuts {
                 startTimer()
             } else {
                 stopTimer()
+            }
+            if !isEnabled {
                 audioService?.stopAmbient()
                 clearActiveState()
             }
         }
+    }
+
+    /// Whether any shortcut trigger is enabled (timer must keep running for detection)
+    var hasActiveShortcuts: Bool {
+        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.ended.isEnabled
     }
 
     // Active session state
@@ -65,6 +72,10 @@ class SessionAwarenessService: ObservableObject {
         didSet {
             config.save()
             isEnabled = config.enabled
+            // Keep timer running if shortcuts need it
+            if hasActiveShortcuts && timer == nil {
+                startTimer()
+            }
             // Sync mute settings to audio service
             if let audioService = audioService {
                 if audioService.muteEnabled != config.muteEnabled {
@@ -93,6 +104,7 @@ class SessionAwarenessService: ObservableObject {
 
     private weak var calendarService: CalendarService?
     private var audioService: SessionAudioService?
+    let shortcutService = ShortcutService()
     private var timer: Timer?
     private var wasActive: Bool = false
     private var previousEventId: String? = nil
@@ -153,7 +165,7 @@ class SessionAwarenessService: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.lastSlotsFetch = .distantPast }
 
-        if isEnabled {
+        if isEnabled || hasActiveShortcuts {
             startTimer()
         }
     }
@@ -250,31 +262,34 @@ class SessionAwarenessService: ObservableObject {
             clearActiveState()
         }
 
-        // Phase 3: Presence reminder
-        if isActive && config.presenceReminderEnabled {
-            checkPresenceReminder(at: now)
-        }
-
-        // Phase 3: Ending soon
-        if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable {
-            if remaining <= 120 && remaining > 0 {
-                audioService?.playTransition(config: config.endingSoonSound)
-                hasPlayedEndingSoon = true
-                triggerFlash(.endingSoon)
+        // Audio/visual features require awareness enabled
+        if isEnabled {
+            // Phase 3: Presence reminder
+            if isActive && config.presenceReminderEnabled {
+                checkPresenceReminder(at: now)
             }
-        }
 
-        // Phase 3: Accelerando — update playback rate
-        if isActive {
-            let accelConfig: AccelerandoConfig
-            if let type = currentSessionType {
-                accelConfig = config.accelerandoConfig(for: type)
-            } else if isBusySlotMode {
-                accelConfig = config.otherEventsSoundAccelerando
-            } else {
-                accelConfig = .init()
+            // Phase 3: Ending soon
+            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable {
+                if remaining <= 120 && remaining > 0 {
+                    audioService?.playTransition(config: config.endingSoonSound)
+                    hasPlayedEndingSoon = true
+                    triggerFlash(.endingSoon)
+                }
             }
-            audioService?.updatePlaybackRate(progress: progress, accelerando: accelConfig)
+
+            // Phase 3: Accelerando — update playback rate
+            if isActive {
+                let accelConfig: AccelerandoConfig
+                if let type = currentSessionType {
+                    accelConfig = config.accelerandoConfig(for: type)
+                } else if isBusySlotMode {
+                    accelConfig = config.otherEventsSoundAccelerando
+                } else {
+                    accelConfig = .init()
+                }
+                audioService?.updatePlaybackRate(progress: progress, accelerando: accelConfig)
+            }
         }
 
         // Update next session
@@ -335,6 +350,14 @@ class SessionAwarenessService: ObservableObject {
             if nextSessionIsBusySlot != isBusy { nextSessionIsBusySlot = isBusy }
             let calColor = isBusy ? next.calendarColor : nil
             if nextSessionCalendarColor != calColor { nextSessionCalendarColor = calColor }
+
+            // Schedule "Approaching" shortcut
+            shortcutService.scheduleApproaching(
+                sessionId: next.id,
+                session: .init(title: next.title, type: type, isBusySlot: isBusy,
+                               startTime: next.startTime, endTime: next.endTime),
+                config: config.shortcuts
+            )
         } else {
             if nextSessionTitle != nil { nextSessionTitle = nil }
             if nextSessionType != nil { nextSessionType = nil }
@@ -342,6 +365,7 @@ class SessionAwarenessService: ObservableObject {
             if nextSessionEndTime != nil { nextSessionEndTime = nil }
             if nextSessionIsBusySlot != false { nextSessionIsBusySlot = false }
             if nextSessionCalendarColor != nil { nextSessionCalendarColor = nil }
+            shortcutService.cancelApproaching()
         }
     }
 
@@ -396,23 +420,35 @@ class SessionAwarenessService: ObservableObject {
             // If we're joining mid-event (elapsed > 10s), skip start transition — just play ambient
             let isJoiningMidEvent = elapsed > 10
 
-            // When joining mid-event, suppress immediate presence/ending triggers
-            // (only fire when DateTime Now naturally crosses the next interval boundary)
-            if isJoiningMidEvent {
-                if lastPresenceReminderTime == nil {
-                    // Anchor to last interval boundary so next reminder fires at a clean multiple
-                    let intervalSeconds = TimeInterval(config.presenceReminderIntervalMinutes * 60)
-                    let completedIntervals = Int(elapsed / intervalSeconds)
-                    if completedIntervals > 0 {
-                        lastPresenceReminderTime = slot.startTime.addingTimeInterval(Double(completedIntervals) * intervalSeconds)
+            if isEnabled {
+                // When joining mid-event, suppress immediate presence/ending triggers
+                // (only fire when DateTime Now naturally crosses the next interval boundary)
+                if isJoiningMidEvent {
+                    if lastPresenceReminderTime == nil {
+                        // Anchor to last interval boundary so next reminder fires at a clean multiple
+                        let intervalSeconds = TimeInterval(config.presenceReminderIntervalMinutes * 60)
+                        let completedIntervals = Int(elapsed / intervalSeconds)
+                        if completedIntervals > 0 {
+                            lastPresenceReminderTime = slot.startTime.addingTimeInterval(Double(completedIntervals) * intervalSeconds)
+                        }
+                    }
+                    if remaining <= 120 {
+                        hasPlayedEndingSoon = true
                     }
                 }
-                if remaining <= 120 {
-                    hasPlayedEndingSoon = true
-                }
+
+                playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
             }
 
-            playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
+            // Fire "Session Started" shortcut (skip if joining mid-event)
+            if !isJoiningMidEvent {
+                shortcutService.fire(
+                    trigger: .started,
+                    session: .init(title: slot.title, type: sessionType, isBusySlot: isBusySlot,
+                                   startTime: slot.startTime, endTime: slot.endTime),
+                    config: config.shortcuts
+                )
+            }
         }
     }
 
@@ -444,17 +480,25 @@ class SessionAwarenessService: ObservableObject {
         endTime: Date,
         isNaturalEnd: Bool
     ) {
+        // Shortcuts fire independently of awareness
+        if isNaturalEnd {
+            shortcutService.fire(
+                trigger: .ended,
+                session: .init(title: sessionTitle, type: sessionType, isBusySlot: sessionType == nil,
+                               startTime: startTime, endTime: endTime),
+                config: config.shortcuts
+            )
+        }
+
+        // Audio and feedback require awareness enabled
+        guard isEnabled else { return }
+
         audioService?.stopAmbient()
 
-        // Only play end sound if session ended naturally (Now passed end time)
         if isNaturalEnd && config.endSound.isPlayable {
             audioService?.playTransition(config: config.endSound)
         }
 
-        // Create feedback prompt from the session that just ended (only for natural ends).
-        // Use in-memory state—do NOT lookup in busySlots; that is scoped to the selected date,
-        // while sessions are tracked from cachedNowSlots (current date). If user views another
-        // date, busySlots would not contain today's event and feedback would silently fail.
         if isNaturalEnd,
            config.productivityEnabled,
            sessionType != nil || config.trackOtherEvents {
@@ -466,7 +510,6 @@ class SessionAwarenessService: ObservableObject {
                 endTime: endTime
             )
 
-            // Auto-dismiss feedback after 15 seconds
             feedbackDismissTimer?.invalidate()
             feedbackDismissTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
                 DispatchQueue.main.async {

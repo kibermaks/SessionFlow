@@ -18,6 +18,10 @@ struct AppSettingsView: View {
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     @State private var focusWeightsExpanded = false
+    @State private var showingShortcutsInfo = false
+    @State private var showingApproachingPayload = false
+    @State private var showingStartedPayload = false
+    @State private var showingEndedPayload = false
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
     @State private var pendingReplacementContext: CalendarReplacementContext?
@@ -35,12 +39,13 @@ struct AppSettingsView: View {
     private let transitionPreviewDuration: TimeInterval = 1.5
 
     private enum SettingsTab: String, CaseIterable {
-        case general, calendars, awareness
+        case general, calendars, awareness, shortcuts
         var icon: String {
             switch self {
             case .general: return "gearshape"
             case .calendars: return "calendar"
             case .awareness: return "eye.circle"
+            case .shortcuts: return "command.square.fill"
             }
         }
         var label: String {
@@ -48,6 +53,7 @@ struct AppSettingsView: View {
             case .general: return "General"
             case .calendars: return "Calendars"
             case .awareness: return "Awareness"
+            case .shortcuts: return "Shortcuts"
             }
         }
     }
@@ -72,6 +78,7 @@ struct AppSettingsView: View {
                 case .general: generalTab
                 case .calendars: calendarsTab
                 case .awareness: sessionAwarenessTab
+                case .shortcuts: shortcutsTab
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -946,6 +953,290 @@ struct AppSettingsView: View {
                 ? (TransitionSoundConfig.availableSounds.first ?? "Off")
                 : SessionAwarenessConfig.default[keyPath: keyPath].sound
         )
+    }
+
+    // MARK: - Shortcuts tab
+
+    private var shortcutsTab: some View {
+        Form {
+            // Header
+            Section {
+                HStack(spacing: 8) {
+                    Image(systemName: "command.square.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.accentColor)
+
+                    Text("Shortcuts")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+
+            // Intro
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("SessionFlow can run your macOS Shortcuts when sessions start, end, or are about to begin.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Each Shortcut receives JSON input with session details — type, title, timing, and a ready-to-display message. Use this to toggle Focus modes, send notifications to your Apple Watch via Pushover or ntfy, control smart home devices, or anything else Shortcuts can do.")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 12) {
+                        Text("To get started, create a Shortcut in the Shortcuts app with a matching name, then enable the trigger below.")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        Spacer()
+
+                        Button {
+                            if let url = URL(string: "https://support.apple.com/guide/shortcuts-mac/intro-to-shortcuts-apdf22b0444c/mac") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "book.fill")
+                                    .font(.system(size: 10))
+                                Text("Shortcuts Guide")
+                                    .font(.system(size: 11, weight: .medium))
+                            }
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.15)))
+                            .foregroundColor(.accentColor)
+                        }
+                        .buttonStyle(.plain)
+                        .hoverEffect(brightness: 0.2)
+                    }
+                }
+            }
+
+            // Triggers
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.approaching,
+                    title: "Session Approaching",
+                    showLeadTime: true,
+                    showingPayload: $showingApproachingPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "approaching",
+                        message: "Deep session 'Heavy brainstorm' starts in 1 min")
+                )
+            }
+
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.started,
+                    title: "Session Started",
+                    showingPayload: $showingStartedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "started",
+                        message: "Deep session 'Heavy brainstorm' started")
+                )
+            }
+
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.ended,
+                    title: "Session Ended",
+                    showingPayload: $showingEndedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "ended",
+                        message: "Deep session 'Heavy brainstorm' ended")
+                )
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func shortcutTriggerRow(
+        triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
+        title: String,
+        showLeadTime: Bool = false,
+        showingPayload: Binding<Bool>,
+        examplePayload: String
+    ) -> some View {
+        let triggerConfig = sessionAwarenessService.config.shortcuts[keyPath: triggerPath]
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Toggle(isOn: Binding(
+                    get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled },
+                    set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled = $0 }
+                )) {
+                    Text(title)
+                        .font(.system(size: 13, weight: .medium, design: .monospaced))
+                        .foregroundColor(triggerConfig.isEnabled ? .primary : .secondary)
+                }
+
+                Button {
+                    showingPayload.wrappedValue.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.3)
+                .help("Example payload")
+                .popover(isPresented: showingPayload, arrowEdge: .trailing) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Example payload")
+                            .font(.system(size: 13, weight: .semibold))
+
+                        Text(examplePayload)
+                            .font(.system(size: 10, design: .monospaced))
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
+
+                        Text("**message** is ready to display — no parsing needed.")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(14)
+                    .frame(width: 360)
+                }
+            }
+            .padding(.vertical, 2)
+
+            if triggerConfig.isEnabled {
+                shortcutNameField(triggerPath: triggerPath)
+
+                if showLeadTime {
+                    HStack(spacing: 8) {
+                        Text("Lead time")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+Spacer()
+                        NumericInputField(
+                            value: Binding(
+                                get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes ?? 1 },
+                                set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes = $0 }
+                            ),
+                            range: 1...30,
+                            unit: "min"
+                        )
+                    }
+                }
+
+                HStack {
+                    Text("Trigger for:")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    shortcutTypeFilterChips(triggerPath: triggerPath)
+                }
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    @FocusState private var shortcutNameFocused: String?
+
+    private func shortcutNameField(triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>) -> some View {
+        let id = String(describing: triggerPath)
+        let isFocused = shortcutNameFocused == id
+
+        return HStack {
+            Text("Shortcut name")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.7))
+
+            Spacer()
+
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                    )
+
+                TextField("", text: Binding(
+                    get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].shortcutName },
+                    set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].shortcutName = $0 }
+                ))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .focused($shortcutNameFocused, equals: id)
+                .padding(.horizontal, 8)
+            }
+            .frame(width: 220, height: 24)
+        }
+    }
+
+    private func shortcutTypeFilterChips(triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>) -> some View {
+        HStack(spacing: 5) {
+            shortcutTypeChip("Work", icon: "briefcase.fill", color: SessionType.work.color,
+                             isOn: Binding(
+                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.work },
+                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.work = $0 }
+                             ))
+            shortcutTypeChip("Side", icon: "star.fill", color: SessionType.side.color,
+                             isOn: Binding(
+                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.side },
+                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.side = $0 }
+                             ))
+            shortcutTypeChip("Deep", icon: "bolt.circle.fill", color: SessionType.deep.color,
+                             isOn: Binding(
+                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.deep },
+                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.deep = $0 }
+                             ))
+            shortcutTypeChip("Planning", icon: "calendar.badge.clock", color: SessionType.planning.color,
+                             isOn: Binding(
+                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.planning },
+                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.planning = $0 }
+                             ))
+            shortcutTypeChip("External", icon: "calendar", color: .gray,
+                             isOn: Binding(
+                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external },
+                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external = $0 }
+                             ))
+        }
+    }
+
+    private func shortcutTypeChip(_ label: String, icon: String, color: Color, isOn: Binding<Bool>) -> some View {
+        Button {
+            isOn.wrappedValue.toggle()
+        } label: {
+            HStack(spacing: 3) {
+                Image(systemName: icon)
+                    .font(.system(size: 8))
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 3)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(isOn.wrappedValue ? color.opacity(0.2) : Color.clear)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .strokeBorder(isOn.wrappedValue ? color.opacity(0.4) : Color.clear, lineWidth: 1)
+            )
+            .foregroundColor(isOn.wrappedValue ? color : .secondary.opacity(0.5))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func shortcutPayloadExample(trigger: String, message: String) -> String {
+        """
+        {
+          "trigger": "\(trigger)",
+          "type": "deep",
+          "typeName": "Deep session",
+          "title": "Heavy brainstorm",
+          "message": "\(message)",
+          "duration": 120,
+          "startTime": "2026-03-14T10:00:00Z",
+          "endTime": "2026-03-14T12:00:00Z"
+        }
+        """
     }
 
     private func focusWeightRow(label: String, icon: String, color: Color, value: Binding<Int>) -> some View {

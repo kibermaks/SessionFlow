@@ -153,6 +153,76 @@ class CustomSoundStore {
     }
 }
 
+// MARK: - Shortcut type filter
+
+struct ShortcutTypeFilter: Codable, Equatable {
+    var work: Bool = true
+    var side: Bool = true
+    var deep: Bool = true
+    var planning: Bool = true
+    var external: Bool = false
+
+    func matches(sessionType: SessionType?, isBusySlot: Bool) -> Bool {
+        if isBusySlot || sessionType == nil { return external }
+        guard let type = sessionType else { return false }
+        switch type {
+        case .work: return work
+        case .side: return side
+        case .deep: return deep
+        case .planning: return planning
+        case .bigRest: return false
+        }
+    }
+
+    /// Count of enabled types (out of 5)
+    var enabledCount: Int {
+        [work, side, deep, planning, external].filter { $0 }.count
+    }
+}
+
+// MARK: - Shortcut trigger config
+
+struct ShortcutTriggerConfig: Codable, Equatable {
+    var isEnabled: Bool = false
+    var shortcutName: String
+    var leadTimeMinutes: Int? = nil   // Only for "approaching" trigger
+    var typeFilter: ShortcutTypeFilter = .init()
+
+    init(isEnabled: Bool = false, shortcutName: String, leadTimeMinutes: Int? = nil) {
+        self.isEnabled = isEnabled
+        self.shortcutName = shortcutName
+        self.leadTimeMinutes = leadTimeMinutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        isEnabled = try c.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? false
+        shortcutName = try c.decodeIfPresent(String.self, forKey: .shortcutName) ?? ""
+        leadTimeMinutes = try c.decodeIfPresent(Int.self, forKey: .leadTimeMinutes)
+        typeFilter = try c.decodeIfPresent(ShortcutTypeFilter.self, forKey: .typeFilter) ?? .init()
+    }
+}
+
+// MARK: - Shortcuts config
+
+struct ShortcutsConfig: Codable, Equatable {
+    var approaching: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
+    var started: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Started")
+    var ended: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ended")
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        approaching = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .approaching)
+            ?? .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
+        started = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .started)
+            ?? .init(shortcutName: "SessionFlow Started")
+        ended = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .ended)
+            ?? .init(shortcutName: "SessionFlow Ended")
+    }
+}
+
 // MARK: - Focus weights (percentage each rating contributes to focus time)
 
 struct FocusWeights: Codable, Equatable {
@@ -225,6 +295,9 @@ struct SessionAwarenessConfig: Codable, Equatable {
     var miniPlayerFrame: CodableRect? = nil
     var mainWindowFrame: CodableRect? = nil
 
+    // Shortcuts integration
+    var shortcuts: ShortcutsConfig = .init()
+
     static let `default` = SessionAwarenessConfig()
 
     // MARK: - Persistence
@@ -261,6 +334,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         case productivityEnabled, focusWeights
         case showMenuBarItem, showDockProgress
         case miniPlayerFrame, mainWindowFrame
+        case shortcuts
     }
 
     // MARK: - Encoding (excludes legacy muteMode)
@@ -297,6 +371,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         try c.encode(showDockProgress, forKey: .showDockProgress)
         try c.encodeIfPresent(miniPlayerFrame, forKey: .miniPlayerFrame)
         try c.encodeIfPresent(mainWindowFrame, forKey: .mainWindowFrame)
+        try c.encode(shortcuts, forKey: .shortcuts)
     }
 
     // MARK: - Backward-compatible decoding
@@ -346,6 +421,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)
         mainWindowFrame = try c.decodeIfPresent(CodableRect.self, forKey: .mainWindowFrame)
+        shortcuts = try c.decodeIfPresent(ShortcutsConfig.self, forKey: .shortcuts) ?? .init()
     }
 
     init() {}
