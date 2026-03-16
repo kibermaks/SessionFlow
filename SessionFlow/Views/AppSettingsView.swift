@@ -19,6 +19,8 @@ struct AppSettingsView: View {
 
     @State private var focusWeightsExpanded = false
     @State private var showingShortcutsInfo = false
+    @State private var shortcutTestResult: ShortcutTestResult?
+    @State private var shortcutTestTitle: String = ""
     @State private var showingApproachingPayload = false
     @State private var showingStartedPayload = false
     @State private var showingEndedPayload = false
@@ -37,6 +39,12 @@ struct AppSettingsView: View {
     private let showVolumeSliderDebugBorder = false
     private let previewDuration: TimeInterval = 4.0
     private let transitionPreviewDuration: TimeInterval = 1.5
+
+    private enum ShortcutTestResult {
+        case running
+        case success
+        case failure(String)
+    }
 
     private enum SettingsTab: String, CaseIterable {
         case general, calendars, awareness, shortcuts
@@ -1021,6 +1029,7 @@ struct AppSettingsView: View {
                 shortcutTriggerRow(
                     triggerPath: \.approaching,
                     title: "Session Approaching",
+                    triggerKey: "approaching",
                     showLeadTime: true,
                     showingPayload: $showingApproachingPayload,
                     examplePayload: shortcutPayloadExample(trigger: "approaching",
@@ -1032,6 +1041,7 @@ struct AppSettingsView: View {
                 shortcutTriggerRow(
                     triggerPath: \.started,
                     title: "Session Started",
+                    triggerKey: "started",
                     showingPayload: $showingStartedPayload,
                     examplePayload: shortcutPayloadExample(trigger: "started",
                         message: "Deep session 'Heavy brainstorm' started")
@@ -1042,6 +1052,7 @@ struct AppSettingsView: View {
                 shortcutTriggerRow(
                     triggerPath: \.ended,
                     title: "Session Ended",
+                    triggerKey: "ended",
                     showingPayload: $showingEndedPayload,
                     examplePayload: shortcutPayloadExample(trigger: "ended",
                         message: "Deep session 'Heavy brainstorm' ended")
@@ -1049,11 +1060,36 @@ struct AppSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .alert(
+            shortcutTestTitle,
+            isPresented: Binding(
+                get: {
+                    guard let result = shortcutTestResult else { return false }
+                    if case .running = result { return false }
+                    return true
+                },
+                set: { if !$0 { shortcutTestResult = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { shortcutTestResult = nil }
+        } message: {
+            if let result = shortcutTestResult {
+                switch result {
+                case .success:
+                    Text("Shortcut ran successfully.")
+                case .failure(let msg):
+                    Text(msg)
+                case .running:
+                    EmptyView()
+                }
+            }
+        }
     }
 
     private func shortcutTriggerRow(
         triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
         title: String,
+        triggerKey: String,
         showLeadTime: Bool = false,
         showingPayload: Binding<Bool>,
         examplePayload: String
@@ -1062,44 +1098,49 @@ struct AppSettingsView: View {
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack(spacing: 8) {
-                Toggle(isOn: Binding(
+                Text(title)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(triggerConfig.isEnabled ? .primary : .secondary)
+
+                Spacer()
+
+                if triggerConfig.isEnabled {
+                    Button {
+                        showingPayload.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
+                    .help("Example payload")
+                    .popover(isPresented: showingPayload, arrowEdge: .trailing) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Example payload")
+                                .font(.system(size: 13, weight: .semibold))
+
+                            Text(examplePayload)
+                                .font(.system(size: 10, design: .monospaced))
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
+
+                            Text("**message** is ready to display — no parsing needed.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(14)
+                        .frame(width: 360)
+                    }
+                }
+
+                Toggle("", isOn: Binding(
                     get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled },
                     set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled = $0 }
-                )) {
-                    Text(title)
-                        .font(.system(size: 13, weight: .medium, design: .monospaced))
-                        .foregroundColor(triggerConfig.isEnabled ? .primary : .secondary)
-                }
-
-                Button {
-                    showingPayload.wrappedValue.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.3)
-                .help("Example payload")
-                .popover(isPresented: showingPayload, arrowEdge: .trailing) {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Example payload")
-                            .font(.system(size: 13, weight: .semibold))
-
-                        Text(examplePayload)
-                            .font(.system(size: 10, design: .monospaced))
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
-
-                        Text("**message** is ready to display — no parsing needed.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(14)
-                    .frame(width: 360)
-                }
+                ))
+                .labelsHidden()
             }
             .padding(.vertical, 2)
 
@@ -1130,9 +1171,104 @@ Spacer()
                     Spacer()
                     shortcutTypeFilterChips(triggerPath: triggerPath)
                 }
+
+                Divider()
+                    .opacity(0.5)
+
+                Button {
+                    showTestTypeMenu(triggerPath: triggerPath, triggerKey: triggerKey, title: title)
+                } label: {
+                    HStack(spacing: 4) {
+                        if case .running = shortcutTestResult, shortcutTestTitle == title {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 8))
+                        }
+                        Text("Test Shortcut")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.accentColor.opacity(0.12))
+                    )
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .hoverEffect(brightness: 0.3)
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private func runShortcutTest(
+        triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
+        triggerKey: String,
+        title: String,
+        typeKey: String
+    ) {
+        let name = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].shortcutName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            shortcutTestTitle = title
+            shortcutTestResult = .failure("No shortcut name specified")
+            return
+        }
+        let typeName = typeKey == "external" ? "External" : typeKey.prefix(1).uppercased() + typeKey.dropFirst()
+        let message: String
+        switch triggerKey {
+        case "approaching":
+            let lead = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes ?? 1
+            message = "\(typeName) session 'Heavy brainstorm' starts in \(lead) min"
+        case "started":
+            message = "\(typeName) session 'Heavy brainstorm' started"
+        default:
+            message = "\(typeName) session 'Heavy brainstorm' ended"
+        }
+        let testPayload = shortcutPayloadExample(trigger: triggerKey, message: message, type: typeKey)
+        shortcutTestTitle = title
+        shortcutTestResult = .running
+        ShortcutService.test(name: name, payload: testPayload) { result in
+            switch result {
+            case .success:
+                shortcutTestResult = .success
+            case .failure(let error):
+                shortcutTestResult = .failure(error.localizedDescription)
+            }
+        }
+    }
+
+    private func showTestTypeMenu(
+        triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
+        triggerKey: String,
+        title: String
+    ) {
+        let filter = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter
+        let enabled = testTypeOptions.filter { o in
+            switch o.key {
+            case "deep": return filter.deep
+            case "work": return filter.work
+            case "side": return filter.side
+            case "planning": return filter.planning
+            case "external": return filter.external
+            default: return false
+            }
+        }
+        let options = enabled.isEmpty ? testTypeOptions : enabled
+
+        let menu = NSMenu()
+        for option in options {
+            let item = ShortcutTestMenuItem(title: option.label, typeKey: option.key) { [self] key in
+                runShortcutTest(triggerPath: triggerPath, triggerKey: triggerKey, title: title, typeKey: key)
+            }
+            menu.addItem(item)
+        }
+
+        if let event = NSApp.currentEvent {
+            NSMenu.popUpContextMenu(menu, with: event, for: event.window?.contentView ?? NSView())
+        }
     }
 
     @FocusState private var shortcutNameFocused: String?
@@ -1224,20 +1360,31 @@ Spacer()
         .buttonStyle(.plain)
     }
 
-    private func shortcutPayloadExample(trigger: String, message: String) -> String {
-        """
+    private func shortcutPayloadExample(trigger: String, message: String, type: String = "deep") -> String {
+        let typeName = type == "external" ? "External" : type.prefix(1).uppercased() + type.dropFirst()
+        let sessionLabel = "\(typeName) session"
+        let msg = message.isEmpty ? "\(sessionLabel) 'Heavy brainstorm'" : message
+        return """
         {
           "trigger": "\(trigger)",
-          "type": "deep",
-          "typeName": "Deep session",
+          "type": "\(type)",
+          "typeName": "\(sessionLabel)",
           "title": "Heavy brainstorm",
-          "message": "\(message)",
+          "message": "\(msg)",
           "duration": 120,
           "startTime": "2026-03-14T10:00:00Z",
           "endTime": "2026-03-14T12:00:00Z"
         }
         """
     }
+
+    private let testTypeOptions: [(key: String, label: String)] = [
+        ("deep", "Deep"),
+        ("work", "Work"),
+        ("side", "Side"),
+        ("planning", "Planning"),
+        ("external", "External"),
+    ]
 
     private func focusWeightRow(label: String, icon: String, color: Color, value: Binding<Int>) -> some View {
         HStack(spacing: 8) {
@@ -1865,6 +2012,26 @@ private struct CalendarReplacementSheet: View {
         }
         .padding(24)
         .frame(minWidth: 380)
+    }
+}
+
+// MARK: - Shortcut Test Menu Item
+
+private class ShortcutTestMenuItem: NSMenuItem {
+    let typeKey: String
+    let handler: (String) -> Void
+
+    init(title: String, typeKey: String, handler: @escaping (String) -> Void) {
+        self.typeKey = typeKey
+        self.handler = handler
+        super.init(title: title, action: #selector(fire), keyEquivalent: "")
+        self.target = self
+    }
+
+    required init(coder: NSCoder) { fatalError() }
+
+    @objc private func fire() {
+        handler(typeKey)
     }
 }
 

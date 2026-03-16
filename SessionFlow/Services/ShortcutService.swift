@@ -113,16 +113,59 @@ class ShortcutService {
         return json
     }
 
+    // MARK: - Test
+
+    /// Run a shortcut with a test payload and report success/failure.
+    static func test(name: String, payload: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            guard let inputPath = Self.writePayloadToTempFile(payload) else {
+                DispatchQueue.main.async { completion(.failure(NSError(domain: "ShortcutService", code: -1, userInfo: [NSLocalizedDescriptionKey: "Failed to write payload"]))) }
+                return
+            }
+            defer { try? FileManager.default.removeItem(at: inputPath) }
+
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/shortcuts")
+            process.arguments = ["run", name, "--input-path", inputPath.path]
+            let errPipe = Pipe()
+            process.standardOutput = FileHandle.nullDevice
+            process.standardError = errPipe
+            do {
+                try process.run()
+                process.waitUntilExit()
+                if process.terminationStatus == 0 {
+                    DispatchQueue.main.async { completion(.success(())) }
+                } else {
+                    let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                    let msg = String(data: errData, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "Exit code \(process.terminationStatus)"
+                    DispatchQueue.main.async { completion(.failure(NSError(domain: "ShortcutService", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: msg]))) }
+                }
+            } catch {
+                DispatchQueue.main.async { completion(.failure(error)) }
+            }
+        }
+    }
+
     // MARK: - Execution
 
     private func runShortcut(name: String, payload: String) {
         DispatchQueue.global(qos: .utility).async {
+            guard let inputPath = Self.writePayloadToTempFile(payload) else { return }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/shortcuts")
-            process.arguments = ["run", name, "--input-type", "text", "--input", payload]
+            process.arguments = ["run", name, "--input-path", inputPath.path]
             process.standardOutput = FileHandle.nullDevice
             process.standardError = FileHandle.nullDevice
             try? process.run()
+            process.waitUntilExit()
+            try? FileManager.default.removeItem(at: inputPath)
         }
+    }
+
+    private static func writePayloadToTempFile(_ payload: String) -> URL? {
+        let tempDir = FileManager.default.temporaryDirectory
+        let file = tempDir.appendingPathComponent("sessionflow-shortcut-\(UUID().uuidString).txt")
+        guard (try? payload.write(to: file, atomically: true, encoding: .utf8)) != nil else { return nil }
+        return file
     }
 }

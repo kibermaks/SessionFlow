@@ -428,7 +428,7 @@ struct AwarenessIdleContent<ToggleButton: View>: View {
                 .font(.system(size: 13))
                 .foregroundColor(.white.opacity(0.25))
 
-            Text("Session Awareness")
+            Text("SessionFlow Awareness")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(.white.opacity(0.3))
 
