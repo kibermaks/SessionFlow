@@ -62,9 +62,13 @@ class SessionAwarenessService: ObservableObject {
     // Mini-player collapsed state (NOT persisted)
     @Published var isCollapsed: Bool = false
 
-    // Flash trigger for attention events (presence reminder, ending soon)
-    enum FlashType { case presenceReminder, endingSoon }
+    // Flash trigger for attention events (presence reminder, ending soon, start)
+    enum FlashType { case presenceReminder, endingSoon, sessionStarted }
     @Published var flashTrigger: FlashType? = nil
+
+    // Skip sounds until next session (mute current session only)
+    @Published var isSessionMuted: Bool = false
+    private var sessionMutedEventId: String? = nil
 
     // MARK: - Config
 
@@ -264,13 +268,13 @@ class SessionAwarenessService: ObservableObject {
 
         // Audio/visual features require awareness enabled
         if isEnabled {
-            // Phase 3: Presence reminder
-            if isActive && config.presenceReminderEnabled {
+            // Phase 3: Presence reminder (suppressed when session-muted)
+            if isActive && config.presenceReminderEnabled && !isSessionMuted {
                 checkPresenceReminder(at: now)
             }
 
-            // Phase 3: Ending soon
-            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable {
+            // Phase 3: Ending soon (suppressed when session-muted)
+            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable && !isSessionMuted {
                 if remaining <= 120 && remaining > 0 {
                     audioService?.playTransition(config: config.endingSoonSound)
                     hasPlayedEndingSoon = true
@@ -278,8 +282,8 @@ class SessionAwarenessService: ObservableObject {
                 }
             }
 
-            // Phase 3: Accelerando — update playback rate
-            if isActive {
+            // Phase 3: Accelerando — update playback rate (skip when session-muted)
+            if isActive && !isSessionMuted {
                 let accelConfig: AccelerandoConfig
                 if let type = currentSessionType {
                     accelConfig = config.accelerandoConfig(for: type)
@@ -380,6 +384,12 @@ class SessionAwarenessService: ObservableObject {
             isBusySlotMode = isBusySlot
             busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
             busySlotCalendarName = isBusySlot ? slot.calendarName : nil
+
+            // Auto-clear session mute when a different session starts
+            if isSessionMuted && sessionMutedEventId != slot.id {
+                isSessionMuted = false
+                sessionMutedEventId = nil
+            }
         }
         if currentSessionTitle != slot.title { currentSessionTitle = slot.title }
         if currentSessionType != sessionType { currentSessionType = sessionType }
@@ -435,6 +445,8 @@ class SessionAwarenessService: ObservableObject {
                     if remaining <= 120 {
                         hasPlayedEndingSoon = true
                     }
+                } else {
+                    triggerFlash(.sessionStarted)
                 }
 
                 playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
@@ -466,6 +478,7 @@ class SessionAwarenessService: ObservableObject {
         if isBusySlotMode { isBusySlotMode = false }
         if busySlotCalendarColor != nil { busySlotCalendarColor = nil }
         if busySlotCalendarName != nil { busySlotCalendarName = nil }
+        if isSessionMuted { isSessionMuted = false; sessionMutedEventId = nil }
         lastPresenceReminderTime = nil
         hasPlayedEndingSoon = false
     }
@@ -595,6 +608,23 @@ class SessionAwarenessService: ObservableObject {
     func dismissFeedback() {
         feedbackDismissTimer?.invalidate()
         sessionFeedbackPending = nil
+    }
+
+    // MARK: - Session mute (skip until next)
+
+    func toggleSessionMute() {
+        if isSessionMuted {
+            isSessionMuted = false
+            sessionMutedEventId = nil
+            // Resume ambient if there's an active session
+            if isActive {
+                playSessionStartAudio(sessionType: currentSessionType, skipTransition: true)
+            }
+        } else {
+            isSessionMuted = true
+            sessionMutedEventId = currentEventId
+            audioService?.stopAmbient()
+        }
     }
 
     // MARK: - Debug simulation

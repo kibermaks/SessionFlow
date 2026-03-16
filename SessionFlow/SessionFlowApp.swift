@@ -1,6 +1,29 @@
 import SwiftUI
 import AppKit
 
+// MARK: - Global Focus Ring Suppression
+
+/// Suppresses default focus rings app-wide by overriding NSView's focusRingType.
+/// This prevents the system blue ring on all controls (text fields, buttons, etc.).
+class FocusRingController {
+    static let shared = FocusRingController()
+    private static var swizzled = false
+
+    func install() {
+        guard !Self.swizzled else { return }
+        Self.swizzled = true
+
+        // Swizzle NSView.focusRingType getter to return .none globally
+        let original = class_getInstanceMethod(NSView.self, #selector(getter: NSView.focusRingType))!
+        let replacement = class_getInstanceMethod(FocusRingController.self, #selector(FocusRingController.noFocusRingType))!
+        method_setImplementation(original, method_getImplementation(replacement))
+    }
+
+    @objc private func noFocusRingType() -> UInt {
+        return NSFocusRingType.none.rawValue
+    }
+}
+
 @main
 struct SessionFlowApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -31,6 +54,11 @@ struct SessionFlowApp: App {
                     menuBarController.setup(awarenessService: sessionAwarenessService)
                     miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
                     dockProgressController.setup(awarenessService: sessionAwarenessService)
+
+                    // Persist main window frame across launches
+                    if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+                        mainWindow.setFrameAutosaveName("SessionFlowMainWindow")
+                    }
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -98,10 +126,72 @@ struct SessionFlowApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let bundleID = Bundle.main.bundleIdentifier ?? ""
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
+        if running.count > 1 {
+            // Another instance is already running — activate it and quit this one
+            if let other = running.first(where: { $0 != NSRunningApplication.current }) {
+                other.activate()
+            }
+            NSApp.terminate(nil)
+        }
+
+        FocusRingController.shared.install()
+    }
+
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         // Don't quit when main window is hidden for mini-player
         let hasVisiblePanel = NSApp.windows.contains { $0 is NSPanel && $0.isVisible }
         return !hasVisiblePanel
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        let hasVisiblePanel = NSApp.windows.contains { $0 is NSPanel && $0.isVisible }
+        let hasVisibleMainWindow = NSApp.windows.contains { !($0 is NSPanel) && $0.isVisible }
+
+        if hasVisiblePanel && !hasVisibleMainWindow {
+            // Mini-player is active, main window is hidden — flash the panel instead
+            if let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
+                flashWindow(panel)
+            }
+            return false // Don't open main window
+        }
+        return true
+    }
+
+    private func flashWindow(_ window: NSWindow) {
+        guard let contentView = window.contentView else { return }
+        let flash = NSView(frame: contentView.bounds)
+        flash.wantsLayer = true
+        flash.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.25).cgColor
+        flash.layer?.cornerRadius = 10
+        flash.alphaValue = 0
+        contentView.addSubview(flash)
+        flash.autoresizingMask = [.width, .height]
+
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.15
+            flash.animator().alphaValue = 1
+        }, completionHandler: {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.3
+                flash.animator().alphaValue = 0
+            }, completionHandler: {
+                // Second flash
+                NSAnimationContext.runAnimationGroup({ ctx in
+                    ctx.duration = 0.15
+                    flash.animator().alphaValue = 1
+                }, completionHandler: {
+                    NSAnimationContext.runAnimationGroup({ ctx in
+                        ctx.duration = 0.3
+                        flash.animator().alphaValue = 0
+                    }, completionHandler: {
+                        flash.removeFromSuperview()
+                    })
+                })
+            })
+        })
     }
 }
 

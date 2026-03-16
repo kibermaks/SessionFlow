@@ -61,6 +61,35 @@ struct AwarenessDivider: View {
     }
 }
 
+// MARK: - Skip Session Button
+
+struct AwarenessSkipSessionButton: View {
+    @ObservedObject var awarenessService: SessionAwarenessService
+
+    var body: some View {
+        if awarenessService.isActive {
+            Button {
+                awarenessService.toggleSessionMute()
+            } label: {
+                Image(systemName: awarenessService.isSessionMuted ? "forward.end.fill" : "forward.end")
+                    .font(.system(size: 13))
+                    .foregroundColor(awarenessService.isSessionMuted ? .yellow.opacity(0.8) : .white.opacity(0.4))
+                    .frame(width: 32, height: 32)
+                    .background(awarenessService.isSessionMuted ? Color.yellow.opacity(0.12) : Color.white.opacity(0.06))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(awarenessService.isSessionMuted ? Color.yellow.opacity(0.25) : Color.clear, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help(awarenessService.isSessionMuted ? "Resume sounds for this session" : "Mute until next session")
+        }
+    }
+}
+
 // MARK: - Mute Button
 
 struct AwarenessMuteButton: View {
@@ -520,7 +549,11 @@ struct AwarenessFlashModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
             if isFlashing, let trigger = awarenessService.flashTrigger {
-                flashColor = trigger == .endingSoon ? .red : .orange
+                switch trigger {
+                case .endingSoon: flashColor = .red
+                case .presenceReminder: flashColor = .orange
+                case .sessionStarted: flashColor = .green
+                }
                 withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
                 withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {

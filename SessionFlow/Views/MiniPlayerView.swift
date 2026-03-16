@@ -89,11 +89,12 @@ struct MiniPlayerView: View {
 
             AwarenessDivider()
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
+                AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService)
             }
-            .frame(minWidth: 100, maxWidth: 150, alignment: .trailing)
+            .frame(minWidth: 130, maxWidth: 180, alignment: .trailing)
         }
         .frame(maxWidth: .infinity)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFullProgress)

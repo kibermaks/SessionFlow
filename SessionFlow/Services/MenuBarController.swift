@@ -102,7 +102,12 @@ class MenuBarController: ObservableObject {
         let gen = flashGeneration
         button.contentTintColor = nil
 
-        let color = type == .endingSoon ? NSColor.systemRed : NSColor.orange
+        let color: NSColor
+        switch type {
+        case .endingSoon: color = .systemRed
+        case .presenceReminder: color = .orange
+        case .sessionStarted: color = .systemGreen
+        }
         let steps: [(TimeInterval, NSColor?)] = [
             (0, color), (0.55, nil), (0.65, color), (1.2, nil),
         ]

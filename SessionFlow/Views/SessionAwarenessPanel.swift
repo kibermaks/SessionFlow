@@ -60,11 +60,12 @@ struct SessionAwarenessPanel: View {
 
             AwarenessDivider()
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
+                AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService)
             }
-            .frame(width: 150, alignment: .trailing)
+            .frame(width: 180, alignment: .trailing)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
