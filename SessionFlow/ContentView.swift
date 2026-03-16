@@ -533,6 +533,7 @@ struct ContentViewBody: View {
         }
         
         calendarService.scheduleEndHour = schedulingEngine.scheduleEndHour
+        syncRestDurationsToAwareness()
 
         nowTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
             if useNowTime && dateSelection == .today && autoPreview {
@@ -574,6 +575,15 @@ struct ContentViewBody: View {
         }
     }
     
+    private func syncRestDurationsToAwareness() {
+        sessionAwarenessService.restDurations = [
+            .work: schedulingEngine.restDuration,
+            .side: schedulingEngine.sideRestDuration,
+            .deep: schedulingEngine.deepRestDuration,
+            .planning: schedulingEngine.restDuration,
+        ]
+    }
+
     func updateProjectedSchedule() {
         let planningExists = calendarService.hasPlanningSession(for: selectedDate)
         
@@ -688,6 +698,7 @@ struct ContentViewBody: View {
 struct SettingsChangeModifier: ViewModifier {
     @EnvironmentObject var engine: SchedulingEngine
     @EnvironmentObject var calendarService: CalendarService
+    @EnvironmentObject var awarenessService: SessionAwarenessService
     @Binding var selectedDate: Date
     let autoPreview: Bool
     let updatePreview: () -> Void
@@ -749,10 +760,20 @@ struct SettingsChangeModifier: ViewModifier {
     }
 
     private func trigger() {
+        syncRestDurations()
         debounceWork?.cancel()
         let work = DispatchWorkItem { if autoPreview { updatePreview() } }
         debounceWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1, execute: work)
+    }
+
+    private func syncRestDurations() {
+        awarenessService.restDurations = [
+            .work: engine.restDuration,
+            .side: engine.sideRestDuration,
+            .deep: engine.deepRestDuration,
+            .planning: engine.restDuration,
+        ]
     }
 }
 

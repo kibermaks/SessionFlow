@@ -7,6 +7,9 @@ class ShortcutService {
         case approaching
         case started
         case ended
+        case restStarted = "rest_started"
+        case restEnded = "rest_ended"
+        case restEndingSoon = "rest_ending_soon"
     }
 
     struct SessionInfo {
@@ -29,10 +32,17 @@ class ShortcutService {
         case .approaching: triggerConfig = config.approaching
         case .started: triggerConfig = config.started
         case .ended: triggerConfig = config.ended
+        case .restStarted: triggerConfig = config.restStarted
+        case .restEnded: triggerConfig = config.restEnded
+        case .restEndingSoon: triggerConfig = config.restEndingSoon
         }
 
         guard triggerConfig.isEnabled else { return }
-        guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
+        // Rest triggers don't use type filter
+        let isRestTrigger = trigger == .restStarted || trigger == .restEnded || trigger == .restEndingSoon
+        if !isRestTrigger {
+            guard triggerConfig.typeFilter.matches(sessionType: session.type, isBusySlot: session.isBusySlot) else { return }
+        }
         guard !triggerConfig.shortcutName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
 
         let payload = buildPayload(trigger: trigger, session: session)
@@ -93,6 +103,13 @@ class ShortcutService {
             message = "\(typeName) session '\(session.title)' started"
         case .ended:
             message = "\(typeName) session '\(session.title)' ended"
+        case .restStarted:
+            message = "Rest started (\(duration) min)"
+        case .restEnded:
+            message = "Rest ended"
+        case .restEndingSoon:
+            let remaining = Int(session.endTime.timeIntervalSinceNow / 60) + 1
+            message = "Rest ending in \(remaining) min"
         }
 
         let payload: [String: Any] = [

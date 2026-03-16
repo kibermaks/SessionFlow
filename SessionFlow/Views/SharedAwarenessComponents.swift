@@ -539,6 +539,78 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
     }
 }
 
+// MARK: - Rest Content
+
+struct AwarenessRestContent<ToggleButton: View>: View {
+    @ObservedObject var awarenessService: SessionAwarenessService
+    @ObservedObject var audioService: SessionAudioService
+    let toggleButton: ToggleButton
+    let showProgress: Bool
+
+    init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, toggleButton: ToggleButton, showProgress: Bool = true) {
+        self.awarenessService = awarenessService
+        self.audioService = audioService
+        self.toggleButton = toggleButton
+        self.showProgress = showProgress
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            toggleButton
+
+            Image(systemName: "cup.and.saucer.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.teal.opacity(0.7))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Rest")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+
+                if let type = awarenessService.restAfterSessionType {
+                    Text("after \(type.rawValue)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
+
+            if showProgress {
+                AwarenessDivider()
+
+                restProgressBar
+                    .padding(.horizontal, 8)
+            }
+
+            Spacer()
+
+            VStack(spacing: 1) {
+                Text(formatSessionDuration(awarenessService.restRemaining))
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                Text("rest")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+
+            AwarenessMuteButton(audioService: audioService)
+        }
+    }
+
+    private var restProgressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.white.opacity(0.08))
+
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.teal.opacity(0.6))
+                    .frame(width: max(0, geo.size.width * CGFloat(awarenessService.restProgress)))
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
 // MARK: - Flash Animation Modifier
 
 struct AwarenessFlashModifier: ViewModifier {

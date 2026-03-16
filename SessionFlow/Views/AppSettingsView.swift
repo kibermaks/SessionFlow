@@ -24,6 +24,9 @@ struct AppSettingsView: View {
     @State private var showingApproachingPayload = false
     @State private var showingStartedPayload = false
     @State private var showingEndedPayload = false
+    @State private var showingRestStartedPayload = false
+    @State private var showingRestEndedPayload = false
+    @State private var showingRestEndingSoonPayload = false
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
     @State private var pendingReplacementContext: CalendarReplacementContext?
@@ -640,6 +643,41 @@ struct AppSettingsView: View {
                         .foregroundColor(.secondary)
                 }
 
+                Section("Rest Tracking") {
+                    Toggle("Track rests between sessions", isOn: Binding(
+                        get: { sessionAwarenessService.config.trackRests },
+                        set: { sessionAwarenessService.config.trackRests = $0 }
+                    ))
+
+                    Text("Shows rest state in the awareness panel when you're between two sessions and the gap matches the configured rest duration. Requires rest durations set in Presets.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    if sessionAwarenessService.config.trackRests {
+                        ambientSoundRow(icon: "cup.and.saucer.fill", iconColor: .teal, label: "Rest",
+                                        soundKeyPath: \.restSound, accelKeyPath: \.restSoundAccelerando)
+
+                        HStack(spacing: 8) {
+                            Text("\"Ending Soon\" lead time")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            NumericInputField(
+                                value: Binding(
+                                    get: { sessionAwarenessService.config.restEndingSoonLeadTimeMinutes },
+                                    set: { sessionAwarenessService.config.restEndingSoonLeadTimeMinutes = $0 }
+                                ),
+                                range: 1...10,
+                                unit: "min"
+                            )
+                        }
+
+                        Text("For Shortcuts: triggers work only while rest tracking is enabled.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Section("Menu Bar & Dock") {
                     Toggle("Show in menu bar", isOn: Binding(
                         get: { sessionAwarenessService.config.showMenuBarItem },
@@ -1058,6 +1096,57 @@ struct AppSettingsView: View {
                         message: "Deep session 'Heavy brainstorm' ended")
                 )
             }
+
+            // Rest triggers (only shown when rest tracking is enabled)
+            if sessionAwarenessService.config.trackRests {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cup.and.saucer.fill")
+                                .font(.system(size: 12))
+                                .foregroundColor(.teal)
+                            Text("Rest Shortcuts")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        Text("These fire only while rest tracking is enabled.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Section {
+                    restShortcutTriggerRow(
+                        triggerPath: \.restStarted,
+                        title: "Rest Started",
+                        triggerKey: "rest_started",
+                        showingPayload: $showingRestStartedPayload,
+                        examplePayload: shortcutPayloadExample(trigger: "rest_started",
+                            message: "Rest started (20 min)")
+                    )
+                }
+
+                Section {
+                    restShortcutTriggerRow(
+                        triggerPath: \.restEndingSoon,
+                        title: "Rest Ending Soon",
+                        triggerKey: "rest_ending_soon",
+                        showingPayload: $showingRestEndingSoonPayload,
+                        examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
+                            message: "Rest ending in 2 min")
+                    )
+                }
+
+                Section {
+                    restShortcutTriggerRow(
+                        triggerPath: \.restEnded,
+                        title: "Rest Ended",
+                        triggerKey: "rest_ended",
+                        showingPayload: $showingRestEndedPayload,
+                        examplePayload: shortcutPayloadExample(trigger: "rest_ended",
+                            message: "Rest ended")
+                    )
+                }
+            }
         }
         .formStyle(.grouped)
         .alert(
@@ -1202,6 +1291,108 @@ Spacer()
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private func restShortcutTriggerRow(
+        triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
+        title: String,
+        triggerKey: String,
+        showingPayload: Binding<Bool>,
+        examplePayload: String
+    ) -> some View {
+        let triggerConfig = sessionAwarenessService.config.shortcuts[keyPath: triggerPath]
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(triggerConfig.isEnabled ? .primary : .secondary)
+
+                Spacer()
+
+                if triggerConfig.isEnabled {
+                    Button {
+                        showingPayload.wrappedValue.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
+                    .help("Example payload")
+                    .popover(isPresented: showingPayload, arrowEdge: .trailing) {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Example payload")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text(examplePayload)
+                                .font(.system(size: 10, design: .monospaced))
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.3)))
+                        }
+                        .padding(14)
+                        .frame(width: 360)
+                    }
+                }
+
+                Toggle("", isOn: Binding(
+                    get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled },
+                    set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].isEnabled = $0 }
+                ))
+                .labelsHidden()
+            }
+            .padding(.vertical, 2)
+
+            if triggerConfig.isEnabled {
+                shortcutNameField(triggerPath: triggerPath)
+
+                Divider().opacity(0.5)
+
+                Button {
+                    runRestShortcutTest(triggerPath: triggerPath, triggerKey: triggerKey, title: title)
+                } label: {
+                    HStack(spacing: 4) {
+                        if case .running = shortcutTestResult, shortcutTestTitle == title {
+                            ProgressView().controlSize(.small)
+                        } else {
+                            Image(systemName: "play.fill").font(.system(size: 8))
+                        }
+                        Text("Test Shortcut")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 5)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.accentColor.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .hoverEffect(brightness: 0.3)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func runRestShortcutTest(
+        triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
+        triggerKey: String,
+        title: String
+    ) {
+        let name = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].shortcutName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else {
+            shortcutTestTitle = title
+            shortcutTestResult = .failure("No shortcut name specified")
+            return
+        }
+        let testPayload = shortcutPayloadExample(trigger: triggerKey, message: "Rest \(triggerKey.replacingOccurrences(of: "rest_", with: ""))", type: "rest")
+        shortcutTestTitle = title
+        shortcutTestResult = .running
+        ShortcutService.test(name: name, payload: testPayload) { result in
+            switch result {
+            case .success: shortcutTestResult = .success
+            case .failure(let error): shortcutTestResult = .failure(error.localizedDescription)
+            }
+        }
     }
 
     private func runShortcutTest(
