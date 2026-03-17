@@ -995,13 +995,26 @@ extension TimelineView {
                 )
 
             VStack(alignment: .leading, spacing: 1) {
-                Text(slot.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white)
-                    .lineLimit(nil)
-                    .fixedSize(horizontal: false, vertical: true)
+                if height <= 25 {
+                    HStack(spacing: 3) {
+                        Text(slot.title)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.white)
+                            .lineLimit(1)
+                        Spacer(minLength: 2)
+                        Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
+                            .font(.system(size: 10))
+                            .foregroundColor(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .layoutPriority(1)
+                    }
+                } else {
+                    Text(slot.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                if height > 25 {
                     Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
                         .foregroundColor(.white.opacity(0.7))
@@ -1220,8 +1233,13 @@ extension TimelineView {
                         .font(.system(size: 10))
                     Text(session.title)
                         .font(.system(size: 11, weight: .medium))
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                    Spacer(minLength: 2)
+                    Text(startAndDurationString(start: session.startTime, end: session.endTime))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 .foregroundColor(.white)
                 .padding(3)
@@ -1237,7 +1255,7 @@ extension TimelineView {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .foregroundColor(.white)
-                    
+
                     Text(startAndDurationString(start: session.startTime, end: session.endTime))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))

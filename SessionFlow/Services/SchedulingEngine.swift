@@ -92,6 +92,7 @@ class SchedulingEngine: ObservableObject {
     @Published var projectedSessions: [ScheduledSession] = []
     @Published var schedulingMessage: String = ""
     @Published var quotasSatisfied: Bool = false
+    @Published var quotaCounts: (work: Int, side: Int, deep: Int) = (0, 0, 0)
     @Published var sessionsFrozen: Bool = false
 
     var hasNoSessionTargets: Bool {
@@ -537,6 +538,7 @@ class SchedulingEngine: ObservableObject {
 
         let deepQuotaMet = !deepSessionConfig.enabled || deepCount >= deepSessionConfig.sessionCount
         quotasSatisfied = workCount >= workSessions && sideCount >= sideSessions && deepQuotaMet
+        quotaCounts = (work: workCount, side: sideCount, deep: deepCount)
 
         var existingNote = ""
         if awareExistingTasks, let existing = existingSessions {
