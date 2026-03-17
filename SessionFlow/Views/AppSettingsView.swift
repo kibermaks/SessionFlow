@@ -1074,6 +1074,7 @@ struct AppSettingsView: View {
                     isRestTrigger: true,
                     showingPayload: $showingRestStartedPayload,
                     examplePayload: shortcutPayloadExample(trigger: "rest_started",
+                        message: "Rest started (20 min)")
                 )
             }
 
@@ -1086,6 +1087,7 @@ struct AppSettingsView: View {
                     showLeadTime: true,
                     showingPayload: $showingRestEndingSoonPayload,
                     examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
+                        message: "Rest ending in 2 min")
                 )
             }
 

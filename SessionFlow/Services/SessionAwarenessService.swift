@@ -147,7 +147,7 @@ class SessionAwarenessService: ObservableObject {
     // Rest state tracking (gap between ended session and next session)
     private var isInRestState: Bool = false
     private var restPreviousSessionInfo: ShortcutService.SessionInfo? = nil
-    private var restEndTime: Date? = nil
+    private var restStateEndTime: Date? = nil
     private var hasFiredRestEndingSoon: Bool = false
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
@@ -737,7 +737,7 @@ class SessionAwarenessService: ObservableObject {
     private func enterRestState(previousSession: ShortcutService.SessionInfo, restEndTime: Date) {
         isInRestState = true
         restPreviousSessionInfo = previousSession
-        self.restEndTime = restEndTime
+        self.restStateEndTime = restEndTime
         hasFiredRestEndingSoon = false
 
         shortcutService.fire(trigger: .restStarted, session: previousSession, config: config.shortcuts)
@@ -759,13 +759,13 @@ class SessionAwarenessService: ObservableObject {
     private func clearRestState() {
         isInRestState = false
         restPreviousSessionInfo = nil
-        restEndTime = nil
+        restStateEndTime = nil
         hasFiredRestEndingSoon = false
     }
 
     /// Called each tick while in rest state — checks rest end and restEndingSoon.
     private func tickRestState(at now: Date) {
-        guard let restEnd = restEndTime else {
+        guard let restEnd = restStateEndTime else {
             clearRestState()
             return
         }
@@ -784,7 +784,7 @@ class SessionAwarenessService: ObservableObject {
 
         // Update rest end time if next session was moved
         if let newNextStart = nextSessionStartTime, newNextStart != restEnd {
-            restEndTime = newNextStart
+            restStateEndTime = newNextStart
             if var info = restPreviousSessionInfo {
                 info.restDuration = Int(newNextStart.timeIntervalSince(info.endTime) / 60)
                 info.nextTitle = nextSessionTitle
@@ -800,7 +800,7 @@ class SessionAwarenessService: ObservableObject {
         // Check restEndingSoon
         if !hasFiredRestEndingSoon {
             let leadTime = TimeInterval((config.shortcuts.restEndingSoon.leadTimeMinutes ?? 2) * 60)
-            let timeUntilEnd = (restEndTime ?? restEnd).timeIntervalSince(now)
+            let timeUntilEnd = (restStateEndTime ?? restEnd).timeIntervalSince(now)
             if timeUntilEnd <= leadTime && timeUntilEnd > 0 {
                 var sessionInfo = restPreviousSessionInfo ?? .init(
                     title: "", type: nil, isBusySlot: false, startTime: now, endTime: now)
