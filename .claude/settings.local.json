@@ -34,6 +34,17 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo \"$TOOL_INPUT\" | grep -q 'project.pbxproj' && echo 'BLOCK: Do not edit project.pbxproj directly with Edit/Write tools. Use xcodebuild or build scripts instead.' && exit 1 || exit 0"
+          }
+        ]
+      }
+    ],
     "TaskCompleted": [
       {
         "hooks": [

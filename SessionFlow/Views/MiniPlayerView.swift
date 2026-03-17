@@ -21,6 +21,8 @@ struct MiniPlayerView: View {
                 miniFeedbackBar
             } else if awarenessService.isActive {
                 miniActiveBar
+            } else if awarenessService.isResting {
+                miniRestBar
             } else if awarenessService.nextSessionTitle != nil {
                 miniNextUpBar
             } else {
@@ -44,6 +46,7 @@ struct MiniPlayerView: View {
             onHeightChange?(height)
         }
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isActive)
+        .animation(.easeInOut(duration: 0.3), value: awarenessService.isResting)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.nextSessionTitle)
     }
@@ -89,11 +92,12 @@ struct MiniPlayerView: View {
 
             AwarenessDivider()
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
+                AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService)
             }
-            .frame(minWidth: 100, maxWidth: 150, alignment: .trailing)
+            .frame(minWidth: 130, maxWidth: 180, alignment: .trailing)
         }
         .frame(maxWidth: .infinity)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFullProgress)
@@ -106,6 +110,14 @@ struct MiniPlayerView: View {
 
     private var miniNextUpBar: some View {
         AwarenessNextUpContent(awarenessService: awarenessService, audioService: audioService, toggleButton: expandButton)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
+    }
+
+    // MARK: - Rest bar
+
+    private var miniRestBar: some View {
+        AwarenessRestContent(awarenessService: awarenessService, audioService: audioService, toggleButton: expandButton)
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
     }

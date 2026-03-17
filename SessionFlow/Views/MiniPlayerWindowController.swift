@@ -9,6 +9,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private var mouseMonitor: Any?
     private var cursorMonitor: Any?
     private var cursorOnEdge = false
+    private var windowObserver: Any?
 
     private enum DragMode { case move, resizeLeft, resizeRight }
     private var dragMode: DragMode?
@@ -108,6 +109,23 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
             return self.handlePanelMouse(event)
         }
 
+        // When main window appears while mini player is active (e.g. dock icon click),
+        // close the mini player and properly restore the main window frame
+        windowObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main
+        ) { [weak self] notification in
+            guard let self = self, self.panel != nil,
+                  let window = notification.object as? NSWindow,
+                  !(window is NSPanel) else { return }
+            // Restore saved frame on the window that SwiftUI just showed
+            if let saved = self.awarenessService?.config.mainWindowFrame {
+                let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
+                window.setFrame(rect, display: true)
+            }
+            // Collapse the mini player normally
+            self.awarenessService?.isCollapsed = false
+        }
+
         cursorMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .mouseEntered, .mouseExited]) { [weak self] event in
             guard let self = self, let panel = self.panel else { return event }
             guard event.window === panel else {
@@ -198,6 +216,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private func hidePanel() {
         if let monitor = mouseMonitor { NSEvent.removeMonitor(monitor); mouseMonitor = nil }
         if let monitor = cursorMonitor { NSEvent.removeMonitor(monitor); cursorMonitor = nil }
+        if let observer = windowObserver { NotificationCenter.default.removeObserver(observer); windowObserver = nil }
         if cursorOnEdge { NSCursor.pop(); cursorOnEdge = false }
 
         guard let panel = panel else { return }

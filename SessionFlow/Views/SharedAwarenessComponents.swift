@@ -61,6 +61,35 @@ struct AwarenessDivider: View {
     }
 }
 
+// MARK: - Skip Session Button
+
+struct AwarenessSkipSessionButton: View {
+    @ObservedObject var awarenessService: SessionAwarenessService
+
+    var body: some View {
+        if awarenessService.isActive {
+            Button {
+                awarenessService.toggleSessionMute()
+            } label: {
+                Image(systemName: awarenessService.isSessionMuted ? "forward.end.fill" : "forward.end")
+                    .font(.system(size: 13))
+                    .foregroundColor(awarenessService.isSessionMuted ? .yellow.opacity(0.8) : .white.opacity(0.4))
+                    .frame(width: 32, height: 32)
+                    .background(awarenessService.isSessionMuted ? Color.yellow.opacity(0.12) : Color.white.opacity(0.06))
+                    .cornerRadius(6)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(awarenessService.isSessionMuted ? Color.yellow.opacity(0.25) : Color.clear, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help(awarenessService.isSessionMuted ? "Resume sounds for this session" : "Mute until next session")
+        }
+    }
+}
+
 // MARK: - Mute Button
 
 struct AwarenessMuteButton: View {
@@ -510,6 +539,78 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
     }
 }
 
+// MARK: - Rest Content
+
+struct AwarenessRestContent<ToggleButton: View>: View {
+    @ObservedObject var awarenessService: SessionAwarenessService
+    @ObservedObject var audioService: SessionAudioService
+    let toggleButton: ToggleButton
+    let showProgress: Bool
+
+    init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, toggleButton: ToggleButton, showProgress: Bool = true) {
+        self.awarenessService = awarenessService
+        self.audioService = audioService
+        self.toggleButton = toggleButton
+        self.showProgress = showProgress
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            toggleButton
+
+            Image(systemName: "cup.and.saucer.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.teal.opacity(0.7))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Rest")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+
+                if let type = awarenessService.restAfterSessionType {
+                    Text("after \(type.rawValue)")
+                        .font(.system(size: 11))
+                        .foregroundColor(.white.opacity(0.35))
+                }
+            }
+
+            if showProgress {
+                AwarenessDivider()
+
+                restProgressBar
+                    .padding(.horizontal, 8)
+            }
+
+            Spacer()
+
+            VStack(spacing: 1) {
+                Text(formatSessionDuration(awarenessService.restRemaining))
+                    .font(.system(size: 14, weight: .medium, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.5))
+                Text("rest")
+                    .font(.system(size: 10))
+                    .foregroundColor(.white.opacity(0.25))
+            }
+
+            AwarenessMuteButton(audioService: audioService)
+        }
+    }
+
+    private var restProgressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.white.opacity(0.08))
+
+                RoundedRectangle(cornerRadius: 2.5)
+                    .fill(Color.teal.opacity(0.6))
+                    .frame(width: max(0, geo.size.width * CGFloat(awarenessService.restProgress)))
+            }
+        }
+        .frame(height: 4)
+    }
+}
+
 // MARK: - Flash Animation Modifier
 
 struct AwarenessFlashModifier: ViewModifier {
@@ -520,7 +621,11 @@ struct AwarenessFlashModifier: ViewModifier {
     func body(content: Content) -> some View {
         content.onChange(of: awarenessService.flashTrigger != nil) { _, isFlashing in
             if isFlashing, let trigger = awarenessService.flashTrigger {
-                flashColor = trigger == .endingSoon ? .red : .orange
+                switch trigger {
+                case .endingSoon: flashColor = .red
+                case .presenceReminder: flashColor = .orange
+                case .sessionStarted: flashColor = .green
+                }
                 withAnimation(.easeIn(duration: 0.15)) { flashOpacity = 0.25 }
                 withAnimation(.easeOut(duration: 0.35).delay(0.2)) { flashOpacity = 0 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {

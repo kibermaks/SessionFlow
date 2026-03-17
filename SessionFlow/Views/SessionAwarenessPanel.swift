@@ -17,6 +17,8 @@ struct SessionAwarenessPanel: View {
                 feedbackPromptBar
             } else if awarenessService.isActive {
                 activeSessionBar
+            } else if awarenessService.isResting {
+                restBar
             } else if awarenessService.nextSessionTitle != nil {
                 nextUpBar
             } else {
@@ -24,6 +26,7 @@ struct SessionAwarenessPanel: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isActive)
+        .animation(.easeInOut(duration: 0.3), value: awarenessService.isResting)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.nextSessionTitle)
         .contentShape(Rectangle())
@@ -60,11 +63,12 @@ struct SessionAwarenessPanel: View {
 
             AwarenessDivider()
 
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 AwarenessClickableTime(awarenessService: awarenessService)
+                AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService)
             }
-            .frame(width: 150, alignment: .trailing)
+            .frame(width: 180, alignment: .trailing)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -104,6 +108,17 @@ struct SessionAwarenessPanel: View {
         AwarenessNextUpContent(awarenessService: awarenessService, audioService: audioService, toggleButton: collapseButton)
             .padding(.horizontal, 20)
             .padding(.vertical, 8)
+            .background(panelBackground)
+            .overlay(topBorder, alignment: .top)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+    }
+
+    // MARK: - Rest
+
+    private var restBar: some View {
+        AwarenessRestContent(awarenessService: awarenessService, audioService: audioService, toggleButton: collapseButton)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 10)
             .background(panelBackground)
             .overlay(topBorder, alignment: .top)
             .transition(.move(edge: .bottom).combined(with: .opacity))

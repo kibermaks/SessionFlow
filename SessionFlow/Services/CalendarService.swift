@@ -314,10 +314,11 @@ class CalendarService: ObservableObject {
         let events = eventStore.events(matching: predicate)
 
         let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+        // Include events that ended up to 1h ago (needed for rest detection between sessions)
+        let recentCutoff = now.addingTimeInterval(-3600)
         return events
             .filter { !$0.isAllDay && $0.endDate.timeIntervalSince($0.startDate) < nearAlldayThreshold }
-            // Only keep events that are currently active or upcoming
-            .filter { $0.endDate > now }
+            .filter { $0.endDate > recentCutoff }
             .map { BusyTimeSlot(from: $0) }
     }
 

@@ -66,8 +66,34 @@ class MenuBarController: ObservableObject {
             NSApp.activate(ignoringOtherApps: true)
             if let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
                 window.makeKeyAndOrderFront(nil)
+            } else if let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
+                // Mini-player mode — flash the panel
+                flashPanel(panel)
             }
         }
+    }
+
+    private func flashPanel(_ window: NSWindow) {
+        guard let contentView = window.contentView else { return }
+        let flash = NSView(frame: contentView.bounds)
+        flash.wantsLayer = true
+        flash.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.25).cgColor
+        flash.layer?.cornerRadius = 10
+        flash.alphaValue = 0
+        contentView.addSubview(flash)
+        flash.autoresizingMask = [.width, .height]
+
+        NSAnimationContext.runAnimationGroup({ ctx in
+            ctx.duration = 0.15
+            flash.animator().alphaValue = 1
+        }, completionHandler: {
+            NSAnimationContext.runAnimationGroup({ ctx in
+                ctx.duration = 0.3
+                flash.animator().alphaValue = 0
+            }, completionHandler: {
+                flash.removeFromSuperview()
+            })
+        })
     }
 
     private func showContextMenu() {
@@ -102,7 +128,12 @@ class MenuBarController: ObservableObject {
         let gen = flashGeneration
         button.contentTintColor = nil
 
-        let color = type == .endingSoon ? NSColor.systemRed : NSColor.orange
+        let color: NSColor
+        switch type {
+        case .endingSoon: color = .systemRed
+        case .presenceReminder: color = .orange
+        case .sessionStarted: color = .systemGreen
+        }
         let steps: [(TimeInterval, NSColor?)] = [
             (0, color), (0.55, nil), (0.65, color), (1.2, nil),
         ]
@@ -135,18 +166,13 @@ class MenuBarController: ObservableObject {
                 time = service.elapsed
                 suffix = ""
             }
-            let totalSeconds = max(0, Int(time))
-            let hours = totalSeconds / 3600
-            let minutes = (totalSeconds % 3600) / 60
-            let seconds = totalSeconds % 60
-            let timeStr = hours > 0
-                ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
-                : String(format: "%02d:%02d", minutes, seconds)
-            let attributed = NSAttributedString(
-                string: " \(timeStr)\(suffix)",
-                attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)]
-            )
-            button.attributedTitle = attributed
+            button.attributedTitle = formattedTime(time, suffix: suffix)
+        } else if service.isResting {
+            // Rest: cup icon + remaining countdown
+            let image = NSImage(systemSymbolName: "cup.and.saucer.fill", accessibilityDescription: "Rest")
+            let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .medium)
+            button.image = image?.withSymbolConfiguration(config)
+            button.attributedTitle = formattedTime(service.restRemaining)
         } else {
             // Idle: show generic icon, no title
             let image = NSImage(systemSymbolName: "eye.circle", accessibilityDescription: "Session Awareness")
@@ -154,5 +180,19 @@ class MenuBarController: ObservableObject {
             button.image = image?.withSymbolConfiguration(config)
             button.attributedTitle = NSAttributedString(string: "")
         }
+    }
+
+    private func formattedTime(_ time: TimeInterval, suffix: String = "") -> NSAttributedString {
+        let totalSeconds = max(0, Int(time))
+        let hours = totalSeconds / 3600
+        let minutes = (totalSeconds % 3600) / 60
+        let seconds = totalSeconds % 60
+        let timeStr = hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
+            : String(format: "%02d:%02d", minutes, seconds)
+        return NSAttributedString(
+            string: " \(timeStr)\(suffix)",
+            attributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .regular)]
+        )
     }
 }

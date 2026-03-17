@@ -24,6 +24,9 @@ struct AppSettingsView: View {
     @State private var showingApproachingPayload = false
     @State private var showingStartedPayload = false
     @State private var showingEndedPayload = false
+    @State private var showingRestStartedPayload = false
+    @State private var showingRestEndedPayload = false
+    @State private var showingRestEndingSoonPayload = false
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
     @State private var pendingReplacementContext: CalendarReplacementContext?
@@ -597,6 +600,9 @@ struct AppSettingsView: View {
                         ambientSoundRow(icon: "calendar", iconColor: .gray, label: "Your events",
                                         soundKeyPath: \.otherEventsSound, accelKeyPath: \.otherEventsSoundAccelerando)
                     }
+
+                    ambientSoundRow(icon: "cup.and.saucer.fill", iconColor: .teal, label: "Rest",
+                                    soundKeyPath: \.restSound, accelKeyPath: \.restSoundAccelerando)
                 }
 
                 Section("Session Transitions") {
@@ -1058,6 +1064,44 @@ struct AppSettingsView: View {
                         message: "Deep session 'Heavy brainstorm' ended")
                 )
             }
+
+            // Rest triggers
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restStarted,
+                    title: "Rest Started",
+                    triggerKey: "rest_started",
+                    isRestTrigger: true,
+                    showingPayload: $showingRestStartedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_started",
+                        message: "Rest started (20 min)")
+                )
+            }
+
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restEndingSoon,
+                    title: "Rest Ending Soon",
+                    triggerKey: "rest_ending_soon",
+                    isRestTrigger: true,
+                    showLeadTime: true,
+                    showingPayload: $showingRestEndingSoonPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_ending_soon",
+                        message: "Rest ending in 2 min")
+                )
+            }
+
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.restEnded,
+                    title: "Rest Ended",
+                    triggerKey: "rest_ended",
+                    isRestTrigger: true,
+                    showingPayload: $showingRestEndedPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "rest_ended",
+                        message: "Rest ended")
+                )
+            }
         }
         .formStyle(.grouped)
         .alert(
@@ -1090,6 +1134,7 @@ struct AppSettingsView: View {
         triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>,
         title: String,
         triggerKey: String,
+        isRestTrigger: Bool = false,
         showLeadTime: Bool = false,
         showingPayload: Binding<Bool>,
         examplePayload: String
@@ -1165,7 +1210,7 @@ Spacer()
                 }
 
                 HStack {
-                    Text("Trigger for:")
+                    Text(isRestTrigger ? "Rest after:" : "Trigger for:")
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()

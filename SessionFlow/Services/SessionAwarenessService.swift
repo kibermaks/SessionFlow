@@ -22,7 +22,8 @@ class SessionAwarenessService: ObservableObject {
 
     /// Whether any shortcut trigger is enabled (timer must keep running for detection)
     var hasActiveShortcuts: Bool {
-        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.ended.isEnabled
+        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.ended.isEnabled ||
+        config.shortcuts.restStarted.isEnabled || config.shortcuts.restEnded.isEnabled || config.shortcuts.restEndingSoon.isEnabled
     }
 
     // Active session state
@@ -62,9 +63,13 @@ class SessionAwarenessService: ObservableObject {
     // Mini-player collapsed state (NOT persisted)
     @Published var isCollapsed: Bool = false
 
-    // Flash trigger for attention events (presence reminder, ending soon)
-    enum FlashType { case presenceReminder, endingSoon }
+    // Flash trigger for attention events (presence reminder, ending soon, start)
+    enum FlashType { case presenceReminder, endingSoon, sessionStarted }
     @Published var flashTrigger: FlashType? = nil
+
+    // Skip sounds until next session (mute current session only)
+    @Published var isSessionMuted: Bool = false
+    private var sessionMutedEventId: String? = nil
 
     // MARK: - Config
 
@@ -100,6 +105,18 @@ class SessionAwarenessService: ObservableObject {
         }
     }
 
+    // Rest tracking state
+    @Published var isResting: Bool = false
+    @Published var restStartTime: Date? = nil
+    @Published var restEndTime: Date? = nil
+    @Published var restElapsed: TimeInterval = 0
+    @Published var restRemaining: TimeInterval = 0
+    @Published var restProgress: Double = 0
+    @Published var restAfterSessionType: SessionType? = nil
+
+    // Rest durations (synced from scheduling engine, in minutes)
+    var restDurations: [SessionType: Int] = [:]
+
     // MARK: - Dependencies
 
     private weak var calendarService: CalendarService?
@@ -116,6 +133,10 @@ class SessionAwarenessService: ObservableObject {
 
     // Phase 3: Ending soon tracking
     private var hasPlayedEndingSoon: Bool = false
+
+    // Rest tracking internals
+    private var wasResting: Bool = false
+    private var hasPlayedRestEndingSoon: Bool = false
 
     // Tracking state preservation for calendar refresh gaps
     private var lastEndedEventId: String? = nil
@@ -264,13 +285,13 @@ class SessionAwarenessService: ObservableObject {
 
         // Audio/visual features require awareness enabled
         if isEnabled {
-            // Phase 3: Presence reminder
-            if isActive && config.presenceReminderEnabled {
+            // Phase 3: Presence reminder (suppressed when session-muted)
+            if isActive && config.presenceReminderEnabled && !isSessionMuted {
                 checkPresenceReminder(at: now)
             }
 
-            // Phase 3: Ending soon
-            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable {
+            // Phase 3: Ending soon (suppressed when session-muted)
+            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable && !isSessionMuted {
                 if remaining <= 120 && remaining > 0 {
                     audioService?.playTransition(config: config.endingSoonSound)
                     hasPlayedEndingSoon = true
@@ -278,8 +299,8 @@ class SessionAwarenessService: ObservableObject {
                 }
             }
 
-            // Phase 3: Accelerando — update playback rate
-            if isActive {
+            // Phase 3: Accelerando — update playback rate (skip when session-muted)
+            if isActive && !isSessionMuted {
                 let accelConfig: AccelerandoConfig
                 if let type = currentSessionType {
                     accelConfig = config.accelerandoConfig(for: type)
@@ -294,6 +315,13 @@ class SessionAwarenessService: ObservableObject {
 
         // Update next session
         updateNextSession(in: todaySlots, at: now)
+
+        // Rest tracking (always active when awareness is enabled)
+        if isEnabled && !isActive {
+            checkRestState(in: todaySlots, at: now)
+        } else if isResting {
+            endRestState()
+        }
 
         wasActive = isActive
         previousEventId = currentEventId
@@ -369,6 +397,120 @@ class SessionAwarenessService: ObservableObject {
         }
     }
 
+    // MARK: - Rest tracking
+
+    private func checkRestState(in slots: [BusyTimeSlot], at now: Date) {
+        // Find the most recently ended tagged session
+        let pastTagged = slots
+            .filter { $0.endTime <= now && CalendarService.sessionType(fromNotes: $0.notes) != nil }
+            .sorted { $0.endTime > $1.endTime }
+
+        guard let prevSlot = pastTagged.first,
+              let prevType = CalendarService.sessionType(fromNotes: prevSlot.notes) else {
+            if isResting { endRestState() }
+            return
+        }
+
+        // Get expected rest duration for this session type
+        guard let restMinutes = restDurations[prevType], restMinutes > 0 else {
+            if isResting { endRestState() }
+            return
+        }
+
+        let restStart = prevSlot.endTime
+        let restEnd = restStart.addingTimeInterval(TimeInterval(restMinutes * 60))
+
+        // Check we're in the rest window
+        guard now >= restStart && now < restEnd else {
+            if isResting { endRestState() }
+            return
+        }
+
+        // Make sure no session started in this gap
+        let sessionInGap = slots.contains { slot in
+            slot.startTime >= restStart && slot.startTime < restEnd &&
+            (CalendarService.sessionType(fromNotes: slot.notes) != nil ||
+             (config.trackOtherEvents && CalendarService.sessionType(fromNotes: slot.notes) == nil))
+        }
+        if sessionInGap {
+            if isResting { endRestState() }
+            return
+        }
+
+        // We're in a rest period
+        let isNewRest = !isResting
+        let total = restEnd.timeIntervalSince(restStart)
+        restElapsed = now.timeIntervalSince(restStart)
+        restRemaining = restEnd.timeIntervalSince(now)
+        restProgress = total > 0 ? min(1.0, max(0.0, restElapsed / total)) : 0
+        restStartTime = restStart
+        restEndTime = restEnd
+        restAfterSessionType = prevType
+
+        if isNewRest {
+            isResting = true
+            hasPlayedRestEndingSoon = false
+
+            // Play rest ambient
+            if !isSessionMuted {
+                audioService?.playAmbient(config: config.restSound)
+            }
+
+            // Fire rest started shortcut
+            shortcutService.fire(
+                trigger: .restStarted,
+                session: .init(title: "Rest", type: prevType, isBusySlot: false,
+                               startTime: restStart, endTime: restEnd),
+                config: config.shortcuts
+            )
+        }
+
+        // Rest ending soon
+        let leadMinutes = config.shortcuts.restEndingSoon.leadTimeMinutes ?? 2
+        let leadSeconds = TimeInterval(leadMinutes * 60)
+        if !hasPlayedRestEndingSoon && restRemaining <= leadSeconds && restRemaining > 0 {
+            hasPlayedRestEndingSoon = true
+            shortcutService.fire(
+                trigger: .restEndingSoon,
+                session: .init(title: "Rest", type: prevType, isBusySlot: false,
+                               startTime: restStart, endTime: restEnd),
+                config: config.shortcuts
+            )
+        }
+
+        // Accelerando for rest
+        if !isSessionMuted {
+            audioService?.updatePlaybackRate(progress: restProgress, accelerando: config.restSoundAccelerando)
+        }
+    }
+
+    private func endRestState() {
+        let wasInRest = isResting
+        isResting = false
+
+        if wasInRest {
+            audioService?.stopAmbient()
+
+            // Fire rest ended shortcut
+            if let start = restStartTime, let end = restEndTime {
+                shortcutService.fire(
+                    trigger: .restEnded,
+                    session: .init(title: "Rest", type: restAfterSessionType, isBusySlot: false,
+                                   startTime: start, endTime: end),
+                    config: config.shortcuts
+                )
+            }
+        }
+
+        restStartTime = nil
+        restEndTime = nil
+        restElapsed = 0
+        restRemaining = 0
+        restProgress = 0
+        restAfterSessionType = nil
+        hasPlayedRestEndingSoon = false
+    }
+
     // MARK: - State management
 
     private func activateSession(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool, at now: Date) {
@@ -380,6 +522,12 @@ class SessionAwarenessService: ObservableObject {
             isBusySlotMode = isBusySlot
             busySlotCalendarColor = isBusySlot ? slot.calendarColor : nil
             busySlotCalendarName = isBusySlot ? slot.calendarName : nil
+
+            // Auto-clear session mute when a different session starts
+            if isSessionMuted && sessionMutedEventId != slot.id {
+                isSessionMuted = false
+                sessionMutedEventId = nil
+            }
         }
         if currentSessionTitle != slot.title { currentSessionTitle = slot.title }
         if currentSessionType != sessionType { currentSessionType = sessionType }
@@ -435,6 +583,8 @@ class SessionAwarenessService: ObservableObject {
                     if remaining <= 120 {
                         hasPlayedEndingSoon = true
                     }
+                } else {
+                    triggerFlash(.sessionStarted)
                 }
 
                 playSessionStartAudio(sessionType: sessionType, skipTransition: isJoiningMidEvent)
@@ -466,6 +616,7 @@ class SessionAwarenessService: ObservableObject {
         if isBusySlotMode { isBusySlotMode = false }
         if busySlotCalendarColor != nil { busySlotCalendarColor = nil }
         if busySlotCalendarName != nil { busySlotCalendarName = nil }
+        if isSessionMuted { isSessionMuted = false; sessionMutedEventId = nil }
         lastPresenceReminderTime = nil
         hasPlayedEndingSoon = false
     }
@@ -595,6 +746,23 @@ class SessionAwarenessService: ObservableObject {
     func dismissFeedback() {
         feedbackDismissTimer?.invalidate()
         sessionFeedbackPending = nil
+    }
+
+    // MARK: - Session mute (skip until next)
+
+    func toggleSessionMute() {
+        if isSessionMuted {
+            isSessionMuted = false
+            sessionMutedEventId = nil
+            // Resume ambient if there's an active session
+            if isActive {
+                playSessionStartAudio(sessionType: currentSessionType, skipTransition: true)
+            }
+        } else {
+            isSessionMuted = true
+            sessionMutedEventId = currentEventId
+            audioService?.stopAmbient()
+        }
     }
 
     // MARK: - Debug simulation
