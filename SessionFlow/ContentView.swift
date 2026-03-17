@@ -1426,9 +1426,7 @@ struct RightPanel: View {
                         .foregroundColor(.white.opacity(0.5))
                         .padding(.vertical, 8)
                 } else if schedulingEngine.quotasSatisfied {
-                    Text("Daily quotas satisfied")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "10B981"))
+                    quotaSatisfiedStats
                         .padding(.vertical, 8)
                 } else if !schedulingEngine.schedulingMessage.isEmpty {
                     Text("No additional sessions projected")
@@ -1515,6 +1513,20 @@ struct RightPanel: View {
         .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
     }
     
+    private var quotaSatisfiedStats: some View {
+        let counts = schedulingEngine.quotaCounts
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Daily quotas satisfied")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(Color(hex: "10B981"))
+            if schedulingEngine.schedulePlanning { countRow(.planning, 1) }
+            if schedulingEngine.workSessions > 0 { countRow(.work, counts.work) }
+            if schedulingEngine.sideSessions > 0 { countRow(.side, counts.side) }
+            if schedulingEngine.deepSessionConfig.enabled { countRow(.deep, counts.deep) }
+        }
+        .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
+    }
+
     private func isCalendarHidden(for type: SessionType) -> Bool {
         let identifier: String?
         let name: String
