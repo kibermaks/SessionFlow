@@ -3,6 +3,7 @@ import SwiftUI
 struct SessionAwarenessPanel: View {
     @EnvironmentObject var awarenessService: SessionAwarenessService
     @EnvironmentObject var audioService: SessionAudioService
+    @EnvironmentObject var timeState: SessionTimeState
 
     @AppStorage("hasSeenSessionAwarenessGuide") private var hasSeenGuide = false
     @State private var showingGuide = false

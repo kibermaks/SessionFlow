@@ -2,6 +2,19 @@ import Foundation
 import SwiftUI
 import Combine
 
+/// Holds the properties that change every tick (1 Hz) so that observers
+/// of SessionAwarenessService (e.g. settings panels) are not re-rendered
+/// every second unless they explicitly observe this object.
+class SessionTimeState: ObservableObject {
+    @Published var currentTime: Date = Date()
+    @Published var elapsed: TimeInterval = 0
+    @Published var remaining: TimeInterval = 0
+    @Published var progress: Double = 0
+    @Published var restElapsed: TimeInterval = 0
+    @Published var restRemaining: TimeInterval = 0
+    @Published var restProgress: Double = 0
+}
+
 class SessionAwarenessService: ObservableObject {
 
     // MARK: - Published state
@@ -35,9 +48,20 @@ class SessionAwarenessService: ObservableObject {
     @Published var currentEventNotes: String? = nil
     @Published var sessionStartTime: Date? = nil
     @Published var sessionEndTime: Date? = nil
-    @Published var elapsed: TimeInterval = 0
-    @Published var remaining: TimeInterval = 0
-    @Published var progress: Double = 0
+    /// Ticking state (1 Hz). Isolated so settings views don't re-render every second.
+    let timeState = SessionTimeState()
+    var elapsed: TimeInterval {
+        get { timeState.elapsed }
+        set { timeState.elapsed = newValue }
+    }
+    var remaining: TimeInterval {
+        get { timeState.remaining }
+        set { timeState.remaining = newValue }
+    }
+    var progress: Double {
+        get { timeState.progress }
+        set { timeState.progress = newValue }
+    }
 
     // Non-tagged busy slot mode
     @Published var isBusySlotMode: Bool = false
@@ -55,8 +79,11 @@ class SessionAwarenessService: ObservableObject {
     // Feedback
     @Published var sessionFeedbackPending: SessionFeedback? = nil
 
-    // Current time (updated every second)
-    @Published var currentTime: Date = Date()
+    // Current time (updated every second) — proxied through timeState
+    var currentTime: Date {
+        get { timeState.currentTime }
+        set { timeState.currentTime = newValue }
+    }
 
     // Time display mode (clickable cycle)
     @Published var timeDisplayMode: TimeDisplayMode = .remaining
@@ -110,9 +137,18 @@ class SessionAwarenessService: ObservableObject {
     @Published var isResting: Bool = false
     @Published var restStartTime: Date? = nil
     @Published var restEndTime: Date? = nil
-    @Published var restElapsed: TimeInterval = 0
-    @Published var restRemaining: TimeInterval = 0
-    @Published var restProgress: Double = 0
+    var restElapsed: TimeInterval {
+        get { timeState.restElapsed }
+        set { timeState.restElapsed = newValue }
+    }
+    var restRemaining: TimeInterval {
+        get { timeState.restRemaining }
+        set { timeState.restRemaining = newValue }
+    }
+    var restProgress: Double {
+        get { timeState.restProgress }
+        set { timeState.restProgress = newValue }
+    }
     @Published var restAfterSessionType: SessionType? = nil
 
     // Rest durations (synced from scheduling engine, in minutes)

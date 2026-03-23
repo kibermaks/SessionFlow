@@ -11,7 +11,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private var cursorOnEdge = false
     private var windowObserver: Any?
 
-    private enum DragMode { case move, resizeLeft, resizeRight }
+    private enum DragMode { case resizeLeft, resizeRight }
     private var dragMode: DragMode?
     private var dragStartMouse: NSPoint = .zero
     private var dragStartFrame: NSRect = .zero
@@ -82,7 +82,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         )
         newPanel.level = .floating
         newPanel.hidesOnDeactivate = false
-        newPanel.isMovableByWindowBackground = false
+        newPanel.isMovableByWindowBackground = true
         newPanel.backgroundColor = .clear
         newPanel.isOpaque = false
         newPanel.hasShadow = false
@@ -167,25 +167,15 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
                 return nil
             }
             dragMode = nil
-            return event // pass through for buttons
+            return event // pass through — system handles native window drag
 
         case .leftMouseDragged:
-            guard let panel = panel else { return event }
+            guard let panel = panel, let mode = dragMode else { return event }
             let mouse = NSEvent.mouseLocation
             let dx = mouse.x - dragStartMouse.x
-            let dy = mouse.y - dragStartMouse.y
-
-            // If no mode yet, start a window move once drag exceeds threshold
-            if dragMode == nil {
-                guard abs(dx) > 3 || abs(dy) > 3 else { return event }
-                dragMode = .move
-            }
 
             var newFrame = dragStartFrame
-            switch dragMode! {
-            case .move:
-                newFrame.origin.x += dx
-                newFrame.origin.y += dy
+            switch mode {
             case .resizeLeft:
                 let maxDx = dragStartFrame.width - panel.minSize.width
                 let clamped = min(dx, maxDx)
@@ -194,7 +184,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
             case .resizeRight:
                 newFrame.size.width = max(panel.minSize.width, dragStartFrame.width + dx)
             }
-            panel.setFrame(newFrame, display: true)
+            panel.setFrame(newFrame, display: false)
             return nil
 
         case .leftMouseUp:

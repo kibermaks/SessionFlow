@@ -10,7 +10,7 @@ class DockProgressController {
     func setup(awarenessService: SessionAwarenessService) {
         awarenessService.$isActive
             .combineLatest(
-                awarenessService.$progress,
+                awarenessService.timeState.$progress,
                 awarenessService.$currentSessionType,
                 awarenessService.$isBusySlotMode
             )

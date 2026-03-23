@@ -21,15 +21,19 @@ class MenuBarController: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // Observe session state for updates
-        awarenessService.objectWillChange
-            .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.updateStatusItem()
-                }
+        // Observe session state for updates — subscribe to timeState for 1 Hz ticks
+        // (awarenessService.objectWillChange no longer fires every second)
+        Publishers.Merge(
+            awarenessService.timeState.objectWillChange.map { _ in () },
+            awarenessService.objectWillChange.map { _ in () }
+        )
+        .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
+        .sink { [weak self] _ in
+            DispatchQueue.main.async {
+                self?.updateStatusItem()
             }
-            .store(in: &cancellables)
+        }
+        .store(in: &cancellables)
 
         // Flash effect (single flash for menu bar)
         awarenessService.$flashTrigger

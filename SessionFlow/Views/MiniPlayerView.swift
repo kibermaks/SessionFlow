@@ -3,7 +3,15 @@ import SwiftUI
 struct MiniPlayerView: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var audioService: SessionAudioService
+    @ObservedObject private var timeState: SessionTimeState
     var onHeightChange: ((CGFloat) -> Void)? = nil
+
+    init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, onHeightChange: ((CGFloat) -> Void)? = nil) {
+        _awarenessService = ObservedObject(wrappedValue: awarenessService)
+        _audioService = ObservedObject(wrappedValue: audioService)
+        _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
+        self.onHeightChange = onHeightChange
+    }
 
     @State private var flashOpacity: Double = 0
     @State private var flashColor: Color = .clear

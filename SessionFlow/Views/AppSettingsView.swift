@@ -1246,7 +1246,7 @@ Spacer()
                         .font(.system(size: 12))
                         .foregroundColor(.secondary)
                     Spacer()
-                    shortcutTypeFilterChips(triggerPath: triggerPath)
+                    shortcutTypeFilterChips(triggerPath: triggerPath, isRestTrigger: isRestTrigger)
                 }
 
                 Divider()
@@ -1398,7 +1398,7 @@ Spacer()
         }
     }
 
-    private func shortcutTypeFilterChips(triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>) -> some View {
+    private func shortcutTypeFilterChips(triggerPath: WritableKeyPath<ShortcutsConfig, ShortcutTriggerConfig>, isRestTrigger: Bool = false) -> some View {
         HStack(spacing: 5) {
             shortcutTypeChip("Work", icon: "briefcase.fill", color: SessionType.work.color,
                              isOn: Binding(
@@ -1420,11 +1420,13 @@ Spacer()
                                  get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.planning },
                                  set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.planning = $0 }
                              ))
-            shortcutTypeChip("External", icon: "calendar", color: .gray,
-                             isOn: Binding(
-                                 get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external },
-                                 set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external = $0 }
-                             ))
+            if !isRestTrigger {
+                shortcutTypeChip("External", icon: "calendar", color: .gray,
+                                 isOn: Binding(
+                                     get: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external },
+                                     set: { sessionAwarenessService.config.shortcuts[keyPath: triggerPath].typeFilter.external = $0 }
+                                 ))
+            }
         }
     }
 

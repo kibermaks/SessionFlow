@@ -44,6 +44,7 @@ struct SessionFlowApp: App {
                 .environmentObject(schedulingEngine)
                 .environmentObject(updateService)
                 .environmentObject(sessionAwarenessService)
+                .environmentObject(sessionAwarenessService.timeState)
                 .environmentObject(sessionAudioService)
                 .frame(minWidth: 1000, minHeight: 700)
                 .focusEffectDisabled()
