@@ -9,6 +9,11 @@ class MenuBarController: ObservableObject {
     private weak var awarenessService: SessionAwarenessService?
 
     func setup(awarenessService: SessionAwarenessService) {
+        if self.awarenessService === awarenessService, !cancellables.isEmpty {
+            return
+        }
+
+        cancellables.removeAll()
         self.awarenessService = awarenessService
 
         // Observe config changes to show/hide (both showMenuBarItem AND enabled)
@@ -29,9 +34,7 @@ class MenuBarController: ObservableObject {
         )
         .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
         .sink { [weak self] _ in
-            DispatchQueue.main.async {
-                self?.updateStatusItem()
-            }
+            self?.updateStatusItem()
         }
         .store(in: &cancellables)
 

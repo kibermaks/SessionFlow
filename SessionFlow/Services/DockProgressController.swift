@@ -6,8 +6,16 @@ class DockProgressController {
     private var cancellables = Set<AnyCancellable>()
     private var customView: DockTileProgressView?
     private var flashGeneration = 0
+    private weak var awarenessService: SessionAwarenessService?
 
     func setup(awarenessService: SessionAwarenessService) {
+        if self.awarenessService === awarenessService, !cancellables.isEmpty {
+            return
+        }
+
+        cancellables.removeAll()
+        self.awarenessService = awarenessService
+
         awarenessService.$isActive
             .combineLatest(
                 awarenessService.timeState.$progress,

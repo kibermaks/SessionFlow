@@ -14,6 +14,7 @@ class CalendarService: ObservableObject {
     private static let excludedCalendarsDefaultsKey = "SessionFlow.ExcludedCalendars"
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
+    private var ekChangeDebouncePending = false
     private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan", "#break"]
 
     /// Resolves a session tag in notes to its corresponding SessionType.
@@ -71,11 +72,21 @@ class CalendarService: ObservableObject {
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            guard let self = self, let date = self.currentFetchDate else { return }
-            Task {
-                // Clear cached EventKit objects so deletions are reflected immediately.
-                self.eventStore.reset()
-                await self.fetchEvents(for: date)
+            guard let self = self else { return }
+            // Debounce: coalesce rapid-fire sync notifications into a single fetch
+            guard !self.ekChangeDebouncePending else { return }
+            self.ekChangeDebouncePending = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self = self, let date = self.currentFetchDate else {
+                    self?.ekChangeDebouncePending = false
+                    return
+                }
+                self.ekChangeDebouncePending = false
+                Task {
+                    // Clear cached EventKit objects so deletions are reflected immediately.
+                    self.eventStore.reset()
+                    await self.fetchEvents(for: date)
+                }
             }
         }
     }

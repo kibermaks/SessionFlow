@@ -35,6 +35,7 @@ struct SessionFlowApp: App {
     @StateObject private var sessionAudioService = SessionAudioService()
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
+    @State private var didInitializeServices = false
     private let dockProgressController = DockProgressController()
 
     var body: some Scene {
@@ -49,6 +50,8 @@ struct SessionFlowApp: App {
                 .frame(minWidth: 1000, minHeight: 700)
                 .focusEffectDisabled()
                 .onAppear {
+                    guard !didInitializeServices else { return }
+                    didInitializeServices = true
                     updateService.startAutomaticChecks()
                     sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
                     SessionFlowAppState.awarenessService = sessionAwarenessService

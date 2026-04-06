@@ -18,6 +18,11 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private let edgeWidth: CGFloat = 8
 
     func setup(awarenessService: SessionAwarenessService, audioService: SessionAudioService) {
+        if self.awarenessService === awarenessService, !cancellables.isEmpty {
+            return
+        }
+
+        cancellables.removeAll()
         self.awarenessService = awarenessService
 
         awarenessService.$isCollapsed
@@ -268,4 +273,3 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         savePanelFrame()
     }
 }
-
