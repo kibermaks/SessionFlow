@@ -36,7 +36,7 @@ class SessionAwarenessService: ObservableObject {
 
     /// Whether any shortcut trigger is enabled (timer must keep running for detection)
     var hasActiveShortcuts: Bool {
-        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.ended.isEnabled ||
+        config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.endingSoon.isEnabled || config.shortcuts.ended.isEnabled ||
         config.shortcuts.restStarted.isEnabled || config.shortcuts.restEnded.isEnabled || config.shortcuts.restEndingSoon.isEnabled
     }
 
@@ -109,12 +109,15 @@ class SessionAwarenessService: ObservableObject {
             if hasActiveShortcuts && timer == nil {
                 startTimer()
             }
-            // Sync mute settings to audio service
+            // Sync mute settings to audio service — only when the config
+            // values actually changed in this mutation. Otherwise an unrelated
+            // settings tweak would clobber a mute toggled from the mini player
+            // or bottom panel (those paths write audioService directly).
             if let audioService = audioService {
-                if audioService.muteEnabled != config.muteEnabled {
+                if oldValue.muteEnabled != config.muteEnabled {
                     audioService.muteEnabled = config.muteEnabled
                 }
-                if audioService.micAwareEnabled != config.micAwareEnabled {
+                if oldValue.micAwareEnabled != config.micAwareEnabled {
                     audioService.micAwareEnabled = config.micAwareEnabled
                 }
             }
@@ -170,6 +173,7 @@ class SessionAwarenessService: ObservableObject {
 
     // Phase 3: Ending soon tracking
     private var hasPlayedEndingSoon: Bool = false
+    private var hasFiredEndingSoonShortcut: Bool = false
 
     // Rest tracking internals
     private var wasResting: Bool = false
@@ -179,6 +183,7 @@ class SessionAwarenessService: ObservableObject {
     private var lastEndedEventId: String? = nil
     private var savedPresenceReminderTime: Date? = nil
     private var savedEndingSoonPlayed: Bool = false
+    private var savedEndingSoonShortcutFired: Bool = false
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
@@ -308,6 +313,7 @@ class SessionAwarenessService: ObservableObject {
                 lastEndedEventId = currentEventId
                 savedPresenceReminderTime = lastPresenceReminderTime
                 savedEndingSoonPlayed = hasPlayedEndingSoon
+                savedEndingSoonShortcutFired = hasFiredEndingSoonShortcut
 
                 // Only play end sound + feedback if the session ended naturally
                 // (Now passed the end time), not if event was moved away
@@ -337,6 +343,20 @@ class SessionAwarenessService: ObservableObject {
                     audioService?.playTransition(config: config.endingSoonSound)
                     hasPlayedEndingSoon = true
                     triggerFlash(.endingSoon)
+                }
+            }
+
+            if isActive && !hasFiredEndingSoonShortcut {
+                let leadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
+                let leadSeconds = TimeInterval(leadMinutes * 60)
+                if remaining <= leadSeconds && remaining > 0 {
+                    hasFiredEndingSoonShortcut = true
+                    shortcutService.fire(
+                        trigger: .endingSoon,
+                        session: .init(title: currentSessionTitle, type: currentSessionType, isBusySlot: isBusySlotMode,
+                                       startTime: sessionStartTime ?? now, endTime: sessionEndTime ?? now),
+                        config: config.shortcuts
+                    )
                 }
             }
 
@@ -484,9 +504,9 @@ class SessionAwarenessService: ObservableObject {
         restElapsed = now.timeIntervalSince(restStart)
         restRemaining = restEnd.timeIntervalSince(now)
         restProgress = total > 0 ? min(1.0, max(0.0, restElapsed / total)) : 0
-        restStartTime = restStart
-        restEndTime = restEnd
-        restAfterSessionType = prevType
+        if restStartTime != restStart { restStartTime = restStart }
+        if restEndTime != restEnd { restEndTime = restEnd }
+        if restAfterSessionType != prevType { restAfterSessionType = prevType }
 
         if isNewRest {
             isResting = true
@@ -598,13 +618,16 @@ class SessionAwarenessService: ObservableObject {
                 // Restore tracking state — don't re-trigger presence/ending sounds
                 lastPresenceReminderTime = savedPresenceReminderTime
                 hasPlayedEndingSoon = savedEndingSoonPlayed
+                hasFiredEndingSoonShortcut = savedEndingSoonShortcutFired
             } else {
                 lastPresenceReminderTime = nil
                 hasPlayedEndingSoon = false
+                hasFiredEndingSoonShortcut = false
             }
             lastEndedEventId = nil
             savedPresenceReminderTime = nil
             savedEndingSoonPlayed = false
+            savedEndingSoonShortcutFired = false
 
             // If we're joining mid-event (elapsed > 10s), skip start transition — just play ambient
             let isJoiningMidEvent = elapsed > 10
@@ -623,6 +646,10 @@ class SessionAwarenessService: ObservableObject {
                     }
                     if remaining <= 120 {
                         hasPlayedEndingSoon = true
+                    }
+                    let endingSoonLeadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
+                    if remaining <= TimeInterval(endingSoonLeadMinutes * 60) {
+                        hasFiredEndingSoonShortcut = true
                     }
                 } else {
                     triggerFlash(.sessionStarted)
@@ -660,6 +687,7 @@ class SessionAwarenessService: ObservableObject {
         if isSessionMuted { isSessionMuted = false; sessionMutedEventId = nil }
         lastPresenceReminderTime = nil
         hasPlayedEndingSoon = false
+        hasFiredEndingSoonShortcut = false
     }
 
     // MARK: - Session transitions

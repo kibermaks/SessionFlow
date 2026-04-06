@@ -25,6 +25,7 @@ struct AppSettingsView: View {
     @State private var shortcutTestTitle: String = ""
     @State private var showingApproachingPayload = false
     @State private var showingStartedPayload = false
+    @State private var showingEndingSoonPayload = false
     @State private var showingEndedPayload = false
     @State private var showingRestStartedPayload = false
     @State private var showingRestEndedPayload = false
@@ -1003,7 +1004,7 @@ struct AppSettingsView: View {
             // Intro
             Section {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("SessionFlow can run your macOS Shortcuts when sessions start, end, or are about to begin.")
+                    Text("SessionFlow can run your macOS Shortcuts when sessions start, end, are about to begin, or are about to end.")
                         .font(.system(size: 13))
                         .foregroundColor(.primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -1083,6 +1084,18 @@ struct AppSettingsView: View {
                     showingPayload: $showingStartedPayload,
                     examplePayload: shortcutPayloadExample(trigger: "started",
                         message: "Deep session 'Heavy brainstorm' started")
+                )
+            }
+
+            Section {
+                shortcutTriggerRow(
+                    triggerPath: \.endingSoon,
+                    title: "Session Ending Soon",
+                    triggerKey: "ending_soon",
+                    showLeadTime: true,
+                    showingPayload: $showingEndingSoonPayload,
+                    examplePayload: shortcutPayloadExample(trigger: "ending_soon",
+                        message: "Deep session 'Heavy brainstorm' ends in 2 min")
                 )
             }
 
@@ -1304,6 +1317,10 @@ Spacer()
             restDuration = nil; nextTitle = nil
         case "started":
             message = "\(typeName) session 'Heavy brainstorm' started"
+            restDuration = nil; nextTitle = nil
+        case "ending_soon":
+            let lead = sessionAwarenessService.config.shortcuts[keyPath: triggerPath].leadTimeMinutes ?? 2
+            message = "\(typeName) session 'Heavy brainstorm' ends in \(lead) min"
             restDuration = nil; nextTitle = nil
         case "rest_started":
             message = "Rest started (20 min)"
@@ -2138,4 +2155,3 @@ private class ShortcutTestMenuItem: NSMenuItem {
         handler(typeKey)
     }
 }
-

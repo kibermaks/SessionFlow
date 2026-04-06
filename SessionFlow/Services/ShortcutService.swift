@@ -6,6 +6,7 @@ class ShortcutService {
     enum Trigger: String {
         case approaching
         case started
+        case endingSoon = "ending_soon"
         case ended
         case restStarted = "rest_started"
         case restEnded = "rest_ended"
@@ -106,6 +107,7 @@ class ShortcutService {
         switch trigger {
         case .approaching: return config.approaching
         case .started: return config.started
+        case .endingSoon: return config.endingSoon
         case .ended: return config.ended
         case .restStarted: return config.restStarted
         case .restEndingSoon: return config.restEndingSoon
@@ -128,6 +130,9 @@ class ShortcutService {
             message = "\(typeName) session '\(session.title)' starts in \(lead) min"
         case .started:
             message = "\(typeName) session '\(session.title)' started"
+        case .endingSoon:
+            let lead = max(1, Int(session.endTime.timeIntervalSinceNow / 60) + 1)
+            message = "\(typeName) session '\(session.title)' ends in \(lead) min"
         case .ended:
             message = "\(typeName) session '\(session.title)' ended"
         case .restStarted:

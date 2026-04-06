@@ -208,6 +208,7 @@ struct ShortcutTriggerConfig: Codable, Equatable {
 struct ShortcutsConfig: Codable, Equatable {
     var approaching: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
     var started: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Started")
+    var endingSoon: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
     var ended: ShortcutTriggerConfig = .init(shortcutName: "SessionFlow Ended")
     var restStarted: ShortcutTriggerConfig = .init(shortcutName: "Rest Started")
     var restEnded: ShortcutTriggerConfig = .init(shortcutName: "Rest Ended")
@@ -221,6 +222,8 @@ struct ShortcutsConfig: Codable, Equatable {
             ?? .init(shortcutName: "SessionFlow Approaching", leadTimeMinutes: 1)
         started = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .started)
             ?? .init(shortcutName: "SessionFlow Started")
+        endingSoon = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .endingSoon)
+            ?? .init(shortcutName: "SessionFlow Ending Soon", leadTimeMinutes: 2)
         ended = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .ended)
             ?? .init(shortcutName: "SessionFlow Ended")
         restStarted = try c.decodeIfPresent(ShortcutTriggerConfig.self, forKey: .restStarted)
