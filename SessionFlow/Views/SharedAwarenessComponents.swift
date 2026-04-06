@@ -307,6 +307,12 @@ struct AwarenessEventInfoPopover: View {
 
 struct AwarenessProgressBar: View {
     @ObservedObject var awarenessService: SessionAwarenessService
+    @ObservedObject private var timeState: SessionTimeState
+
+    init(awarenessService: SessionAwarenessService) {
+        _awarenessService = ObservedObject(wrappedValue: awarenessService)
+        _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
+    }
 
     var body: some View {
         VStack(spacing: 3) {
@@ -343,6 +349,12 @@ struct AwarenessProgressBar: View {
 
 struct AwarenessClickableTime: View {
     @ObservedObject var awarenessService: SessionAwarenessService
+    @ObservedObject private var timeState: SessionTimeState
+
+    init(awarenessService: SessionAwarenessService) {
+        _awarenessService = ObservedObject(wrappedValue: awarenessService)
+        _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
+    }
 
     private var timeText: String {
         let time: TimeInterval = awarenessService.timeDisplayMode == .remaining
@@ -375,6 +387,12 @@ struct AwarenessClickableTime: View {
 
 struct AwarenessCountdown: View {
     @ObservedObject var awarenessService: SessionAwarenessService
+    @ObservedObject private var timeState: SessionTimeState
+
+    init(awarenessService: SessionAwarenessService) {
+        _awarenessService = ObservedObject(wrappedValue: awarenessService)
+        _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
+    }
 
     var body: some View {
         if let startTime = awarenessService.nextSessionStartTime {
@@ -544,12 +562,14 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
 struct AwarenessRestContent<ToggleButton: View>: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var audioService: SessionAudioService
+    @ObservedObject private var timeState: SessionTimeState
     let toggleButton: ToggleButton
     let showProgress: Bool
 
     init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, toggleButton: ToggleButton, showProgress: Bool = true) {
-        self.awarenessService = awarenessService
-        self.audioService = audioService
+        _awarenessService = ObservedObject(wrappedValue: awarenessService)
+        _audioService = ObservedObject(wrappedValue: audioService)
+        _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
         self.toggleButton = toggleButton
         self.showProgress = showProgress
     }
