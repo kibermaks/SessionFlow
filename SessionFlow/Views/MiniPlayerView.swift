@@ -15,6 +15,7 @@ struct MiniPlayerView: View {
 
     @State private var flashOpacity: Double = 0
     @State private var flashColor: Color = .clear
+    @State private var activationBorderOpacity: Double = 0
     @State private var showingEventInfo = false
     @State private var feedbackConfirmation: SessionRating? = nil
     @State private var totalWidth: CGFloat = 620
@@ -43,6 +44,17 @@ struct MiniPlayerView: View {
             RoundedRectangle(cornerRadius: 10)
                 .stroke(Color.white.opacity(0.08), lineWidth: 1)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(activationBorderOpacity), lineWidth: 1.5)
+        )
+        .onAppear {
+            for i in 0..<3 {
+                let base = Double(i) * 0.35
+                withAnimation(.easeIn(duration: 0.12).delay(base)) { activationBorderOpacity = 0.75 }
+                withAnimation(.easeOut(duration: 0.23).delay(base + 0.12)) { activationBorderOpacity = 0 }
+            }
+        }
         .background(
             GeometryReader { geo in
                 Color.clear
