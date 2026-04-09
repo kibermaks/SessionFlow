@@ -29,6 +29,7 @@ class EventUndoManager: ObservableObject {
         case time(EventTimeChange)
         case delete(EventDeleteSnapshot)
         case schedule(ScheduleSnapshot)
+        case create(EventDeleteSnapshot)  // undo = delete, redo = restore
     }
 
     struct EventTimeChange: Equatable {
@@ -102,6 +103,15 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    func recordCreate(_ snapshot: EventDeleteSnapshot) {
+        undoStack.append(.create(snapshot))
+        if undoStack.count > maxStackSize {
+            undoStack.removeFirst()
+        }
+        redoStack.removeAll()
+        updateState()
+    }
+
     func recordSchedule(_ snapshot: ScheduleSnapshot) {
         undoStack.append(.schedule(snapshot))
         if undoStack.count > maxStackSize {
@@ -121,6 +131,8 @@ class EventUndoManager: ObservableObject {
             break  // Caller will push redo after restore (needs new eventId)
         case .schedule:
             redoStack.append(change)
+        case .create:
+            break  // Caller will push redo after delete (needs new eventId after re-create)
         }
         updateState()
         switch change {
@@ -149,6 +161,8 @@ class EventUndoManager: ObservableObject {
             return .delete(snap)
         case .schedule(let snap):
             return .schedule(snap)
+        case .create(let snap):
+            return .create(snap)
         }
     }
 
@@ -164,6 +178,12 @@ class EventUndoManager: ObservableObject {
             calendarIdentifier: original.calendarIdentifier,
             calendarName: original.calendarName
         )))
+        updateState()
+    }
+
+    /// Call after undoing a create (deleting event). Pushes redo entry so re-creation is possible.
+    func pushRedoForUndoneCreate(_ snapshot: EventDeleteSnapshot) {
+        redoStack.append(.create(snapshot))
         updateState()
     }
 
@@ -191,6 +211,18 @@ class EventUndoManager: ObservableObject {
             return .delete(snap)
         case .schedule(let snap):
             return .schedule(snap)
+        case .create(let snap):
+            return .create(snap)
+        }
+    }
+
+    /// After redoing a create, update the undo stack's top `.create` entry with the new event ID.
+    func updateTopUndoCreateId(_ snapshot: EventDeleteSnapshot) {
+        if let idx = undoStack.lastIndex(where: {
+            if case .create = $0 { return true }
+            return false
+        }) {
+            undoStack[idx] = .create(snapshot)
         }
     }
 

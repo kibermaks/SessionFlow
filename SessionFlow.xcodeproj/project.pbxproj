@@ -72,6 +72,8 @@
 		E5E5F6A7B8C9D0E1F2A3B4C5 /* SharedAwarenessComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5A6B7C8D9E0F1A2B3C4D5E6 /* SharedAwarenessComponents.swift */; };
 		A1B1C1D1E1F10001A2B2C2D1 /* ShortcutService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */; };
 		A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */; };
+		EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */; };
+		EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -142,6 +144,8 @@
 		A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutService.swift; sourceTree = "<group>"; };
 		A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowIntents.swift; sourceTree = "<group>"; };
 		FF01CHANGELOG001 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = CHANGELOG.md; sourceTree = SOURCE_ROOT; };
+		EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentEventsStore.swift; sourceTree = "<group>"; };
+		EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreationPopover.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -237,6 +241,7 @@
 				E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */,
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* MiniPlayerView.swift */,
 				F5A6B7C8D9E0F1A2B3C4D5E6 /* SharedAwarenessComponents.swift */,
+				EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -256,6 +261,7 @@
 				E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */,
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */,
 				A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */,
+				EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -425,6 +431,8 @@
 				E5E5F6A7B8C9D0E1F2A3B4C5 /* SharedAwarenessComponents.swift in Sources */,
 				A1B1C1D1E1F10001A2B2C2D1 /* ShortcutService.swift in Sources */,
 				A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */,
+				EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */,
+				EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -563,7 +571,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 734;
+				CURRENT_PROJECT_VERSION = 754;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -600,7 +608,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 734;
+				CURRENT_PROJECT_VERSION = 754;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

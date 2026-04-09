@@ -41,6 +41,7 @@ struct TimelineView: View {
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
+    @EnvironmentObject var recentEventsStore: RecentEventsStore
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
@@ -102,6 +103,10 @@ struct TimelineView: View {
     @State private var renamingSessionId: UUID? = nil
     @State private var renameText: String = ""
 
+    // Event creation popover
+    @State private var showingEventCreation: Bool = false
+    @State private var eventCreationTime: Date? = nil
+
     // Feedback badge
     @State private var feedbackPopoverEventId: String? = nil
 
@@ -155,6 +160,11 @@ struct TimelineView: View {
                 if showingDetailSheet {
                     detailSheetOverlay
                 }
+
+                // Event creation overlay (outside scroll view so it doesn't clip)
+                if showingEventCreation, let creationTime = eventCreationTime {
+                    eventCreationFloatingOverlay(startTime: creationTime, geoSize: geo.size)
+                }
             }
             .onAppear {
                 containerWidth = geo.size.width
@@ -164,10 +174,17 @@ struct TimelineView: View {
                 }
                 // Use keyDown monitor for Esc (cancel drag) and undo/redo.
                 keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-                    // Esc cancels active drag/resize or closes detail sheet
+                    // Esc cancels active drag/resize, closes detail sheet, or closes event creation
                     if event.keyCode == 53 {
                         if dragMode != .none {
                             cancelDrag()
+                            return nil
+                        }
+                        if showingEventCreation {
+                            withAnimation(.easeOut(duration: 0.15)) {
+                                showingEventCreation = false
+                                eventCreationTime = nil
+                            }
                             return nil
                         }
                         if showingDetailSheet {
@@ -435,11 +452,14 @@ struct TimelineView: View {
                     currentTimeIndicator(currentTime: effectiveNowTimeForIndicator, width: geometry.size.width)
                 }
                 
+                // Background tap target for event creation (left half only)
+                eventCreationBackgroundLayer(containerWidth: geometry.size.width)
+
                 // Existing events - left half
                 ForEach(busySlotsWithLayout) { positionedSlot in
                     eventBlock(for: positionedSlot, containerWidth: geometry.size.width)
                 }
-                
+
                 // Projected sessions - right half
                 ForEach(filteredProjectedSessions) { session in
                     projectedSessionBlock(for: session, containerWidth: geometry.size.width)
@@ -1845,6 +1865,117 @@ extension TimelineView {
         }
     }
 
+    // MARK: - Event Creation from Timeline
+
+    /// Transparent left-half layer that captures double-click on empty space.
+    private func eventCreationBackgroundLayer(containerWidth: CGFloat) -> some View {
+        let leftHalfWidth = max((containerWidth / 2), 10)
+        return Color.clear
+            .frame(width: leftHalfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .contentShape(Rectangle())
+            .position(x: leftHalfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .onTapGesture(count: 2) { location in
+                let clickedTime = snapToInterval(dateFromYOffset(location.y))
+                beginEventCreation(at: clickedTime)
+            }
+    }
+
+    /// Floating overlay for event creation, rendered outside the scroll view so it never clips.
+    private func eventCreationFloatingOverlay(startTime: Date, geoSize: CGSize) -> some View {
+        ZStack {
+            // Dimmed background — click to dismiss
+            Color.black.opacity(0.3)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        showingEventCreation = false
+                        eventCreationTime = nil
+                    }
+                }
+
+            VStack {
+                Spacer()
+                    .frame(height: geoSize.height * 0.22)
+                EventCreationPopover(
+                    startTime: startTime,
+                    defaultDurationMinutes: 30,
+                    onCommit: { title, start, end, calendar in
+                        createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar)
+                    },
+                    onCancel: {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            showingEventCreation = false
+                            eventCreationTime = nil
+                        }
+                    }
+                )
+                Spacer()
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .transition(.opacity)
+        .animation(.easeOut(duration: 0.15), value: showingEventCreation)
+    }
+
+    private func beginEventCreation(at time: Date) {
+        guard !eventsLocked else {
+            onModeToast?("Events locked")
+            return
+        }
+        // Close any open detail sheet
+        selectedSession = nil
+        selectedBusySlot = nil
+        resetEditingState()
+
+        withAnimation(.easeOut(duration: 0.15)) {
+            eventCreationTime = time
+            showingEventCreation = true
+        }
+    }
+
+    private func createEventFromTimeline(title: String, startDate: Date, endDate: Date, calendar: CalendarDescriptor) {
+        guard let eventId = calendarService.createEventReturningId(
+            title: title,
+            startDate: startDate,
+            endDate: endDate,
+            calendar: calendar
+        ) else {
+            onModeToast?("Failed to create event")
+            return
+        }
+
+        // Record in undo stack
+        let snapshot = EventDeleteSnapshot(
+            eventId: eventId,
+            title: title,
+            notes: nil,
+            url: nil,
+            startDate: startDate,
+            endDate: endDate,
+            calendarIdentifier: calendar.identifier,
+            calendarName: calendar.name
+        )
+        eventUndoManager.recordCreate(snapshot)
+
+        // Record in recents
+        let durationMinutes = Int(endDate.timeIntervalSince(startDate) / 60)
+        recentEventsStore.record(
+            title: title,
+            durationMinutes: durationMinutes,
+            calendarName: calendar.name,
+            calendarIdentifier: calendar.identifier,
+            eventId: eventId
+        )
+
+        // Close popover and refresh
+        withAnimation(.easeOut(duration: 0.15)) {
+            showingEventCreation = false
+            eventCreationTime = nil
+        }
+        onModeToast?("Created \"\(title)\"")
+        Task { await calendarService.fetchEvents(for: selectedDate) }
+    }
+
     // MARK: - Position Calculations
 
     private func calculateYPosition(for date: Date) -> CGFloat {
@@ -2545,6 +2676,12 @@ extension TimelineView {
             schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
             schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
             Task { await calendarService.fetchEvents(for: selectedDate) }
+        case .create(let snap):
+            // Undo create = delete the event
+            if calendarService.deleteEvent(identifier: snap.eventId) {
+                eventUndoManager.pushRedoForUndoneCreate(snap)
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
         }
     }
 
@@ -2588,6 +2725,24 @@ extension TimelineView {
                     eventIds: result.eventIds,
                     sessions: snap.sessions
                 ))
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+            }
+        case .create(let snap):
+            // Redo create = restore the event
+            if let newId = calendarService.restoreEvent(snap) {
+                // Update the undo stack entry with the new event ID
+                let updatedSnap = EventDeleteSnapshot(
+                    eventId: newId,
+                    title: snap.title,
+                    notes: snap.notes,
+                    url: snap.url,
+                    startDate: snap.startDate,
+                    endDate: snap.endDate,
+                    calendarIdentifier: snap.calendarIdentifier,
+                    calendarName: snap.calendarName
+                )
+                // Replace the top of the undo stack with updated ID
+                eventUndoManager.updateTopUndoCreateId(updatedSnap)
                 Task { await calendarService.fetchEvents(for: selectedDate) }
             }
         }

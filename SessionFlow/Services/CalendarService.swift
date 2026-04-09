@@ -477,6 +477,13 @@ class CalendarService: ObservableObject {
         }
     }
 
+    /// Returns the current duration in minutes for an event, or nil if the event no longer exists.
+    func eventDurationMinutes(identifier: String) -> Int? {
+        guard let event = eventStore.event(withIdentifier: identifier) else { return nil }
+        guard let start = event.startDate, let end = event.endDate else { return nil }
+        return Int(end.timeIntervalSince(start) / 60)
+    }
+
     func createSessions(_ sessions: [ScheduledSession]) -> (success: Int, failed: Int, eventIds: [String]) {
         var successCount = 0
         var failCount = 0
