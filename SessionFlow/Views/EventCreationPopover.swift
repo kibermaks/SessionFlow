@@ -128,6 +128,7 @@ struct EventCreationPopover: View {
                         .font(.system(size: 13))
                         .foregroundColor(.white)
                         .focused($titleFieldFocused)
+                        .autocorrectionDisabled()
                         .onSubmit { commitEvent() }
                         .onChange(of: eventTitle) { _, newValue in
                             selectedSuggestionIndex = -1
@@ -253,9 +254,13 @@ struct EventCreationPopover: View {
             if selectedCalendarName.isEmpty || !cals.contains(where: { $0.name == selectedCalendarName }) {
                 selectedCalendarName = cals.first?.name ?? ""
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                titleFieldFocused = true
-            }
+        }
+        .task {
+            // Wait for the opacity transition (0.15s) to complete before grabbing focus,
+            // otherwise focusing during the transition can briefly reset the field and
+            // make the suggestion dropdown pop in/out.
+            try? await Task.sleep(nanoseconds: 180_000_000)
+            titleFieldFocused = true
         }
         .onKeyPress(.upArrow, phases: .down) { press in
             if press.modifiers.contains(.command) {
