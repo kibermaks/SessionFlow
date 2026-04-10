@@ -1,38 +1,9 @@
-# List of tasks I think might be useful to add to the app
+# TODO
 
-## v2.0 — Rename to Sessionflow
-
-- [ ] Rename app from "Task Scheduler" to "Sessionflow" across the entire codebase
-  - Xcode: PRODUCT_NAME, bundle ID (`com.kibermaks.Sessionflow`), xcodeproj, source folder, `TaskSchedulerApp.swift` → `SessionflowApp.swift`
-  - Scripts: build_app.sh, create_dmg.sh (artifact naming)
-  - Docs: README title/badges/clone URL, CHANGELOG, CONTRIBUTING, Agents.md
-  - Code: About view title, window titles, UpdateService repo URL
-  - GitHub: Rename repository (auto-redirects old URL)
+Running backlog of follow-ups for SessionFlow. Items here are ideas and nice-to-haves, not commitments.
 
 ## Docs & Screenshots
 
-- [ ] Capture updated Main Screen screenshot (with Tasks + Awareness visible) → `docs/assets/Main Screen.png`
-- [ ] Capture Session Awareness GIF (idle → active session → progress → feedback → badge) → `docs/assets/SessionAwareness.gif`
 - [ ] Capture Tasks Panel screenshot → `docs/assets/TasksPanel.png`
 - [ ] Capture Mini-Player + Menu Bar composite screenshot → `docs/assets/MiniPlayer.png`
-- [ ] Uncomment Session Awareness and Mini-Player sections in README once screenshots are ready
-
-## 03.03.2026
-
-- [x] Add "⋮" button before Today button to show dropdown of previous days(e.g. Yesterday, 2 days ago, 3 days ago, etc.);
-- [x] Each real event block in the timeline has context menu "Copy to..." and a list of nearby days(e.g. Today, Tomorrow, 2 days from now, 3 days from now, etc.) So in one click I can copy everything(time, title, notes, url) to the selected day;
-- [x] Remove confirmation modal when clicking on "Schedule Sessions" button;
-- [x] Add a way to freeze configuration of proposed sessions in the timeline. And after that I can start moving, resizing proposed sessions. Probably Preset side(left) panel will become darkened with some blur effect and button with lock in the middle(meaning I started manual alignment). So if I click on this button - we should show warning confirmation modal(that I will lose manual alignments). Ok, so as I formed this idea - I think I know what should be "the way" to implement this: Just we also should allow to move, resize proposed sessions(I mean add interactive cursor), respecting "eventsLocked" flag of course. Just when first such action happens with projected sessions - we execute above "freeze" projections logic. Presets dropdown should be disabled while "frozen" mode is active too;
-- [x] Let's remove "Create just planning" red button. And place it next to schedule sessions button. It's should be 10% width of button with arrow down. So it's just like purple button when main action is schedule sessions. But you can click on right 10% of button and it will show dropdown where you can choose create just planning option. So we have cleaner look.
-- [x] holistic improvement for deep sessions. We need extra parameter "and then...". So if user wants to create more than one deep session - "and then..." defines distance between next deep sessions. So we have more flexibility.
-- [x] We already have Night edge setting in Settings panel. But it's limited to 24h(midnight) from upper edge. Let's add ability to see +1d mark(smth like this, to have visual clue) if we go up to e.g. 04am. and Timeline should show support for this. And Scheduling Engine should be able to handle this too. It's for night owls who work late nights.
-- [x] Add concept of Big Break(Rest). Rest section in SettingsPanel and for Big Break we should have on/off toggle, duration and inject after mins of sessions(mins with 15m step) So for example, I set 1h break after 120 mins of session time(w/o rests between them). So after session that crosses 120 mins mark - we inject big break. Show it on projections as hollow and dashed border.
-
-## 16.03.2026
-- [x] In some cases Main Window doesn't take stored position and size after opening it. Need to investigate why it happens and fix it.
-- [x] If Mini Player is open and Main Window is closed - when click on App Icon in Dock - Main Window shouldn't open; Mini Player should flash and attract attention.
-- [x] Disallow having more than one running instance of the app.
-- [x] Flashing for start of the session too for Awareness Panel and Mini Player.
-- [x] Remove focus rings everywhere. I mean keep tab switching allowed probably but not by default(I mean first responder is invisible by default) And only if I start using Tab key - we should show focus ring.
-- [x] For awareness: we should have extra button on the left from Mute button. Mute current or skip until next session. It should disable sounds for current session and skip until next session starts. Make whole feature to work holistically and well balanced.
-- [x] Add setting to track rests(they are virtual events w/o calendar binding) to Awareness Tab in AppSettingsView but follow next logic: if Now is in between two sessions and duration matches to rest duration of previous session type - we show special rest state in Awareness Panel and Mini Player. Also we have ambient setting with accelerando etc. for Rest(waves by default). And for Shortcuts: should appear Rest started, Rest ended, Rest ending soon(with lead time for ending soon, default 2 mins), but have mentioning somewhere that it works only if rests are tracked) Don't overcomplicate names of shortcuts(prob just "Rest Started", "Rest Ended", "Rest Ending Soon").
+- [ ] Add a Mini-Player section to the README once its screenshot is ready
