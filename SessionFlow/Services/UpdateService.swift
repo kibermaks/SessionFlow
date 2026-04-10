@@ -4,12 +4,25 @@ import AppKit
 
 /// Handles lightweight update checks against GitHub releases.
 final class UpdateService: ObservableObject {
+    enum LatestReleaseStatus: Equatable {
+        case unknown
+        case current
+        case updateAvailable
+        case unavailable
+    }
+
     struct UpdateInfo {
         let version: String
+        let buildNumber: Int?
         let title: String
         let releaseNotes: String
         let downloadURL: URL?
         let pageURL: URL
+
+        var displayVersion: String {
+            guard let buildNumber else { return version }
+            return "\(version) (\(buildNumber))"
+        }
     }
 
     struct UpdateAlert: Identifiable {
@@ -39,6 +52,7 @@ final class UpdateService: ObservableObject {
     @Published private(set) var isChecking = false
     @Published var pendingAlert: UpdateAlert?
     @Published private(set) var installationStatus: InstallationStatus?
+    @Published private(set) var latestReleaseStatus: LatestReleaseStatus = .unknown
 
     private let repoOwner = "kibermaks"
     private let repoName = "SessionFlow"
@@ -128,6 +142,9 @@ final class UpdateService: ObservableObject {
                 let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
                 try await handleRelease(release, userInitiated: userInitiated)
             } catch {
+                _ = await MainActor.run {
+                    self.latestReleaseStatus = .unavailable
+                }
                 if userInitiated {
                     _ = await MainActor.run {
                         self.pendingAlert = UpdateAlert(kind: .failure(errorMessage(for: error)))
@@ -139,8 +156,15 @@ final class UpdateService: ObservableObject {
     
     private func handleRelease(_ release: GitHubRelease, userInitiated: Bool) async throws {
         let currentVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-        let normalizedTag = release.tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
-        let comparison = compareVersion(lhs: normalizedTag, rhs: currentVersion)
+        let currentBuild = Int(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "")
+        let releaseIdentity = parseReleaseIdentity(from: release)
+        let comparison = compareRelease(
+            lhsVersion: releaseIdentity.version,
+            lhsBuild: releaseIdentity.buildNumber,
+            rhsVersion: currentVersion,
+            rhsBuild: currentBuild
+        )
+        let currentDisplayVersion = displayVersion(version: currentVersion, buildNumber: currentBuild)
         
         _ = await MainActor.run {
             UserDefaults.standard.set(Date(), forKey: self.lastCheckDefaultsKey)
@@ -149,19 +173,24 @@ final class UpdateService: ObservableObject {
         switch comparison {
         case .orderedDescending:
             let info = UpdateInfo(
-                version: normalizedTag,
-                title: release.name.isEmpty ? "SessionFlow \(normalizedTag)" : release.name,
+                version: releaseIdentity.version,
+                buildNumber: releaseIdentity.buildNumber,
+                title: release.name.isEmpty ? "SessionFlow \(displayVersion(version: releaseIdentity.version, buildNumber: releaseIdentity.buildNumber))" : release.name,
                 releaseNotes: release.notesPreview,
                 downloadURL: preferredDownloadURL(from: release.assets),
                 pageURL: release.htmlURL
             )
             _ = await MainActor.run {
+                self.latestReleaseStatus = .updateAvailable
                 self.pendingAlert = UpdateAlert(kind: .updateAvailable(info))
             }
         default:
+            _ = await MainActor.run {
+                self.latestReleaseStatus = .current
+            }
             guard userInitiated else { return }
             _ = await MainActor.run {
-                self.pendingAlert = UpdateAlert(kind: .upToDate(currentVersion))
+                self.pendingAlert = UpdateAlert(kind: .upToDate(currentDisplayVersion))
             }
         }
     }
@@ -442,6 +471,49 @@ open "$DEST_APP"
             if left > right { return .orderedDescending }
         }
         return .orderedSame
+    }
+
+    private func compareRelease(lhsVersion: String, lhsBuild: Int?, rhsVersion: String, rhsBuild: Int?) -> ComparisonResult {
+        let versionComparison = compareVersion(lhs: lhsVersion, rhs: rhsVersion)
+        if versionComparison != .orderedSame {
+            return versionComparison
+        }
+
+        guard let leftBuild = lhsBuild, let rightBuild = rhsBuild else {
+            return .orderedSame
+        }
+        if leftBuild < rightBuild { return .orderedAscending }
+        if leftBuild > rightBuild { return .orderedDescending }
+        return .orderedSame
+    }
+
+    private func displayVersion(version: String, buildNumber: Int?) -> String {
+        guard let buildNumber else { return version }
+        return "\(version) (\(buildNumber))"
+    }
+
+    private func parseReleaseIdentity(from release: GitHubRelease) -> (version: String, buildNumber: Int?) {
+        let normalizedTag = release.tagName.trimmingCharacters(in: CharacterSet(charactersIn: "vV "))
+        if let match = normalizedTag.wholeMatch(of: /^([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)$/) {
+            return (version: String(match.output.1), buildNumber: extractBuildNumber(from: release.name) ?? extractBuildNumber(from: release.body ?? ""))
+        }
+
+        if let buildNumber = extractBuildNumber(from: release.name) ?? extractBuildNumber(from: release.body ?? "") {
+            return (version: normalizedTag, buildNumber: buildNumber)
+        }
+
+        return (version: normalizedTag, buildNumber: nil)
+    }
+
+    private func extractBuildNumber(from text: String) -> Int? {
+        let pattern = #"(?i)\bbuild[\s#:()-]*([0-9]+)\b"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(text.startIndex..., in: text)
+        guard let match = regex.firstMatch(in: text, range: range), match.numberOfRanges > 1,
+              let captureRange = Range(match.range(at: 1), in: text) else {
+            return nil
+        }
+        return Int(text[captureRange])
     }
 }
 

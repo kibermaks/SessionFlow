@@ -28,7 +28,7 @@ The fastest way to create a release is using the `release.sh` script:
 ```
 
 This interactive script will:
-1. Ask you to choose release type (major/minor/patch/custom)
+1. Ask you to choose today's date, a custom date version, or keep the current marketing version
 2. Check your pre-release checklist
 3. Build the app with updated version
 4. Create DMG installer
@@ -54,7 +54,7 @@ If you prefer more control, follow these steps:
 Move items from `[Unreleased]` section to a new version section:
 
 ```markdown
-## [1.1] - 2026-01-20
+## [2026.1.20] - 2026-01-20
 
 ### Added
 - New feature description
@@ -74,17 +74,14 @@ Move items from `[Unreleased]` section to a new version section:
 Choose the appropriate version increment:
 
 ```bash
-# For bug fixes (1.0 build 42 → 1.0 build 43)
+# Use today's date version and bump build number
 ./build_app.sh
 
-# For new features (1.0 → 1.1)
-./build_app.sh minor
+# Keep current marketing version and bump build number only
+./build_app.sh current
 
-# For breaking changes (1.0 → 2.0)
-./build_app.sh major
-
-# For custom version (→ 1.5)
-./build_app.sh version 1.5
+# Build with a dedicated date version
+./build_app.sh dedicated-version 2026.4.9
 ```
 
 ### 3. Create DMG
@@ -93,24 +90,31 @@ Choose the appropriate version increment:
 ./create_dmg.sh
 ```
 
-This creates `dmg_output/SessionFlow-vX.Y.dmg`.
+This creates `dmg_output/SessionFlow-YYYY.M.D.dmg`.
 
 ### 4. Commit Version Changes
 
 ```bash
 git add SessionFlow.xcodeproj/project.pbxproj CHANGELOG.md
-git commit -m "chore: bump version to X.Y"
+git commit -m "chore: bump version to YYYY.M.D"
 ```
 
 ### 5. Create and Push Tag
 
 ```bash
 # Create annotated tag
-git tag -a vX.Y -m "Release version X.Y"
+git tag -a vYYYY.M.D -m "Release version YYYY.M.D"
 
 # Push commits and tag
 git push origin main
-git push origin vX.Y
+git push origin vYYYY.M.D
+```
+
+Optional same-day rebuild tag:
+
+```bash
+git tag -a vYYYY.M.D-2 -m "Release version YYYY.M.D (build BUILD)"
+git push origin vYYYY.M.D-2
 ```
 
 ### 6. Wait for GitHub Actions
@@ -130,7 +134,7 @@ Monitor progress at: `https://github.com/kibermaks/SessionFlow/actions`
 File: `.github/workflows/release.yml`
 
 **Triggers:**
-- Push of tag matching `v*.*` (e.g., v1.0, v2.1)
+- Push of tag matching `v*.*` (e.g., `v2026.4.9` or `v2026.4.9-2`)
 - Manual workflow dispatch (for custom builds)
 
 **What it does:**
@@ -145,8 +149,8 @@ File: `.github/workflows/release.yml`
 9. Creates GitHub Release with artifacts
 
 **Artifacts:**
-- `SessionFlow-vX.Y.dmg` - DMG installer
-- `SessionFlow-vX.Y.zip` - ZIP archive
+- `SessionFlow-YYYY.M.D.dmg` - DMG installer
+- `SessionFlow-YYYY.M.D.zip` - ZIP archive
 
 ### Build Check Workflow
 
@@ -178,7 +182,7 @@ After GitHub Actions completes the release:
 ### 2. Test Released Artifacts
 
 Download and test the DMG:
-1. Download `SessionFlow-vX.Y.dmg` from the release
+1. Download `SessionFlow-YYYY.M.D.dmg` from the release
 2. Mount and install the app
 3. Launch and verify it works correctly
 4. Check version number in app header
@@ -225,7 +229,7 @@ If the release includes new features:
 **Problem**: Released version doesn't match expected version
 
 **Solutions:**
-- Verify tag name matches desired version (e.g., `v1.5` not `v1.50`)
+- Verify tag name matches desired version (e.g., `v2026.4.9`)
 - Check that project.pbxproj was committed with updated version
 - Ensure build script updated version correctly
 
@@ -235,13 +239,13 @@ If the release includes new features:
 
 **Solutions:**
 - Ensure CHANGELOG.md has section for this version
-- Check section format: `## [X.Y] - YYYY-MM-DD`
+- Check section format: `## [YYYY.M.D] - YYYY-MM-DD`
 - Verify changelog was committed before tagging
 - Can manually edit GitHub Release after creation
 
 ### Can't Push Tag
 
-**Problem**: `git push origin vX.Y` fails
+**Problem**: `git push origin vYYYY.M.D` fails
 
 **Solutions:**
 ```bash
@@ -249,62 +253,58 @@ If the release includes new features:
 git tag -l
 
 # Delete local tag if needed
-git tag -d vX.Y
+git tag -d vYYYY.M.D
 
 # Delete remote tag if needed
-git push origin :refs/tags/vX.Y
+git push origin :refs/tags/vYYYY.M.D
 
 # Create new tag
-git tag -a vX.Y -m "Release version X.Y"
+git tag -a vYYYY.M.D -m "Release version YYYY.M.D"
 
 # Push again
-git push origin vX.Y
+git push origin vYYYY.M.D
 ```
 
 ## Version Numbering Guide
 
-SessionFlow follows [Semantic Versioning](https://semver.org/):
+SessionFlow uses date-based marketing versions in the format `YYYY.M.D`.
 
-### Major Version (X.0)
-Increment for:
-- Breaking changes to user workflows
-- Removal of features
-- Major UI redesigns
-- Incompatible data format changes
+### Marketing Version
+Use:
+- Today's date for normal releases
+- A custom date only when you need to reproduce or backfill a release tag
 
-Example: `1.0 → 2.0`
-
-### Minor Version (X.Y)
-Increment for:
-- New features
-- Enhancements to existing features
-- Non-breaking changes
-- New UI components
-
-Example: `1.0 → 1.1`
+Example: `2026.4.9`
 
 ### Build Number
-Auto-incremented for:
+Auto-incremented for every build:
 - Bug fixes
 - Performance improvements
 - Documentation updates
 - Minor UI tweaks
+- Multiple builds on the same date
 
-Example: `1.0 (build 42) → 1.0 (build 43)`
+Example: `2026.4.9 (build 42) → 2026.4.9 (build 43)`
+
+### Optional Same-Day Release Tag
+For a second release on the same marketing version, you can optionally create a build-qualified tag:
+
+Examples: `v2026.4.9-2`, `v2026.4.9-3`
+
+This keeps the app version at `2026.4.9`, but gives GitHub and the updater a unique external release identifier. The actual app build number still comes from `CFBundleVersion`.
 
 ## Release Frequency
 
 Recommended release schedule:
 
-- **Major releases**: 6-12 months (when ready)
-- **Minor releases**: 1-3 months (feature-driven)
-- **Patch builds**: As needed (bug fixes)
+- **Date releases**: whenever a release is ready
+- **Same-day rebuilds**: use the same marketing version with a higher build number
 
 ## Beta/Pre-releases
 
 For beta testing:
 
-1. Create tag with `-beta` suffix: `v1.1-beta.1`
+1. Create tag with `-beta` suffix: `v2026.4.9-beta.1`
 2. GitHub Actions will build normally
 3. Manually mark as "Pre-release" in GitHub
 4. Distribute to beta testers
@@ -317,13 +317,12 @@ For urgent bug fixes:
 2. Fix the bug
 3. Test thoroughly
 4. Merge to main
-5. Follow normal release process with patch increment
+5. Follow normal release process using today's date or `current` for same-day rebuilds
 6. Clearly mark as "Hotfix" in release notes
 
 ## Resources
 
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)
-- [Semantic Versioning](https://semver.org/)
 - [Keep a Changelog](https://keepachangelog.com/)
 - [Creating Releases](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository)
 

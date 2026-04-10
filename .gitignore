@@ -117,29 +117,10 @@ release_notes.md
 *.log
 dev/
 .derived_data/
-SessionFlow.xcodeproj/project.xcworkspace/xcuserdata/maks.xcuserdatad/UserInterfaceState.xcuserstate
-SessionFlow.xcodeproj/project.xcworkspace/xcuserdata/maks.xcuserdatad/UserInterfaceState.xcuserstate
-.derivedData/info.plist
-.derivedData/CompilationCache.noindex/generic/lock
-.derivedData/CompilationCache.noindex/generic/v1.1/v3.actions
-.derivedData/CompilationCache.noindex/generic/v1.1/v3.actions.shared
-.derivedData/CompilationCache.noindex/generic/v1.1/v8.data
-.derivedData/CompilationCache.noindex/generic/v1.1/v8.data.shared
-.derivedData/CompilationCache.noindex/generic/v1.1/v8.index
-.derivedData/CompilationCache.noindex/generic/v1.1/v8.index.shared
-.derivedData/Logs/Launch/LogStoreManifest.plist
-.derivedData/Logs/Localization/LogStoreManifest.plist
-.derivedData/Logs/Package/LogStoreManifest.plist
-.derivedData/Logs/Test/LogStoreManifest.plist
-.derivedData/ModuleCache.noindex/Session.modulevalidation
-SessionFlow icon/6b23ea0b755112bbab4240742c448650_Sidebar_Calendar.icns
-SessionFlow icon/603c4774ddc613f639777308b1cc7f91_Notion_Calendar.icns
-SessionFlow icon/calendar.png
-SessionFlow icon/clock 2.png
-SessionFlow icon/clock.png
-SessionFlow icon/Icon.png
-SessionFlow icon/task icon.png
-SessionFlow icon/Task Scheduler.png
-SessionFlow icon/Icon.icon/icon.json
-SessionFlow icon/Icon.icon/Assets/calendar.png
-SessionFlow icon/Icon.icon/Assets/clock 2.png
+.derivedData/
+
+# Legacy icon workspace
+SessionFlow icon/
+
+# Claude Code local settings
+.claude/settings.local.json

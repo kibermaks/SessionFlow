@@ -8,6 +8,14 @@ struct AboutView: View {
     private let starURL = "https://github.com/kibermaks/SessionFlow"
     private let authorURL = "https://github.com/kibermaks"
 
+    private var displayedVersion: String {
+        #if DEBUG
+        return "Version \(version) (\(build))"
+        #else
+        return "Version \(version)"
+        #endif
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             // App icon
@@ -27,7 +35,7 @@ struct AboutView: View {
                 .foregroundColor(.white.opacity(0.7))
 
             // Version
-            Text("Version \(version) (\(build))")
+            Text(displayedVersion)
                 .font(.system(size: 12, design: .monospaced))
                 .foregroundColor(.white.opacity(0.5))
 

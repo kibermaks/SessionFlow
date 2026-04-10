@@ -1,6 +1,9 @@
 <div align="center">
 
-# SessionFlow
+<h1 style="display: flex; align-items: center; justify-content: center; gap: 0.4em;">
+  <img src="docs/assets/AppIcon.png" width="48" height="48" alt="SessionFlow app icon" />
+  SessionFlow
+</h1>
 
 **Smart scheduling for productive days**
 
@@ -107,7 +110,7 @@ The right side of the window can show a **Productivity** card once you start lea
 
 ### Option 1: Download Pre-built Release (Recommended)
 
-1. Download the latest `SessionFlow-vX.X.dmg` from [Releases](https://github.com/kibermaks/SessionFlow/releases/latest)
+1. Download the latest `SessionFlow-YYYY.M.D.dmg` from [Releases](https://github.com/kibermaks/SessionFlow/releases/latest)
 2. Open the DMG file
 3. Drag `SessionFlow.app` to your Applications folder
 4. Launch from Applications or Spotlight
@@ -146,6 +149,61 @@ See [Building from Source](#-building-from-source) section below.
 - **Lock Dragging**: Toggle the lock icon to prevent accidental event moves while reviewing your schedule.
 - **Night Scheduling**: Extend the schedule end hour past midnight to plan late-night sessions with clear +1d markers.
 - **Rate Sessions**: After each session ends, use the quick feedback prompt to rate it—these ratings feed into the Productivity card and monthly view.
+
+## ⚡ Power Features
+
+These are the tricks that make SessionFlow click once you know them.
+
+### Keyboard Shortcuts
+
+| Shortcut | What it does |
+| --- | --- |
+| **⌘Z** | Undo the last drag, resize, or delete on the timeline |
+| **⇧⌘Z** | Redo |
+| **Esc** | Cancel an active drag, close the detail sheet, or dismiss the event creation popover |
+| **Hold ⇧ (Shift)** while dragging | Free-form positioning — skips the 5-minute grid |
+| **Hold ⌥ (Option)** while resizing | Snap to 5-minute increments for fine control |
+
+### Timeline Tricks
+
+- **Double-click empty space** (left half) to create a new event right there — no need to open Calendar.app. An autocomplete dropdown suggests recent events so you can recreate them in two keystrokes.
+- **Double-click an event block** to open its detail sheet where you can edit the title, notes, and URL inline.
+- **Drag the top or bottom edge** of any event or projected session to resize it. The grab zone is about 8 pixels from the edge.
+- **Right-click any calendar event** to copy it to an upcoming day or pick a custom date. Great for repeating a meeting you just had.
+- **Right-click a projected session** to schedule it immediately, schedule everything up to that point, or rename it.
+
+### Event Creation Popover
+
+When the popover is open after a double-click:
+
+- **Type a few letters** and recent events matching your input appear instantly with their calendar and duration pre-filled. Hit **Tab** to accept.
+- **⌘↑ / ⌘↓** cycles through your calendars without touching the mouse.
+- **↑ / ↓** navigates suggestions; **Tab** or click applies one.
+
+### Freeze & Manual Layout
+
+Drag any projected session and the app automatically freezes all projections so they stop recalculating. Now you can rearrange sessions by hand — overlapping sessions push out of the way. Unfreeze when you want the engine to take over again.
+
+### Developer Mode
+
+Quadruple-click the "General" heading in Settings to unlock developer tools:
+
+- **Override the "now" line** — pin the red time marker to any hour and minute. Perfect for screenshots or testing how awareness behaves at a specific time.
+- **Simulate awareness events** — trigger "Presence Reminder" or "Ending Soon" sounds without waiting for a real session.
+- **Reset onboarding** — re-show the welcome wizard, calendar setup, or "Did You Know" tips.
+
+### Awareness Anywhere
+
+You don't need the main window open to stay on track:
+
+- **Dock icon** shows a progress donut for the active session.
+- **Menu bar** shows a live countdown timer.
+- **Mini-player** floats on your desktop — collapse the bottom awareness panel to switch to it.
+- **Mute button** is always accessible from the mini-player and the bottom panel.
+
+### Shortcuts Automation
+
+Each trigger (session start, end, approaching, rest boundaries) sends a structured JSON payload to your macOS Shortcut. You can use this to toggle Focus modes, send yourself a Slack message, control smart lights, or anything else Shortcuts supports — the app doesn't care what you do with the data.
 
 ## 🏗 Architecture & Key Elements
 
@@ -288,24 +346,21 @@ open SessionFlow.xcodeproj
 
 The project includes several convenience scripts:
 
-#### `./build_app.sh [major|minor|patch|version X.Y]`
+#### `./build_app.sh [current|dedicated-version YYYY.M.D]`
 
-Builds a Release version of the app with version management.
+Builds a Release version of the app with date-based version management.
 
 > ⚠️ Before running, update the `TEAM_ID="RGFAX8X946"` placeholder in both `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
 
 ```bash
-# Increment build number only (default)
+# Set marketing version to today's date and increment build number (default)
 ./build_app.sh
 
-# Bump minor version (1.0 → 1.1)
-./build_app.sh minor
+# Keep current marketing version and increment build number only
+./build_app.sh current
 
-# Bump major version (1.0 → 2.0)
-./build_app.sh major
-
-# Set specific version
-./build_app.sh version 1.5
+# Build with a dedicated version
+./build_app.sh dedicated-version 2026.4.9
 ```
 
 **What it does:**
@@ -332,7 +387,7 @@ Creates a distributable DMG file for the app.
 - Creates Applications folder symlink
 - Adds README with installation instructions
 - Outputs to `./dmg_output/`
-- Names file as `SessionFlow-vX.Y.dmg`
+- Names file as `SessionFlow-YYYY.M.D.dmg`
 
 ### Development Workflow
 

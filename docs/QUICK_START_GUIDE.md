@@ -16,10 +16,10 @@ open SessionFlow.xcodeproj
 # Build and deploy to Applications
 ./build_app.sh && ./deploy_app.sh
 
-# Build specific version
-./build_app.sh minor          # Bump minor version
-./build_app.sh major          # Bump major version
-./build_app.sh version 2.0    # Set specific version
+# Build with specific date version behavior
+./build_app.sh                # Use today's date version
+./build_app.sh current        # Keep current marketing version
+./build_app.sh dedicated-version 2026.4.9
 ```
 
 ### Distribution
@@ -39,8 +39,12 @@ open SessionFlow.xcodeproj
 git status
 
 # Create release tag
-git tag -a v1.0 -m "Release version 1.0"
-git push origin v1.0
+git tag -a v2026.4.9 -m "Release version 2026.4.9"
+git push origin v2026.4.9
+
+# Optional same-day rebuild tag
+git tag -a v2026.4.9-2 -m "Release version 2026.4.9 (build 790)"
+git push origin v2026.4.9-2
 
 # List all tags
 git tag -l
@@ -120,19 +124,19 @@ git push origin feature/my-feature
 # 1. Update CHANGELOG.md
 
 # 2. Build
-./build_app.sh minor
+./build_app.sh
 
 # 3. Create DMG
 ./create_dmg.sh
 
 # 4. Commit and tag
 git add .
-git commit -m "chore: bump version to 1.1"
-git tag -a v1.1 -m "Release version 1.1"
+git commit -m "chore: bump version to 2026.4.9"
+git tag -a v2026.4.9 -m "Release version 2026.4.9"
 
 # 5. Push
 git push origin main
-git push origin v1.1
+git push origin v2026.4.9
 
 # GitHub Actions will handle the rest!
 ```

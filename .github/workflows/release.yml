@@ -38,13 +38,18 @@ jobs:
             VERSION="${GITHUB_REF#refs/tags/}"
           fi
           VERSION_NUMBER="${VERSION#v}"
+          MARKETING_VERSION="$VERSION_NUMBER"
+          if [[ "$VERSION_NUMBER" =~ ^([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)$ ]]; then
+            MARKETING_VERSION="${BASH_REMATCH[1]}"
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "version_number=$VERSION_NUMBER" >> $GITHUB_OUTPUT
-          echo "Building version: $VERSION_NUMBER"
+          echo "marketing_version=$MARKETING_VERSION" >> $GITHUB_OUTPUT
+          echo "Building version: $MARKETING_VERSION"
       
       - name: Update version in project
         run: |
-          VERSION="${{ steps.version.outputs.version_number }}"
+          VERSION="${{ steps.version.outputs.marketing_version }}"
           sed -i '' "s/MARKETING_VERSION = [0-9.]*;/MARKETING_VERSION = $VERSION;/g" SessionFlow.xcodeproj/project.pbxproj
           echo "Updated project version to $VERSION"
       
@@ -58,7 +63,7 @@ jobs:
           NEW_BUILD_NUMBER=$((CURRENT_BUILD + 1))
           sed -i '' "s/CURRENT_PROJECT_VERSION = [0-9]*;/CURRENT_PROJECT_VERSION = $NEW_BUILD_NUMBER;/g" "$PROJECT/project.pbxproj"
           
-          echo "Building version ${{ steps.version.outputs.version_number }} (build $NEW_BUILD_NUMBER)"
+          echo "Building version ${{ steps.version.outputs.marketing_version }} (build $NEW_BUILD_NUMBER)"
           
           xcodebuild -project "$PROJECT" \
                      -scheme "$SCHEME" \
@@ -69,7 +74,7 @@ jobs:
                      CODE_SIGNING_REQUIRED="NO" \
                      CODE_SIGNING_ALLOWED="NO" \
                      CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
-                     MARKETING_VERSION="${{ steps.version.outputs.version_number }}" \
+                     MARKETING_VERSION="${{ steps.version.outputs.marketing_version }}" \
                      CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER" \
                      | xcpretty || true
           

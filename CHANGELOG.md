@@ -3,13 +3,17 @@
 All notable changes to SessionFlow will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
-## [2.8] - 2026-04-09
+## [2026.4.9] - 2026-04-09
 
 ### Added
 
 - Inline event creation — double-click empty space in the timeline to create calendar events with Spotlight-like autocomplete from recent events
+
+### Changed
+
+- Marketing versions now use the release date format (`YYYY.M.D`) while the build number continues incrementing independently
 
 ### Fixed
 

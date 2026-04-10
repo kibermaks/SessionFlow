@@ -81,6 +81,7 @@ struct ContentView: View {
     @State private var updateAlert: UpdateService.UpdateAlert?
     @State private var showingWhatsNew = false
     @AppStorage("SessionFlow.LastSeenVersion") private var lastSeenVersion = ""
+    @State private var pendingWhatsNewVersion: String?
     @State private var copyToast: CopyToastInfo? = nil
     @State private var modeToast: String? = nil
 
@@ -158,6 +159,9 @@ struct ContentView: View {
         .onReceive(updateService.$pendingAlert) { alert in
             updateAlert = alert
         }
+        .onReceive(updateService.$latestReleaseStatus) { status in
+            handleLatestReleaseStatus(status)
+        }
         .sheet(item: $updateAlert) { alert in
             UpdateAlertSheet(alert: alert)
                 .environmentObject(updateService)
@@ -189,12 +193,38 @@ struct ContentView: View {
     private func checkForWhatsNew() {
         let currentVersion = ChangelogService.currentVersion
         guard lastSeenVersion != currentVersion else { return }
-        lastSeenVersion = currentVersion
+        pendingWhatsNewVersion = currentVersion
+        if updateService.latestReleaseStatus == .current {
+            showWhatsNewIfEligible(for: currentVersion)
+        }
+    }
+
+    private func handleLatestReleaseStatus(_ status: UpdateService.LatestReleaseStatus) {
+        guard let pendingVersion = pendingWhatsNewVersion else { return }
+        guard pendingVersion == ChangelogService.currentVersion else {
+            pendingWhatsNewVersion = nil
+            return
+        }
+
+        switch status {
+        case .current:
+            showWhatsNewIfEligible(for: pendingVersion)
+        case .updateAvailable, .unavailable:
+            pendingWhatsNewVersion = nil
+        case .unknown:
+            break
+        }
+    }
+
+    private func showWhatsNewIfEligible(for version: String) {
+        guard hasCompletedSetup, hasSeenWelcome, updateService.installationStatus == nil else { return }
+
+        pendingWhatsNewVersion = nil
+        lastSeenVersion = version
         ChangelogService.shared.fetchIfNeeded()
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            if hasCompletedSetup && hasSeenWelcome && updateService.installationStatus == nil {
-                showingWhatsNew = true
-            }
+            showingWhatsNew = true
         }
     }
 }
@@ -849,7 +879,7 @@ struct HeaderView: View {
                 Text("SessionFlow")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
-                Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0").\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0")")
+                Text(displayedHeaderVersion)
                     .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundColor(.white.opacity(0.4))
             }
@@ -879,6 +909,16 @@ struct HeaderView: View {
                 }
             }
         }
+    }
+
+    private var displayedHeaderVersion: String {
+        let marketingVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        #if DEBUG
+        let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        return "v\(marketingVersion).\(buildNumber)"
+        #else
+        return "v\(marketingVersion)"
+        #endif
     }
     
     private var dateButtons: some View {

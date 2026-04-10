@@ -188,7 +188,7 @@ struct AppSettingsView: View {
                             withAnimation { showDevSettings.toggle() }
                         }
 
-                    Text("v\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"))")
+                    Text(settingsDisplayedVersion)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -332,6 +332,16 @@ struct AppSettingsView: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    private var settingsDisplayedVersion: String {
+        let marketingVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        #if DEBUG
+        let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "-"
+        return "v\(marketingVersion) (\(buildNumber))"
+        #else
+        return "v\(marketingVersion)"
+        #endif
     }
 
     // MARK: - Tab 2: Calendars

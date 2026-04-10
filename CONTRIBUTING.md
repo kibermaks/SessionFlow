@@ -11,7 +11,7 @@ Short version: keep the Xcode project tidy, test your change, ship it.
 ## Setup
 
 - macOS 13+, Xcode 15+, Git installed.
-- Clone, `open SessionFlow.xcodeproj`, or run `./build_app.sh` (`major|minor|patch` bump) for command‑line builds. `deploy_app.sh` and `create_dmg.sh` exist for release flows.
+- Clone, `open SessionFlow.xcodeproj`, or run `./build_app.sh` for command-line builds. Use `./build_app.sh current` to keep the current marketing version, or `./build_app.sh dedicated-version YYYY.M.D` to build with a specific version. `deploy_app.sh` and `create_dmg.sh` exist for release flows.
 
 ## Workflow
 

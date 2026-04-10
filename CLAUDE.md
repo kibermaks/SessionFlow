@@ -5,29 +5,47 @@ macOS productivity app (SwiftUI, macOS 14.0+) for scheduling focus sessions arou
 ## Build & Run
 
 ```bash
-./build_app.sh patch     # Build with version bump (patch/minor/major)
+./build_app.sh           # Set marketing version to today's date, bump build number
+./build_app.sh current   # Keep current marketing version, bump build number
 ./create_dmg.sh          # Create DMG for distribution
 ./notarize.sh            # Notarize for distribution
 ```
 
-Xcode build: `xcodebuild -scheme SessionFlow -configuration Debug build`
+No test targets — verify changes by building and running the app.
 
-No test targets exist — verify changes by building and running the app.
-
-**After any code changes**: always finish by running `./build_app.sh` so the user gets a ready-to-test build immediately. Skip this only for text-only changes (docs, CHANGELOG, CLAUDE.md, etc.).
+**After any code changes**: always finish by running `./build_app.sh` so the user gets a ready-to-test build immediately. Skip only for text-only changes (docs, CHANGELOG, CLAUDE.md, etc.).
 
 ## Architecture
 
-MVVM-like: Models → Services → Views. No external dependencies, only Apple frameworks (EventKit, SwiftUI, AppKit, AVFoundation).
+MVVM-like: Models → Services → Views. No external dependencies — only Apple frameworks (EventKit, SwiftUI, AppKit, AVFoundation).
 
-Key files:
 - `SessionFlowApp.swift` — app entry point with AppDelegate
-- `ContentView.swift` — central layout, `.onChange` observers call `trigger()` to regenerate schedule
-- `SchedulingEngine.swift` — `generateSchedule()` produces `projectedSessions`
+- `ContentView.swift` — central layout; `.onChange` observers call `trigger()` to regenerate schedule
+- `SchedulingEngine.swift` — `generateSchedule()` produces `projectedSessions`; main `ObservedObject`, persists via `UserDefaults`
+- `CalendarService.swift` — EventKit integration for reading/writing calendar events
 - `TimelineView.swift` — interactive timeline with drag/resize for events and projected sessions
 - `SettingsPanel.swift` — all scheduling parameter UI
-- `CalendarService.swift` — EventKit integration for reading/writing calendar events
-- `EventUndoManager.swift` — undo/redo for calendar events (eventId) and projected sessions (sessionId)
+- `EventUndoManager.swift` — undo/redo for calendar events and projected sessions
+
+### Adding Files to Xcode
+
+Creating a `.swift` file on disk is NOT enough. You must also register it in `project.pbxproj`: `PBXBuildFile`, `PBXFileReference`, `PBXGroup`, and `PBXSourcesBuildPhase`.
+
+## Session Types & Hashtags
+
+Sessions are identified by hashtags in calendar event notes: `#work`, `#side`, `#deep`, `#plan`. Existing-session awareness depends on these tags.
+
+| Type | Purpose |
+|------|---------|
+| Work | Primary focus tasks |
+| Side | Life admin (emails, errands) |
+| Deep | Rare, high-intensity focus blocks |
+| Planning | Short strategy block at start of day |
+
+## Visual Conventions
+
+- **Solid** borders = real calendar events; **dashed** borders = projected/preview sessions
+- Use `NumericInputField` for numeric settings (supports keyboard typing + stepper)
 
 ## Adding New Config Properties
 
@@ -48,7 +66,7 @@ Observer groups live in `ContentView.swift` → `SettingsChangeModifier` → `ex
 
 ## Release Process
 
-1. Update `CHANGELOG.md` → `./build_app.sh patch` → `./create_dmg.sh` → ZIP
+1. Update `CHANGELOG.md` → `./build_app.sh` → `./create_dmg.sh` → ZIP
 2. `git commit` + tag + push → `gh release create` with DMG + ZIP
 
 CHANGELOG guidelines:

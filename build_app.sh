@@ -35,9 +35,36 @@ set_build_number() {
 }
 
 # Parse flags
-INCREMENT_TYPE="patch"
+VERSION_MODE="today"
 FORCED_VERSION=""
 RELEASE_BUILD=false
+
+today_version() {
+    date +%Y.%-m.%-d
+}
+
+is_valid_date_version() {
+    local version="$1"
+    if [[ ! "$version" =~ ^([0-9]{4})\.([0-9]{1,2})\.([0-9]{1,2})$ ]]; then
+        return 1
+    fi
+
+    local year="${BASH_REMATCH[1]}"
+    local month="${BASH_REMATCH[2]}"
+    local day="${BASH_REMATCH[3]}"
+
+    if (( year < 2000 || year > 9999 )); then
+        return 1
+    fi
+    if (( month < 1 || month > 12 )); then
+        return 1
+    fi
+    if (( day < 1 || day > 31 )); then
+        return 1
+    fi
+
+    return 0
+}
 
 ARGS=()
 for arg in "$@"; do
@@ -48,27 +75,31 @@ for arg in "$@"; do
     fi
 done
 
-if [[ "${ARGS[0]}" == "major" ]]; then
-    INCREMENT_TYPE="major"
-elif [[ "${ARGS[0]}" == "minor" ]]; then
-    INCREMENT_TYPE="minor"
-elif [[ "${ARGS[0]}" == "version" && -n "${ARGS[1]}" ]]; then
-    # Validate version format (e.g., 1.4, 2.0, 10.12)
-    if [[ "${ARGS[1]}" =~ ^[0-9]+\.[0-9]+$ ]]; then
-        INCREMENT_TYPE="forced"
+if [[ "${ARGS[0]}" == "current" ]]; then
+    VERSION_MODE="current"
+elif [[ ( "${ARGS[0]}" == "version" || "${ARGS[0]}" == "dedicated-version" ) && -n "${ARGS[1]}" ]]; then
+    if is_valid_date_version "${ARGS[1]}"; then
+        VERSION_MODE="forced"
         FORCED_VERSION="${ARGS[1]}"
     else
-        echo "❌ Invalid version format. Use: ./build_app.sh version X.Y (e.g., version 1.4)"
+        echo "❌ Invalid version format. Use: ./build_app.sh dedicated-version YYYY.M.D (e.g., 2026.4.9)"
         exit 1
     fi
+elif [[ -n "${ARGS[0]}" ]]; then
+    echo "❌ Unknown argument: ${ARGS[0]}"
+    echo "   Usage:"
+    echo "     ./build_app.sh                 # set marketing version to today and bump build"
+    echo "     ./build_app.sh current         # keep current marketing version and bump build"
+    echo "     ./build_app.sh dedicated-version YYYY.M.D   # set explicit marketing version and bump build"
+    exit 1
 fi
 
 if [ "$RELEASE_BUILD" = true ]; then
-    echo "📋 Preparing RELEASE build ($INCREMENT_TYPE increment)..."
+    echo "📋 Preparing RELEASE build ($VERSION_MODE mode)..."
 else
-    echo "📋 Preparing to build ($INCREMENT_TYPE increment)..."
+    echo "📋 Preparing to build ($VERSION_MODE mode)..."
 fi
-if [ "$INCREMENT_TYPE" == "forced" ]; then
+if [ "$VERSION_MODE" == "forced" ]; then
     echo "   Forcing version $FORCED_VERSION"
 fi
 
@@ -78,40 +109,29 @@ if [ -d "$BUILD_DIR" ]; then
     rm -rf "$BUILD_DIR"
 fi
 
+# 1. Compute Today's Version
+TODAY_VERSION=$(today_version)
+
 # 1. Get Current Version
 CURRENT_VERSION=$(get_version)
 if [ -z "$CURRENT_VERSION" ]; then
-    echo "⚠️  Could not detect current version. Defaulting to 1.0"
-    CURRENT_VERSION="1.0"
+    CURRENT_VERSION="$TODAY_VERSION"
+    echo "⚠️  Could not detect current version. Defaulting to $CURRENT_VERSION"
 fi
 echo "   Current Version: $CURRENT_VERSION"
 
 # 2. Calculate New Version
-IFS='.' read -r -a parts <<< "$CURRENT_VERSION"
-major="${parts[0]:-1}"
-minor="${parts[1]:-0}"
-
 NEW_VERSION="$CURRENT_VERSION"
 VERSION_CHANGED=false
 
-if [ "$INCREMENT_TYPE" == "forced" ]; then
+if [ "$VERSION_MODE" == "forced" ]; then
     NEW_VERSION="$FORCED_VERSION"
-    if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
-        VERSION_CHANGED=true
-    fi
-elif [ "$INCREMENT_TYPE" == "major" ]; then
-    major=$((major + 1))
-    minor=0
-    NEW_VERSION="$major.$minor"
+elif [ "$VERSION_MODE" == "today" ]; then
+    NEW_VERSION="$TODAY_VERSION"
+fi
+
+if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
     VERSION_CHANGED=true
-elif [ "$INCREMENT_TYPE" == "minor" ]; then
-    minor=$((minor + 1))
-    NEW_VERSION="$major.$minor"
-    VERSION_CHANGED=true
-else
-    # Patch increment: we stay on the same marketing version
-    # but we will increment the build number below.
-    NEW_VERSION="$CURRENT_VERSION"
 fi
 
 if [ "$VERSION_CHANGED" = true ]; then
