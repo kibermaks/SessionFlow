@@ -376,5 +376,8 @@ struct SoundWaveBar: View {
             .onAppear {
                 animating = true
             }
+            .onDisappear {
+                animating = false
+            }
     }
 }

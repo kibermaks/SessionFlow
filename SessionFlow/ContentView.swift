@@ -852,10 +852,18 @@ struct HeaderView: View {
         .padding(.vertical, 16)
         .background(WindowDragView())
         .background(Color.black.opacity(0.2))
+        #if DEBUG
+        .task {
+            let branch = Self.resolveGitBranch()
+            await MainActor.run { gitBranch = branch }
+        }
+        #endif
     }
-    
+
     #if DEBUG
-    private static let gitBranch: String? = {
+    @State private var gitBranch: String?
+
+    private static func resolveGitBranch() -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
         process.arguments = ["rev-parse", "--abbrev-ref", "HEAD"]
@@ -870,7 +878,7 @@ struct HeaderView: View {
               !branch.isEmpty, branch != "main"
         else { return nil }
         return branch
-    }()
+    }
     #endif
 
     private var appTitle: some View {
@@ -888,7 +896,7 @@ struct HeaderView: View {
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.6))
                 #if DEBUG
-                if let branch = Self.gitBranch {
+                if let branch = gitBranch {
                     Text(branch)
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(.orange.opacity(0.7))

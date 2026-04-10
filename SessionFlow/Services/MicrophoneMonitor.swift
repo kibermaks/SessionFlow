@@ -9,7 +9,8 @@ class MicrophoneMonitor: ObservableObject {
     @Published private(set) var inputOutputSharedDevice = false
     @Published private(set) var sharedDeviceName: String?
 
-    private var listenerBlock: AudioObjectPropertyListenerBlock?
+    private var runningListenerBlock: AudioObjectPropertyListenerBlock?
+    private var defaultDeviceListenerBlock: AudioObjectPropertyListenerBlock?
     private var observedDevice: AudioDeviceID = 0
 
     init() {
@@ -18,7 +19,7 @@ class MicrophoneMonitor: ObservableObject {
     }
 
     deinit {
-        removeListener()
+        removeAllListeners()
     }
 
     private func observeDefaultInputDevice() {
@@ -49,27 +50,31 @@ class MicrophoneMonitor: ObservableObject {
         let block: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             DispatchQueue.main.async { self?.updateMicState() }
         }
-        listenerBlock = block
+        runningListenerBlock = block
 
         AudioObjectAddPropertyListenerBlock(deviceID, &runningAddress, DispatchQueue.main, block)
 
-        // Also listen for default input device changes
+        // Listen for default input device changes
         var defaultDeviceAddress = AudioObjectPropertyAddress(
             mSelector: kAudioHardwarePropertyDefaultInputDevice,
             mScope: kAudioObjectPropertyScopeGlobal,
             mElement: kAudioObjectPropertyElementMain
         )
-        AudioObjectAddPropertyListenerBlock(
-            AudioObjectID(kAudioObjectSystemObject),
-            &defaultDeviceAddress,
-            DispatchQueue.main
-        ) { [weak self] _, _ in
+        let deviceBlock: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
             DispatchQueue.main.async {
-                self?.removeListener()
+                self?.removeAllListeners()
                 self?.observeDefaultInputDevice()
                 self?.checkSharedDevice()
             }
         }
+        defaultDeviceListenerBlock = deviceBlock
+
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &defaultDeviceAddress,
+            DispatchQueue.main,
+            deviceBlock
+        )
     }
 
     private func updateMicState() {
@@ -133,14 +138,26 @@ class MicrophoneMonitor: ObservableObject {
         return cf as String
     }
 
-    private func removeListener() {
-        guard let block = listenerBlock, observedDevice != 0 else { return }
-        var address = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        AudioObjectRemovePropertyListenerBlock(observedDevice, &address, DispatchQueue.main, block)
-        listenerBlock = nil
+    private func removeAllListeners() {
+        if let block = runningListenerBlock, observedDevice != 0 {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceIsRunningSomewhere,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(observedDevice, &address, DispatchQueue.main, block)
+            runningListenerBlock = nil
+        }
+        if let block = defaultDeviceListenerBlock {
+            var address = AudioObjectPropertyAddress(
+                mSelector: kAudioHardwarePropertyDefaultInputDevice,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject), &address, DispatchQueue.main, block
+            )
+            defaultDeviceListenerBlock = nil
+        }
     }
 }

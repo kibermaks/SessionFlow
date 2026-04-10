@@ -32,6 +32,7 @@ struct AppSettingsView: View {
     @State private var showingRestEndingSoonPayload = false
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
+    @State private var showingResetCalendarPermissionsConfirmation = false
     @State private var pendingReplacementContext: CalendarReplacementContext?
     @State private var selectedReplacementCalendarId: String = ""
     @State private var replacementErrorMessage: String?
@@ -321,8 +322,16 @@ struct AppSettingsView: View {
 
                     Divider()
 
-                    Button(role: .destructive, action: resetCalendarPermissions) {
+                    Button(role: .destructive) {
+                        showingResetCalendarPermissionsConfirmation = true
+                    } label: {
                         Label("Reset Calendar Permissions", systemImage: "lock.slash.fill")
+                    }
+                    .alert("Reset Calendar Permissions?", isPresented: $showingResetCalendarPermissionsConfirmation) {
+                        Button("Reset & Quit", role: .destructive, action: resetCalendarPermissions)
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("The app will quit immediately to clear the calendar permission cache. You'll need to grant calendar access again on next launch.")
                     }
 
                     Text("Note: Resetting permissions will immediately terminate the application to clear the system cache.")
