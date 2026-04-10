@@ -5,6 +5,14 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.4.10-2] - 2026-04-10
+
+### Fixed
+
+- Fixed CPU drain caused by CoreAudio listener leak in microphone monitor
+- Fixed crash when granting calendar permissions (recursive dispatch_once in debug header)
+- Reset Calendar Permissions now shows a confirmation dialog before quitting
+
 ## [2026.4.10] - 2026-04-10
 
 ### Changed
