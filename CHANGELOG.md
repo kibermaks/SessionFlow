@@ -5,6 +5,14 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.4.10] - 2026-04-10
+
+### Changed
+
+- Release builds are now code-signed and notarized for clean Gatekeeper experience
+- What's New dialog only appears when running the latest version
+- Updated app icon
+
 ## [2026.4.9] - 2026-04-09
 
 ### Added
