@@ -5,6 +5,12 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.4.13] - 2026-04-13
+
+### Changed
+
+- Universal binary build supporting both Apple Silicon and Intel Macs
+
 ## [2026.4.10-2] - 2026-04-10
 
 ### Fixed
