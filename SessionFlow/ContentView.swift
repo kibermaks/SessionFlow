@@ -623,12 +623,6 @@ struct ContentViewBody: View {
         ensureCalendarsExist(for: preset)
         
         schedulingEngine.applyPreset(preset)
-        if !useNowTime {
-            let cal = Calendar.current
-            if let adjusted = cal.date(bySettingHour: schedulingEngine.defaultStartHour, minute: 0, second: 0, of: selectedDate) {
-                startTime = adjusted
-            }
-        }
         if autoPreview { updateProjectedSchedule() }
     }
     
