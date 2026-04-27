@@ -7,7 +7,7 @@
 
 **Smart scheduling for productive days**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)](https://www.apple.com/macos) [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org) [![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg)](https://github.com/kibermaks/SessionFlow/actions) [![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)](https://www.apple.com/macos) [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org) [![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg?branch=main&event=push)](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
 
 SessionFlow is a native macOS app that helps you plan, execute, and reflect on productive days. It automatically schedules work, side, and deep sessions around your existing calendar events, tracks them in real time with ambient sounds and progress indicators, and captures feedback so you can see how your time actually felt.
 
