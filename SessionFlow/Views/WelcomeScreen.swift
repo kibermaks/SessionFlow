@@ -3,6 +3,9 @@ import SwiftUI
 struct WelcomeScreen: View {
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @State private var currentPage = 0
     
     let pages = [
@@ -45,13 +48,8 @@ struct WelcomeScreen: View {
     
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
             
             // Main content container
             VStack(spacing: 10) {
@@ -63,9 +61,9 @@ struct WelcomeScreen: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(colors.subtleBackground))
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.2)
@@ -115,7 +113,7 @@ struct WelcomeScreen: View {
                     HStack(spacing: 8) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Circle()
-                                .fill(currentPage == index ? pages[index].color : Color.white.opacity(0.2))
+                                .fill(currentPage == index ? pages[index].color : colors.textDisabled)
                                 .frame(width: 8, height: 8)
                                 .animation(.spring(), value: currentPage)
                         }
@@ -128,12 +126,12 @@ struct WelcomeScreen: View {
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(colors.textSecondary)
                                     .frame(width: 100)
                                     .padding(.vertical, 14)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.white.opacity(0.1))
+                                            .fill(colors.hoveredBackground)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -216,11 +214,11 @@ struct WelcomeScreen: View {
             VStack(spacing: 12) {
                 Text(page.title)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                
+                    .foregroundColor(colors.textPrimary)
+
                 Text(page.subtitle)
                     .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
                     .lineSpacing(4)
@@ -241,30 +239,30 @@ struct WelcomeScreen: View {
     private var calendarFittingView: some View {
         HStack(spacing: 12) {
             VStack(spacing: 4) {
-                RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.1)).frame(height: 30)
+                RoundedRectangle(cornerRadius: 6).fill(colors.hoveredBackground).frame(height: 30)
                 RoundedRectangle(cornerRadius: 6).fill(Color(hex: "8B5CF6")).frame(height: 40)
                     .overlay(Text("Work").font(.system(size: 10, weight: .bold)).foregroundColor(.white))
-                RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.1)).frame(height: 30)
+                RoundedRectangle(cornerRadius: 6).fill(colors.hoveredBackground).frame(height: 30)
                 RoundedRectangle(cornerRadius: 6).fill(Color(hex: "3B82F6")).frame(height: 30)
                     .overlay(Text("Side").font(.system(size: 10, weight: .bold)).foregroundColor(.white))
             }
             .frame(width: 120)
             .padding(8)
-            .background(Color.white.opacity(0.05))
+            .background(colors.subtleBackground)
             .cornerRadius(10)
-            
+
             Image(systemName: "arrow.left.and.right")
                 .font(.system(size: 20, weight: .bold))
-                .foregroundColor(.white.opacity(0.3))
-            
+                .foregroundColor(colors.textMuted)
+
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    Circle().fill(Color.white.opacity(0.1)).frame(width: 12, height: 12)
-                    Text("Existing events").font(.system(size: 12)).foregroundColor(.white.opacity(0.5))
+                    Circle().fill(colors.hoveredBackground).frame(width: 12, height: 12)
+                    Text("Existing events").font(.system(size: 12)).foregroundColor(colors.textSecondary)
                 }
                 HStack(spacing: 8) {
                     Circle().fill(Color(hex: "8B5CF6")).frame(width: 12, height: 12)
-                    Text("Smart placement").font(.system(size: 12)).foregroundColor(.white.opacity(0.8))
+                    Text("Smart placement").font(.system(size: 12)).foregroundColor(colors.textPrimary)
                 }
             }
         }
@@ -278,7 +276,7 @@ struct WelcomeScreen: View {
                 .foregroundColor(color)
             Text(title)
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
             Text(tag)
                 .font(.system(size: 10, weight: .medium, design: .monospaced))
                 .padding(.horizontal, 8)
@@ -288,7 +286,7 @@ struct WelcomeScreen: View {
                 .cornerRadius(4)
         }
         .frame(width: 100, height: 110)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -306,15 +304,15 @@ struct WelcomeScreen: View {
                         .fill(Color(hex: "8B5CF6"))
                         .frame(width: 60, height: 36)
                         .overlay(Text("Work").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
-                    Text("40m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                    Text("40m").font(.system(size: 8)).foregroundColor(colors.textMuted)
                 }
 
                 // Small rest gap
                 VStack(spacing: 2) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(colors.divider)
                         .frame(width: 14, height: 36)
-                    Text("10m").font(.system(size: 8)).foregroundColor(.white.opacity(0.3))
+                    Text("10m").font(.system(size: 8)).foregroundColor(colors.textMuted)
                 }
 
                 // Another work session
@@ -323,15 +321,15 @@ struct WelcomeScreen: View {
                         .fill(Color(hex: "8B5CF6"))
                         .frame(width: 60, height: 36)
                         .overlay(Text("Work").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
-                    Text("40m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                    Text("40m").font(.system(size: 8)).foregroundColor(colors.textMuted)
                 }
 
                 // Rest before big rest
                 VStack(spacing: 2) {
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(colors.divider)
                         .frame(width: 14, height: 36)
-                    Text("10m").font(.system(size: 8)).foregroundColor(.white.opacity(0.3))
+                    Text("10m").font(.system(size: 8)).foregroundColor(colors.textMuted)
                 }
 
                 // Big Rest block (hollow with dashed border)
@@ -362,17 +360,17 @@ struct WelcomeScreen: View {
                         .fill(Color(hex: "3B82F6"))
                         .frame(width: 60, height: 36)
                         .overlay(Text("Side").font(.system(size: 9, weight: .bold)).foregroundColor(.white))
-                    Text("30m").font(.system(size: 8)).foregroundColor(.white.opacity(0.4))
+                    Text("30m").font(.system(size: 8)).foregroundColor(colors.textMuted)
                 }
             }
 
             Text("Automatically placed after enough focus time accumulates")
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 20)
     }
@@ -381,7 +379,7 @@ struct WelcomeScreen: View {
         VStack(spacing: 16) {
             Text("Potential Productivity Gain")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(colors.textSecondary)
             
             HStack(alignment: .bottom, spacing: 12) {
                 productivityBar(label: "Random", value: 0.4, color: .gray)
@@ -397,16 +395,16 @@ struct WelcomeScreen: View {
                 .multilineTextAlignment(.center)
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
-    
+
     private func productivityBar(label: String, value: CGFloat, color: Color, isHighlight: Bool = false) -> some View {
         VStack(spacing: 8) {
             ZStack(alignment: .bottom) {
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(Color.white.opacity(0.1))
+                    .fill(colors.hoveredBackground)
                     .frame(width: 40, height: 60)
                 
                 RoundedRectangle(cornerRadius: 4)
@@ -416,7 +414,7 @@ struct WelcomeScreen: View {
             }
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(colors.textSecondary)
         }
     }
 }
@@ -424,7 +422,9 @@ struct WelcomeScreen: View {
 // MARK: - Container Style Modifier
 struct ContainerStyleModifier: ViewModifier {
     let isShownFromMenu: Bool
-    
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     func body(content: Content) -> some View {
         if isShownFromMenu {
             // Simple style like PatternsGuide when shown from menu
@@ -435,22 +435,12 @@ struct ContainerStyleModifier: ViewModifier {
             content
                 .background(
                     RoundedRectangle(cornerRadius: 20)
-                        .fill(Color(hex: "1E293B").opacity(0.95))
+                        .fill(colors.panelBackground.opacity(0.95))
                         .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.2),
-                                    Color.white.opacity(0.05)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
+                        .stroke(colors.borderStrong, lineWidth: 1)
                 )
                 .padding(40)
                 .frame(width: 500, height: 750)

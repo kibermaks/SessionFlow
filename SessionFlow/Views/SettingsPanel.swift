@@ -5,7 +5,10 @@ import Combine
 struct SettingsPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var calendarService: CalendarService
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Binding var hasSeenPatternsGuide: Bool
     @Binding var showingPatternsGuide: Bool
     var isLocked: Bool = false
@@ -43,7 +46,7 @@ struct SettingsPanel: View {
                 // Planning Section
                 planningSection
                 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
                 
                 sessionSection(
                     title: "Work Sessions",
@@ -63,7 +66,7 @@ struct SettingsPanel: View {
                     }
                 )
                 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
                 
                 // Side Sessions Section
                 sessionSection(
@@ -84,20 +87,20 @@ struct SettingsPanel: View {
                     }
                 )
                 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
                 
                 // Pattern Section
                 patternSection
                 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
                 
                 // Deep Sessions Section
                 deepSessionSection
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
                 
                 // Rest Section
                 restSection
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
 
                 // Long Rest Section
                 longRestSection
@@ -105,7 +108,7 @@ struct SettingsPanel: View {
             .padding()
             .disabled(isLocked)
         }
-        .background(Color.white.opacity(0.03))
+        .background(colors.subtleBackground)
         .cornerRadius(12)
     }
     
@@ -118,17 +121,17 @@ struct SettingsPanel: View {
                     .foregroundColor(Color(hex: "3B82F6"))
                 Text("Timeline View")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
             }
 
             Toggle(isOn: $schedulingEngine.hideNightHours) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Hide night hours")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                     Text(schedulingEngine.hideNightHours ? "Showing \(formattedHour(schedulingEngine.dayStartHour)) - \(schedulingEngine.scheduleEndHour > 24 ? "+1d " : "")\(formattedHour(schedulingEngine.scheduleEndHour))" : "Showing full 24h")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                 }
             }
             .toggleStyle(.switch)
@@ -139,14 +142,14 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Morning Edge:")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         NumericInputField(value: $schedulingEngine.dayStartHour, range: 0...12, unit: "h")
                     }
 
                     Text("Night edge controlled by Schedule Until in Settings")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                         .italic()
                 }
                 .padding(.leading, 8)
@@ -164,13 +167,13 @@ struct SettingsPanel: View {
                     .foregroundColor(.orange)
                 Text("Schedule Until")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
             }
 
             HStack {
                 Text("End hour:")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(colors.textSecondary)
                 Spacer()
                 if schedulingEngine.scheduleEndHour > 24 {
                     Text("+1d \(formattedHour(schedulingEngine.scheduleEndHour))")
@@ -214,14 +217,14 @@ struct SettingsPanel: View {
                         .foregroundColor(Color(hex: "EF4444"))
                     Text("Planning Session")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
 
                     Button {
                         showingPlanningHelp.toggle()
                     } label: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.3)
@@ -256,7 +259,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("Duration:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
 
                     Spacer()
 
@@ -295,14 +298,14 @@ struct SettingsPanel: View {
                     .foregroundColor(iconColor)
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 Button {
                     isShowingHelp.wrappedValue.toggle()
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -326,7 +329,7 @@ struct SettingsPanel: View {
             HStack {
                 Text("Count:")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colors.textSecondary)
 
                 Spacer()
 
@@ -346,7 +349,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("Duration:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
 
                     Spacer()
 
@@ -361,7 +364,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("Calendar:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
 
                     Spacer()
 
@@ -401,14 +404,14 @@ struct SettingsPanel: View {
                     .foregroundColor(Color(hex: "10B981"))
                 Text("Scheduling Pattern")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 Button {
                     showingPatternHelp.toggle()
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -449,7 +452,7 @@ struct SettingsPanel: View {
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 8)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(colors.subtleBackground)
                             .background(
                                 RoundedRectangle(cornerRadius: 8)
                                     .fill(.ultraThinMaterial)
@@ -470,7 +473,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Pattern:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         Picker("", selection: $schedulingEngine.pattern) {
                             ForEach(SchedulePattern.allCases) { pattern in
@@ -489,12 +492,12 @@ struct SettingsPanel: View {
                     if patternExpanded {
                         Text(schedulingEngine.pattern.description)
                             .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(colors.textSecondary)
                         if [.alternating, .alternatingReverse, .customRatio].contains(schedulingEngine.pattern) {
                             HStack {
                                 Text("Work per cycle:")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(colors.textSecondary)
 
                                 Spacer()
 
@@ -506,7 +509,7 @@ struct SettingsPanel: View {
                             HStack {
                                 Text("Side per cycle:")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(colors.textSecondary)
 
                                 Spacer()
 
@@ -517,23 +520,23 @@ struct SettingsPanel: View {
                         if schedulingEngine.pattern == .customRatio {
                             Toggle("Side First", isOn: $schedulingEngine.sideFirst)
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colors.textSecondary)
                                 .toggleStyle(.switch)
                                 .tint(Color(hex: "3B82F6"))
                         }
 
-                        Divider().background(Color.white.opacity(0.05))
+                        Divider().background(colors.subtleBackground)
 
                         HStack(spacing: 8) {
                             Text("Flexible Side Scheduling")
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colors.textSecondary)
                             Button {
                                 showingFlexibleSideHelp.toggle()
                             } label: {
                                 Image(systemName: "info.circle")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.4))
+                                    .foregroundColor(colors.textMuted)
                             }
                             .buttonStyle(.plain)
                             .hoverEffect(brightness: 0.3)
@@ -576,14 +579,14 @@ struct SettingsPanel: View {
                         .foregroundColor(Color(hex: "10B981"))
                     Text("Deep Sessions")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
 
                     Button {
                         showingDeepHelp.toggle()
                     } label: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.3)
@@ -619,7 +622,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("Count:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $schedulingEngine.deepSessionConfig.sessionCount, range: 1...10)
                 }
@@ -636,7 +639,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Duration:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         NumericInputField(value: $schedulingEngine.deepSessionConfig.duration, range: 5...180, step: 5, unit: "min")
                     }
@@ -644,7 +647,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Inject after:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         NumericInputField(value: $schedulingEngine.deepSessionConfig.injectAfterEvery, range: 0...10, unit: "slots")
                     }
@@ -653,7 +656,7 @@ struct SettingsPanel: View {
                         HStack {
                             Text("And then after:")
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colors.textSecondary)
                             Spacer()
                             NumericInputField(value: $schedulingEngine.deepSessionConfig.andThenGap, range: 0...10, unit: "slots")
                         }
@@ -663,7 +666,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Calendar:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         CalendarPickerCompact(
                             selectedCalendar: $schedulingEngine.deepSessionConfig.calendarName,
@@ -696,14 +699,14 @@ struct SettingsPanel: View {
                     .foregroundColor(Color(hex: "F59E0B"))
                 Text("Rest Between Sessions")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 Button {
                     showingRestHelp.toggle()
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -727,7 +730,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("After Work:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $schedulingEngine.restDuration, range: 0...60, step: 5, unit: "min")
                 }
@@ -735,7 +738,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("After Side:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $schedulingEngine.sideRestDuration, range: 0...60, step: 5, unit: "min")
                 }
@@ -743,7 +746,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("After Deep:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $schedulingEngine.deepRestDuration, range: 0...60, step: 5, unit: "min")
                 }
@@ -763,14 +766,14 @@ struct SettingsPanel: View {
                         .foregroundColor(Color(hex: "F59E0B"))
                     Text("Long Rest")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
 
                     Button {
                         showingBigRestHelp.toggle()
                     } label: {
                         Image(systemName: "info.circle")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.3)
@@ -806,7 +809,7 @@ struct SettingsPanel: View {
                 HStack {
                     Text("Count:")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $schedulingEngine.bigRestConfig.count, range: 1...5, step: 1, unit: "")
                 }
@@ -816,7 +819,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("Duration:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         NumericInputField(value: $schedulingEngine.bigRestConfig.duration, range: 15...120, step: 5, unit: "min")
                     }
@@ -824,7 +827,7 @@ struct SettingsPanel: View {
                     HStack {
                         Text("After:")
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                         Spacer()
                         NumericInputField(value: $schedulingEngine.bigRestConfig.afterMinutes, range: 30...480, step: 15, unit: "min")
                     }
@@ -840,6 +843,9 @@ struct SectionExpandButton: View {
     @Binding var isExpanded: Bool
     var tooltip: String = ""
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -848,7 +854,7 @@ struct SectionExpandButton: View {
         } label: {
             Image(systemName: "chevron.right")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(colors.textMuted)
                 .rotationEffect(.degrees(isExpanded ? 90 : 0))
                 .animation(.easeInOut(duration: 0.2), value: isExpanded)
         }
@@ -866,7 +872,10 @@ struct NameFieldWithHistory: View {
     @Binding var text: String
     let sessionType: SessionType
     let placeholder: String
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @StateObject private var nameHistory = SessionNameHistory.shared
     @StateObject private var suggestionModel = SuggestionsModel<String>()
     
@@ -892,17 +901,17 @@ struct NameFieldWithHistory: View {
         HStack {
             Text(label)
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.7))
-            
+                .foregroundColor(colors.textSecondary)
+
             Spacer()
-            
+
             // Match NumericInputField styling and calendar dropdown width
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(suggestionModel.isFocused ? 0.2 : 0.15))
+                    .fill(suggestionModel.isFocused ? colors.hoveredBackground : colors.border)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(suggestionModel.isFocused ? 0.4 : 0), lineWidth: 1)
+                            .stroke(suggestionModel.isFocused ? colors.borderStrong : Color.clear, lineWidth: 1)
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
@@ -1178,28 +1187,30 @@ fileprivate struct SuggestionView<V: Equatable>: View {
     var accentColor: Color
     @ObservedObject var model: SuggestionsModel<V>
     var onDelete: ((String) -> Void)?
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @State private var isHovering = false
-    
+
     var body: some View {
         let suggestion = self.suggestion
         let model = self.model
         let isSelected = model.selectedSuggestion == suggestion
-        
+
         return HStack {
             Text(suggestion.text)
                 .font(.system(size: 13))
-                // Always use light text for dark popup background
-                .foregroundColor(isSelected ? .white : .white.opacity(0.9))
+                .foregroundColor(isSelected ? .white : colors.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             if isHovering || isSelected {
                 Button {
                     onDelete?(suggestion.text)
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(isSelected ? .white.opacity(0.9) : .white.opacity(0.7))
+                        .foregroundColor(isSelected ? .white.opacity(0.9) : colors.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -1210,7 +1221,7 @@ fileprivate struct SuggestionView<V: Equatable>: View {
         .padding(EdgeInsets(top: 6, leading: 8, bottom: 6, trailing: 8))
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .foregroundColor(isSelected ? accentColor : (isHovering ? Color.white.opacity(0.1) : Color.clear))
+                .foregroundColor(isSelected ? accentColor : (isHovering ? colors.hoveredBackground : Color.clear))
         )
         .contentShape(Rectangle()) // Make entire area tappable/hoverable
         .onHover(perform: { hovering in
@@ -1231,20 +1242,23 @@ fileprivate struct SuggestionGroupView<V: Equatable>: View {
     var accentColor: Color
     @ObservedObject var model: SuggestionsModel<V>
     var onDelete: ((String) -> Void)?
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         let suggestionGroup = self.suggestionGroup
         let model = self.model
-        
+
         return VStack(alignment: .leading, spacing: 0) {
             if self.showDivider {
                 Divider()
-                    .background(Color.white.opacity(0.1))
+                    .background(colors.divider)
                     .padding(.vertical, 4)
             }
             if let title = suggestionGroup.title {
                 Text(title)
-                    .foregroundColor(.white.opacity(0.6)) // Light label for dark theme
+                    .foregroundColor(colors.textMuted)
                     .font(.system(size: 11, weight: .bold))
                     .padding(.leading, 8)
                     .padding(.bottom, 2)
@@ -1304,19 +1318,21 @@ fileprivate struct SuggestionTextField<V: Equatable>: NSViewRepresentable {
     @Binding var text: String
     @ObservedObject var model: SuggestionsModel<V>
     var placeholder: String
-    
+    @Environment(\.colorScheme) var colorScheme
+
+    private var isDark: Bool { colorScheme == .dark }
+
     func makeNSView(context: Context) -> NSTextField {
         let textField = NSTextField(frame: .zero)
         textField.focusRingType = .none
         textField.isBordered = false
         textField.drawsBackground = false
         textField.font = NSFont.systemFont(ofSize: 13)
-        // Set placeholder color to be lighter/consistent
         let placeholderStr = NSAttributedString(string: placeholder, attributes: [
-            .foregroundColor: NSColor.white.withAlphaComponent(0.4)
+            .foregroundColor: isDark ? NSColor.white.withAlphaComponent(0.4) : NSColor.placeholderTextColor
         ])
         textField.placeholderAttributedString = placeholderStr
-        textField.textColor = .white
+        textField.textColor = isDark ? .white : .labelColor
         
         textField.delegate = context.coordinator
         
@@ -1332,7 +1348,14 @@ fileprivate struct SuggestionTextField<V: Equatable>: NSViewRepresentable {
     func updateNSView(_ textField: NSTextField, context: Context) {
         let model = self.model
         let text = self.text
-        
+
+        // Update colors when theme changes
+        textField.textColor = isDark ? .white : .labelColor
+        let placeholderStr = NSAttributedString(string: placeholder, attributes: [
+            .foregroundColor: isDark ? NSColor.white.withAlphaComponent(0.4) : NSColor.placeholderTextColor
+        ])
+        textField.placeholderAttributedString = placeholderStr
+
         let coordinator = context.coordinator
         coordinator.model = model
         
@@ -1454,16 +1477,19 @@ fileprivate struct SuggestionInput<V: Equatable>: View {
     var placeholder: String
     var accentColor: Color = .blue
     var onDelete: ((String) -> Void)?
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @StateObject var model = SuggestionsModel<V>()
-    
+
     var body: some View {
         let model = self.model
         if model.suggestionGroups != self.suggestionGroups {
             model.suggestionGroups = self.suggestionGroups
         }
         model.textBinding = self.$text
-        
+
         return SuggestionTextField(text: self.$text, model: model, placeholder: placeholder)
             .borderlessWindow(isVisible: Binding<Bool>(get: { model.suggestionsVisible && !model.suggestionGroups.isEmpty },
                                                      set: { model.suggestionsVisible = $0 }),
@@ -1473,13 +1499,13 @@ fileprivate struct SuggestionInput<V: Equatable>: View {
                               windowOffset: CGPoint(x: -8, y: -4)) {
                 SuggestionPopup(model: model, accentColor: accentColor, onDelete: onDelete)
                     .frame(width: max(model.width, 200))
-                    .background(Color(hex: "1E293B").opacity(0.98)) // Dark background
+                    .background(colors.panelBackground.opacity(0.98))
                     .overlay(RoundedRectangle(cornerRadius: 8)
                                 .stroke(lineWidth: 1)
-                                .foregroundColor(Color.white.opacity(0.1))
+                                .foregroundColor(colors.border)
                     )
                     .cornerRadius(8)
-                    .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.black.opacity(colors.isDark ? 0.5 : 0.15), radius: 10, x: 0, y: 4)
                     .padding(10)
             }
             .onAppear {
@@ -1495,13 +1521,16 @@ fileprivate struct SuggestionInputWithModel<V: Equatable>: View {
     var placeholder: String
     var accentColor: Color = .blue
     var onDelete: ((String) -> Void)?
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         if model.suggestionGroups != self.suggestionGroups {
             model.suggestionGroups = self.suggestionGroups
         }
         model.textBinding = self.$text
-        
+
         return SuggestionTextField(text: self.$text, model: model, placeholder: placeholder)
             .borderlessWindow(isVisible: Binding<Bool>(get: { model.suggestionsVisible && !model.suggestionGroups.isEmpty },
                                                      set: { model.suggestionsVisible = $0 }),
@@ -1511,13 +1540,13 @@ fileprivate struct SuggestionInputWithModel<V: Equatable>: View {
                               windowOffset: CGPoint(x: -8, y: -4)) {
                 SuggestionPopup(model: model, accentColor: accentColor, onDelete: onDelete)
                     .frame(width: max(model.width, 200))
-                    .background(Color(hex: "1E293B").opacity(0.98)) // Dark background
+                    .background(colors.panelBackground.opacity(0.98))
                     .overlay(RoundedRectangle(cornerRadius: 8)
                                 .stroke(lineWidth: 1)
-                                .foregroundColor(Color.white.opacity(0.1))
+                                .foregroundColor(colors.border)
                     )
                     .cornerRadius(8)
-                    .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 4)
+                    .shadow(color: Color.black.opacity(colors.isDark ? 0.5 : 0.15), radius: 10, x: 0, y: 4)
                     .padding(10)
             }
             .onAppear {
@@ -1752,5 +1781,4 @@ fileprivate struct VisualEffectBlur: View {
         .environmentObject(SchedulingEngine())
         .environmentObject(CalendarService())
         .frame(width: 320, height: 800)
-        .background(Color(hex: "0F172A"))
 }

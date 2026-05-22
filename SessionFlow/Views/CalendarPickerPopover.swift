@@ -1,11 +1,14 @@
 import SwiftUI
 
 struct CalendarPickerPopover: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Binding var selectedCalendar: String
     let calendars: [CalendarService.CalendarInfo]
     let accentColor: Color
     var onSelection: ((CalendarService.CalendarInfo) -> Void)?
-    
+
     @State private var showingPopover = false
     
     var body: some View {
@@ -32,19 +35,19 @@ struct CalendarPickerPopover: View {
                     .frame(width: 12, height: 12)
             }
             Text(selectedCalendar.isEmpty ? "Select a calendar..." : selectedCalendar)
-                .foregroundColor(selectedCalendar.isEmpty ? .white.opacity(0.5) : .white)
+                .foregroundColor(selectedCalendar.isEmpty ? colors.textSecondary : colors.textPrimary)
                 .font(.system(size: 14, weight: .medium))
             Spacer()
             Image(systemName: "chevron.up.chevron.down")
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(colors.textSecondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "0F172A").opacity(0.6))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
                         .stroke(accentColor.opacity(0.5), lineWidth: 2)
@@ -113,11 +116,14 @@ struct CalendarPickerPopover: View {
 
 // Compact version for SettingsPanel
 struct CalendarPickerCompact: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Binding var selectedCalendar: String
     let calendars: [CalendarService.CalendarInfo]
     let accentColor: Color
     var onSelection: ((CalendarService.CalendarInfo) -> Void)?
-    
+
     @State private var showingPopover = false
     
     var body: some View {
@@ -155,20 +161,20 @@ struct CalendarPickerCompact: View {
                     .frame(width: 10, height: 10)
             }
             Text(selectedCalendar.isEmpty ? "Select..." : selectedCalendar)
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .font(.system(size: 13))
                 .lineLimit(1)
             Spacer()
             Image(systemName: "chevron.down")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
         }
         .frame(minWidth: 120, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(Color.white.opacity(0.1))
+                .fill(colors.subtleBackground)
         )
     }
     

@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct SessionAwarenessPanel: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var awarenessService: SessionAwarenessService
     @EnvironmentObject var audioService: SessionAudioService
     @EnvironmentObject var timeState: SessionTimeState
@@ -92,9 +95,9 @@ struct SessionAwarenessPanel: View {
         } label: {
             Image(systemName: "arrow.down.right.and.arrow.up.left")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(colors.textMuted)
                 .frame(width: 28, height: 28)
-                .background(Color.white.opacity(0.06))
+                .background(colors.subtleBackground)
                 .cornerRadius(5)
                 .contentShape(Rectangle())
         }
@@ -154,16 +157,12 @@ struct SessionAwarenessPanel: View {
     // MARK: - Panel styling
 
     private var panelBackground: some View {
-        LinearGradient(
-            colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+        colors.backgroundGradient
     }
 
     private var topBorder: some View {
         Rectangle()
             .frame(height: 1)
-            .foregroundColor(.white.opacity(0.08))
+            .foregroundColor(colors.divider)
     }
 }

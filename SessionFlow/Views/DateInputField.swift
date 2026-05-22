@@ -3,7 +3,10 @@ import SwiftUI
 /// A date input field with internal padding and stepper buttons.
 struct DateInputField: View {
     @Binding var date: Date
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @FocusState private var isFocused: Bool
     
     private static let dateFormat = Date.FormatStyle()
@@ -16,10 +19,10 @@ struct DateInputField: View {
             // Date field with internal padding
             ZStack(alignment: .center) {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                    .fill(isFocused ? colors.hoveredBackground : colors.border)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                            .stroke(isFocused ? colors.borderStrong : Color.clear, lineWidth: 1)
                     )
                     .frame(height: 24)
                 
@@ -28,7 +31,7 @@ struct DateInputField: View {
                     .multilineTextAlignment(.center)
                     .lineLimit(1)
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                     .focused($isFocused)
                     .padding(.horizontal, 10)
                     .frame(height: 24)
@@ -42,7 +45,7 @@ struct DateInputField: View {
                 } label: {
                     Image(systemName: "chevron.up")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                         .frame(width: 20, height: 14)
                 }
                 .buttonStyle(.plain)
@@ -53,7 +56,7 @@ struct DateInputField: View {
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 8, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                         .frame(width: 20, height: 14)
                 }
                 .buttonStyle(.plain)

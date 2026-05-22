@@ -4,15 +4,13 @@ struct UpdateAlertSheet: View {
     let alert: UpdateService.UpdateAlert
     @EnvironmentObject var updateService: UpdateService
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
 
             switch alert.kind {
             case .updateAvailable(let info):
@@ -33,7 +31,6 @@ struct UpdateAlertSheet: View {
                 )
             }
         }
-        .preferredColorScheme(.dark)
     }
 
     // MARK: - Update Available
@@ -49,9 +46,9 @@ struct UpdateAlertSheet: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                         .padding(8)
-                        .background(Circle().fill(Color.white.opacity(0.1)))
+                        .background(Circle().fill(colors.subtleBackground))
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.2)
@@ -75,10 +72,10 @@ struct UpdateAlertSheet: View {
                 VStack(spacing: 6) {
                     Text("Update Available")
                         .font(.system(size: 20, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                     Text("SessionFlow \(info.displayVersion) is ready to install.")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(colors.textSecondary)
                 }
             }
             .padding(.bottom, 16)
@@ -120,22 +117,22 @@ struct UpdateAlertSheet: View {
                     if line.hasPrefix("### ") {
                         Text(String(line.dropFirst(4)))
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundColor(Color(hex: "60A5FA"))
+                            .foregroundColor(colors.isDark ? Color(hex: "60A5FA") : Color(hex: "1D4ED8"))
                             .padding(.top, 6)
                     } else if line.hasPrefix("- ") {
                         HStack(alignment: .top, spacing: 6) {
                             Text("•")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.3))
+                                .foregroundColor(colors.textMuted)
                             Text(String(line.dropFirst(2)))
                                 .font(.system(size: 13))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(colors.textSecondary)
                                 .fixedSize(horizontal: false, vertical: true)
                         }
                     } else if !line.trimmingCharacters(in: .whitespaces).isEmpty {
                         Text(line)
                             .font(.system(size: 13))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                     }
                 }
             }
@@ -145,10 +142,10 @@ struct UpdateAlertSheet: View {
         .frame(maxHeight: 200)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.white.opacity(0.05))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(colors.divider, lineWidth: 1)
                 )
         )
     }
@@ -168,10 +165,10 @@ struct UpdateAlertSheet: View {
             VStack(spacing: 6) {
                 Text(title)
                     .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text(message)
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 340)
             }
@@ -210,15 +207,15 @@ private struct SecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundColor(.white.opacity(0.7))
+            .foregroundColor(.secondary)
             .padding(.horizontal, 24)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.white.opacity(configuration.isPressed ? 0.1 : 0.06))
+                    .fill(Color.primary.opacity(configuration.isPressed ? 0.1 : 0.06))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                     )
             )
     }

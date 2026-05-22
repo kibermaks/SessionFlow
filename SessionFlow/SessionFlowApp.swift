@@ -39,6 +39,11 @@ struct SessionFlowApp: App {
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
     @State private var didInitializeServices = false
     private let dockProgressController = DockProgressController()
+    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.dark.rawValue
+
+    private var preferredScheme: ColorScheme? {
+        AppearanceMode(rawValue: appearanceModeRaw)?.colorScheme
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -52,7 +57,10 @@ struct SessionFlowApp: App {
                 .environmentObject(recentEventsStore)
                 .environmentObject(eventCreationCoordinator)
                 .frame(minWidth: 1000, minHeight: 700)
+                .preferredColorScheme(preferredScheme)
                 .focusEffectDisabled()
+                .onAppear { applyAppearance(appearanceModeRaw) }
+                .onChange(of: appearanceModeRaw) { _, new in applyAppearance(new) }
                 .onAppear {
                     guard !didInitializeServices else { return }
                     didInitializeServices = true
@@ -124,6 +132,7 @@ struct SessionFlowApp: App {
         
         Window("About SessionFlow", id: "about") {
             AboutView()
+                .preferredColorScheme(preferredScheme)
         }
         .defaultSize(width: 320, height: 420)
 
@@ -133,6 +142,7 @@ struct SessionFlowApp: App {
                 .environmentObject(schedulingEngine)
                 .environmentObject(sessionAwarenessService)
                 .environmentObject(sessionAudioService)
+                .preferredColorScheme(preferredScheme)
         }
         .windowResizability(.contentSize)
     }
@@ -258,6 +268,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 private extension SessionFlowApp {
+    func applyAppearance(_ raw: String) {
+        let mode = AppearanceMode(rawValue: raw) ?? .dark
+        switch mode {
+        case .system: NSApp.appearance = nil
+        case .light:  NSApp.appearance = NSAppearance(named: .aqua)
+        case .dark:   NSApp.appearance = NSAppearance(named: .darkAqua)
+        }
+    }
+
     func openProjectReadme() {
         guard let url = URL(string: "https://github.com/kibermaks/SessionFlow#readme") else { return }
         NSWorkspace.shared.open(url)

@@ -10,6 +10,7 @@
 		001 /* SessionFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* SessionFlowApp.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		003 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Session.swift */; };
+		AT001 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AT002 /* AppTheme.swift */; };
 		004 /* SchedulePattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* SchedulePattern.swift */; };
 		005 /* Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* Preset.swift */; };
 		006 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* CalendarService.swift */; };
@@ -81,6 +82,7 @@
 		101 /* SessionFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		AT002 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		104 /* SchedulePattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulePattern.swift; sourceTree = "<group>"; };
 		105 /* Preset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preset.swift; sourceTree = "<group>"; };
 		106 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
@@ -207,6 +209,7 @@
 			isa = PBXGroup;
 			children = (
 				103 /* Session.swift */,
+				AT002 /* AppTheme.swift */,
 				104 /* SchedulePattern.swift */,
 				105 /* Preset.swift */,
 				125 /* Changelog.swift */,
@@ -392,6 +395,7 @@
 				001 /* SessionFlowApp.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Session.swift in Sources */,
+				AT001 /* AppTheme.swift in Sources */,
 				004 /* SchedulePattern.swift in Sources */,
 				005 /* Preset.swift in Sources */,
 				006 /* CalendarService.swift in Sources */,
@@ -575,7 +579,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 883;
+				CURRENT_PROJECT_VERSION = 918;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -594,7 +598,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.5.21;
+				MARKETING_VERSION = 2026.5.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
@@ -613,7 +617,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 883;
+				CURRENT_PROJECT_VERSION = 918;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -632,7 +636,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.5.21;
+				MARKETING_VERSION = 2026.5.22;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";

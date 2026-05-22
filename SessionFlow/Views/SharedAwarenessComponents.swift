@@ -27,11 +27,11 @@ func nextSessionTimeDescription(start: Date, end: Date) -> String {
     return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
 }
 
-func awarenessRatingColor(_ rating: SessionRating) -> Color {
+func awarenessRatingColor(_ rating: SessionRating, isDark: Bool = true) -> Color {
     switch rating {
     case .rocket: return .orange
     case .completed: return .green
-    case .partial: return .yellow
+    case .partial: return isDark ? .yellow : Color(hex: "92400E")
     case .skipped: return .red
     }
 }
@@ -53,9 +53,12 @@ func awarenessBarColor(service: SessionAwarenessService) -> Color {
 // MARK: - Divider
 
 struct AwarenessDivider: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.1))
+            .fill(colors.divider)
             .frame(width: 1, height: 32)
             .padding(.horizontal, 8)
     }
@@ -66,6 +69,9 @@ struct AwarenessDivider: View {
 struct AwarenessSkipSessionButton: View {
     @ObservedObject var awarenessService: SessionAwarenessService
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         if awarenessService.isActive || awarenessService.isResting {
             Button {
@@ -73,13 +79,13 @@ struct AwarenessSkipSessionButton: View {
             } label: {
                 Image(systemName: awarenessService.isSessionMuted ? "forward.end.fill" : "forward.end")
                     .font(.system(size: 13))
-                    .foregroundColor(awarenessService.isSessionMuted ? .yellow.opacity(0.8) : .white.opacity(0.4))
+                    .foregroundColor(awarenessService.isSessionMuted ? (colors.isDark ? .yellow.opacity(0.9) : Color(hex: "D97706")) : colors.textMuted)
                     .frame(width: 32, height: 32)
-                    .background(awarenessService.isSessionMuted ? Color.yellow.opacity(0.12) : Color.white.opacity(0.06))
+                    .background(awarenessService.isSessionMuted ? (colors.isDark ? Color.yellow.opacity(0.12) : Color(hex: "FEF3C7")) : colors.subtleBackground)
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(awarenessService.isSessionMuted ? Color.yellow.opacity(0.25) : Color.clear, lineWidth: 1)
+                            .stroke(awarenessService.isSessionMuted ? (colors.isDark ? Color.yellow.opacity(0.25) : Color(hex: "D97706").opacity(0.4)) : Color.clear, lineWidth: 1)
                     )
                     .contentShape(Rectangle())
             }
@@ -96,6 +102,9 @@ struct AwarenessMuteButton: View {
     @ObservedObject var audioService: SessionAudioService
     @ObservedObject var awarenessService: SessionAwarenessService
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         Button {
             let newValue = !audioService.muteEnabled
@@ -104,7 +113,7 @@ struct AwarenessMuteButton: View {
         } label: {
             iconView
                 .frame(width: 32, height: 32)
-                .background(Color.white.opacity(0.06))
+                .background(colors.subtleBackground)
                 .cornerRadius(6)
                 .contentShape(Rectangle())
         }
@@ -125,17 +134,17 @@ struct AwarenessMuteButton: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: audioService.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .white.opacity(0.5))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : colors.textSecondary)
                 Text("A")
                     .font(.system(size: 7, weight: .heavy, design: .rounded))
-                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .foregroundColor(audioService.isMuted ? .orange.opacity(0.7) : (colors.isDark ? .green.opacity(0.7) : Color(hex: "15803D")))
                     .offset(x: 3, y: 3)
             }
         } else {
             // Normal
             Image(systemName: "speaker.wave.2.fill")
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
         }
     }
 
@@ -156,8 +165,10 @@ struct AwarenessFeedbackButton: View {
     let rating: SessionRating
     let onSubmit: (SessionRating) -> Void
 
+    @Environment(\.colorScheme) var colorScheme
+
     var body: some View {
-        let color = awarenessRatingColor(rating)
+        let color = awarenessRatingColor(rating, isDark: colorScheme == .dark)
 
         Button {
             onSubmit(rating)
@@ -186,6 +197,9 @@ struct AwarenessSessionInfo: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @Binding var showingEventInfo: Bool
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: awarenessIconName(service: awarenessService))
@@ -196,7 +210,7 @@ struct AwarenessSessionInfo: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(awarenessService.currentSessionTitle)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                     .lineLimit(2)
                     .truncationMode(.tail)
 
@@ -204,7 +218,7 @@ struct AwarenessSessionInfo: View {
                     HStack(alignment: .top, spacing: 4) {
                         Text(notes)
                             .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                             .lineLimit(2)
                             .truncationMode(.tail)
 
@@ -213,7 +227,7 @@ struct AwarenessSessionInfo: View {
                         } label: {
                             Image(systemName: "info.circle.fill")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundColor(colors.textSecondary)
                         }
                         .buttonStyle(.plain)
                         .hoverEffect(brightness: 0.3)
@@ -232,12 +246,15 @@ struct AwarenessSessionInfo: View {
 struct AwarenessSessionMeta: View {
     @ObservedObject var awarenessService: SessionAwarenessService
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let start = awarenessService.sessionStartTime, let end = awarenessService.sessionEndTime {
                 Text("\(formatSessionTime(start)) – \(formatSessionTime(end))")
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
             }
             if awarenessService.isBusySlotMode {
                 Text(awarenessService.busySlotCalendarName ?? "Calendar")
@@ -312,6 +329,9 @@ struct AwarenessProgressBar: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject private var timeState: SessionTimeState
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     init(awarenessService: SessionAwarenessService) {
         _awarenessService = ObservedObject(wrappedValue: awarenessService)
         _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
@@ -324,7 +344,7 @@ struct AwarenessProgressBar: View {
 
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2.5)
-                        .fill(Color.white.opacity(0.08))
+                        .fill(colors.divider)
 
                     RoundedRectangle(cornerRadius: 2.5)
                         .fill(barColor)
@@ -336,7 +356,7 @@ struct AwarenessProgressBar: View {
             HStack {
                 Text(formatSessionDuration(awarenessService.elapsed))
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
 
@@ -344,7 +364,7 @@ struct AwarenessProgressBar: View {
 
                 Text(formatSessionDuration(awarenessService.remaining))
                     .font(.system(size: 11, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
             }
@@ -357,6 +377,9 @@ struct AwarenessProgressBar: View {
 struct AwarenessClickableTime: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject private var timeState: SessionTimeState
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     init(awarenessService: SessionAwarenessService) {
         _awarenessService = ObservedObject(wrappedValue: awarenessService)
@@ -377,12 +400,12 @@ struct AwarenessClickableTime: View {
         VStack(spacing: 1) {
             Text(timeText)
                 .font(.system(size: 16, weight: .medium, design: .monospaced))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
             Text(timeLabel)
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(colors.textMuted)
                 .lineLimit(1)
         }
         .frame(width: 76)
@@ -400,6 +423,9 @@ struct AwarenessCountdown: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject private var timeState: SessionTimeState
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     init(awarenessService: SessionAwarenessService) {
         _awarenessService = ObservedObject(wrappedValue: awarenessService)
         _timeState = ObservedObject(wrappedValue: awarenessService.timeState)
@@ -413,15 +439,15 @@ struct AwarenessCountdown: View {
                 let m = minutesUntil % 60
                 Text(m > 0 ? "in \(h)h \(m)m" : "in \(h)h")
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
             } else if minutesUntil > 0 {
                 Text("in \(minutesUntil) min")
                     .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
             } else {
                 Text("starting now")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(colors.textSecondary)
             }
         }
     }
@@ -433,6 +459,9 @@ struct AwarenessNextUpContent<ToggleButton: View>: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var audioService: SessionAudioService
     let toggleButton: ToggleButton
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -451,14 +480,14 @@ struct AwarenessNextUpContent<ToggleButton: View>: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("Next: \(awarenessService.nextSessionTitle ?? "")")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(1)
 
                 if let start = awarenessService.nextSessionStartTime,
                    let end = awarenessService.nextSessionEndTime {
                     Text(nextSessionTimeDescription(start: start, end: end))
                         .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundColor(colors.textMuted)
                         .lineLimit(1)
                 }
             }
@@ -479,23 +508,26 @@ struct AwarenessIdleContent<ToggleButton: View>: View {
     @ObservedObject var audioService: SessionAudioService
     let toggleButton: ToggleButton
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         HStack(spacing: 8) {
             toggleButton
 
             Image(systemName: "eye.circle")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.25))
+                .foregroundColor(colors.textDisabled)
 
             Text("SessionFlow Awareness")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(colors.textMuted)
 
             Spacer()
 
             Text("No sessions today")
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.2))
+                .foregroundColor(colors.textDisabled)
 
             AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
@@ -510,6 +542,9 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
     @Binding var feedbackConfirmation: SessionRating?
     let toggleButton: ToggleButton
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         HStack(spacing: 12) {
             toggleButton
@@ -518,16 +553,16 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                 if feedbackConfirmation != nil {
                     HStack(spacing: 8) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                         Text("Logged!")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(colors.textSecondary)
                     }
                     .transition(.scale.combined(with: .opacity))
                 } else {
                     Text("How was \"\(feedback.sessionTitle)\"?")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                         .lineLimit(1)
 
                     Spacer()
@@ -544,7 +579,7 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(colors.textMuted)
                             .frame(width: 28, height: 28)
                             .contentShape(Rectangle())
                     }
@@ -578,6 +613,9 @@ struct AwarenessRestContent<ToggleButton: View>: View {
     let toggleButton: ToggleButton
     let showProgress: Bool
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, toggleButton: ToggleButton, showProgress: Bool = true) {
         _awarenessService = ObservedObject(wrappedValue: awarenessService)
         _audioService = ObservedObject(wrappedValue: audioService)
@@ -592,17 +630,17 @@ struct AwarenessRestContent<ToggleButton: View>: View {
 
             Image(systemName: "cup.and.saucer.fill")
                 .font(.system(size: 16))
-                .foregroundColor(.teal.opacity(0.7))
+                .foregroundColor(colors.isDark ? .teal.opacity(0.7) : Color(hex: "0F766E"))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text("Rest")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colors.textSecondary)
 
                 if let type = awarenessService.restAfterSessionType {
                     Text("after \(type.rawValue)")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.35))
+                        .foregroundColor(colors.textMuted)
                 }
             }
 
@@ -618,10 +656,10 @@ struct AwarenessRestContent<ToggleButton: View>: View {
             VStack(spacing: 1) {
                 Text(formatSessionDuration(awarenessService.restRemaining))
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                 Text("rest")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.25))
+                    .foregroundColor(colors.textDisabled)
             }
 
             AwarenessSkipSessionButton(awarenessService: awarenessService)
@@ -633,10 +671,10 @@ struct AwarenessRestContent<ToggleButton: View>: View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 2.5)
-                    .fill(Color.white.opacity(0.08))
+                    .fill(colors.divider)
 
                 RoundedRectangle(cornerRadius: 2.5)
-                    .fill(Color.teal.opacity(0.6))
+                    .fill(colors.isDark ? Color.teal.opacity(0.6) : Color(hex: "0D9488"))
                     .frame(width: max(0, geo.size.width * CGFloat(awarenessService.restProgress)))
             }
         }

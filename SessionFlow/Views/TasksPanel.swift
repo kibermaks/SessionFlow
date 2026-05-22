@@ -5,6 +5,9 @@ struct TasksPanel: View {
     @ObservedObject private var taskLineHistory = TaskLineHistory.shared
     var isLocked: Bool = false
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @StateObject private var workAction = TaskEditorAction()
     @StateObject private var sideAction = TaskEditorAction()
     @StateObject private var deepAction = TaskEditorAction()
@@ -29,7 +32,7 @@ struct TasksPanel: View {
                     isFocused: $isWorkFocused
                 )
 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
 
                 taskSection(
                     title: "Side Tasks",
@@ -42,7 +45,7 @@ struct TasksPanel: View {
                     isFocused: $isSideFocused
                 )
 
-                Divider().background(Color.white.opacity(0.1))
+                Divider().background(colors.divider)
 
                 taskSection(
                     title: "Deep Tasks",
@@ -58,7 +61,7 @@ struct TasksPanel: View {
             .padding()
             .disabled(isLocked)
         }
-        .background(Color.white.opacity(0.03))
+        .background(colors.subtleBackground)
         .cornerRadius(12)
     }
 
@@ -82,7 +85,7 @@ struct TasksPanel: View {
                     .foregroundColor(iconColor)
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Spacer()
 
                 // History menu
@@ -104,9 +107,9 @@ struct TasksPanel: View {
                     } label: {
                         Image(systemName: "clock.arrow.circlepath")
                             .font(.system(size: 11))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(colors.textSecondary)
                             .frame(width: 24, height: 24)
-                            .background(Color.white.opacity(0.05))
+                            .background(colors.subtleBackground)
                             .cornerRadius(4)
                     }
                     .menuStyle(.borderlessButton)
@@ -121,9 +124,9 @@ struct TasksPanel: View {
                 } label: {
                     Image(systemName: isConfirming ? "trash.fill" : "trash")
                         .font(.system(size: 11))
-                        .foregroundColor(isConfirming ? Color(hex: "EF4444") : .white.opacity(hasText ? 0.5 : 0.2))
+                        .foregroundColor(isConfirming ? Color(hex: "EF4444") : (hasText ? colors.textSecondary : colors.textDisabled))
                         .frame(width: 24, height: 24)
-                        .background(isConfirming ? Color(hex: "EF4444").opacity(0.15) : Color.white.opacity(0.05))
+                        .background(isConfirming ? Color(hex: "EF4444").opacity(0.15) : colors.subtleBackground)
                         .cornerRadius(4)
                         .animation(.easeInOut(duration: 0.15), value: isConfirming)
                 }
@@ -162,7 +165,7 @@ struct TasksPanel: View {
 
             Text("One title per line. Use Ctrl + Cmd + Up/Down to reorder.")
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(colors.textMuted)
         }
     }
 
@@ -197,9 +200,9 @@ struct TasksPanel: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .bold))
-                .foregroundColor(isEnabled ? .white : .white.opacity(0.2))
+                .foregroundColor(isEnabled ? colors.textPrimary : colors.textDisabled)
                 .frame(width: 24, height: 24)
-                .background(isEnabled ? Color.white.opacity(0.1) : Color.white.opacity(0.05))
+                .background(isEnabled ? colors.divider : colors.subtleBackground)
                 .cornerRadius(4)
         }
         .buttonStyle(.plain)
@@ -274,5 +277,4 @@ class TaskLineHistory: ObservableObject {
     TasksPanel()
         .environmentObject(SchedulingEngine())
         .frame(width: 320, height: 600)
-        .background(Color(hex: "0F172A"))
 }

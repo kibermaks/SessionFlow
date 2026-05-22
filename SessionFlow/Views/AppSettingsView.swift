@@ -8,6 +8,10 @@ struct AppSettingsView: View {
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var sessionAudioService: SessionAudioService
 
+    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.dark.rawValue
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @AppStorage("hasSeenWelcome") var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") var hasSeenTasksGuide = false
@@ -86,7 +90,6 @@ struct AppSettingsView: View {
             .background(Color(nsColor: .windowBackgroundColor))
 
             Divider()
-                .background(Color.white.opacity(0.1))
 
             Group {
                 switch selectedSettingsTab {
@@ -99,7 +102,6 @@ struct AppSettingsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(width: 520, height: 680)
-        .preferredColorScheme(.dark)
         .alert("Reset Presets?", isPresented: $showingResetPresetsConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Reset", role: .destructive) {
@@ -195,6 +197,15 @@ struct AppSettingsView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 6)
+            }
+
+            Section("Appearance") {
+                Picker("Color scheme:", selection: $appearanceModeRaw) {
+                    ForEach(AppearanceMode.allCases, id: \.rawValue) { mode in
+                        Text(mode.displayName).tag(mode.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
             }
 
             Section("Scheduling Logic") {
@@ -532,7 +543,7 @@ struct AppSettingsView: View {
                                                    get: { sessionAwarenessService.config.focusWeights.completedPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.completedPercent = $0 }
                                                ))
-                                focusWeightRow(label: "Partly", icon: "circle.lefthalf.filled", color: .yellow,
+                                focusWeightRow(label: "Partly", icon: "circle.lefthalf.filled", color: colors.isDark ? .yellow : Color(hex: "D97706"),
                                                value: Binding(
                                                    get: { sessionAwarenessService.config.focusWeights.partialPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.partialPercent = $0 }
@@ -552,7 +563,7 @@ struct AppSettingsView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "speaker.wave.2.fill")
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.5))
+                                .foregroundColor(colors.textMuted)
 
                             Text("Master Volume")
                                 .font(.system(size: 14, weight: .medium))
@@ -588,11 +599,11 @@ struct AppSettingsView: View {
                                 .frame(width: 28, height: 22)
                                 .background(
                                     RoundedRectangle(cornerRadius: 5)
-                                        .fill(sessionAudioService.muteEnabled ? Color.red.opacity(0.15) : Color.white.opacity(0.06))
+                                        .fill(sessionAudioService.muteEnabled ? Color.red.opacity(0.15) : colors.subtleBackground)
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 5)
-                                        .strokeBorder(sessionAudioService.muteEnabled ? Color.red.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
+                                        .strokeBorder(sessionAudioService.muteEnabled ? Color.red.opacity(0.3) : colors.border, lineWidth: 1)
                                 )
                         }
                         .buttonStyle(.plain)
@@ -600,7 +611,7 @@ struct AppSettingsView: View {
 
                         Text("\(Int((sessionAudioService.muteEnabled ? 0 : sessionAwarenessService.config.masterVolume) * 100))%")
                             .font(.system(size: 12, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(colors.textMuted)
                             .frame(width: 38, alignment: .trailing)
                     }
 
@@ -868,16 +879,16 @@ struct AppSettingsView: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: sessionAudioService.micMonitor.isMicActive ? "speaker.slash.fill" : "speaker.wave.2.fill")
                     .font(.system(size: 12))
-                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? .orange.opacity(0.7) : .white.opacity(0.5))
+                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? (colors.isDark ? .orange.opacity(0.7) : Color(hex: "C2410C")) : colors.textMuted)
                 Text("A")
                     .font(.system(size: 6, weight: .heavy, design: .rounded))
-                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? .orange.opacity(0.7) : .green.opacity(0.7))
+                    .foregroundColor(sessionAudioService.micMonitor.isMicActive ? (colors.isDark ? .orange.opacity(0.7) : Color(hex: "C2410C")) : (colors.isDark ? .green.opacity(0.7) : Color(hex: "15803D")))
                     .offset(x: 2, y: 2)
             }
         } else {
             Image(systemName: "mic.slash")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.3))
+                .foregroundColor(colors.textDisabled)
         }
     }
 
@@ -933,7 +944,7 @@ struct AppSettingsView: View {
         return HStack(spacing: spacing) {
             Image(systemName: "speaker.wave.2.fill")
                 .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(colors.textMuted)
                 .frame(width: iconWidth)
 
             Slider(value: value, in: 0...1)
@@ -961,26 +972,26 @@ struct AppSettingsView: View {
             HStack(spacing: 4) {
                 Image(systemName: "hare.fill")
                     .font(.system(size: 5))
-                    .foregroundColor(.white.opacity(0.24))
+                    .foregroundColor(colors.textMuted)
                     .frame(width: 7)
 
                 Text(String(format: "%.1fx", value.wrappedValue))
                     .font(.system(size: 13, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.92))
+                    .foregroundColor(colors.textPrimary)
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
             }
             .padding(.horizontal, 8)
             .frame(width: 92, height: soundControlHeight, alignment: .leading)
-            .background(Color.white.opacity(0.06))
+            .background(colors.subtleBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 4)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(colors.divider, lineWidth: 1)
             )
             .cornerRadius(4)
         }
@@ -1451,16 +1462,16 @@ Spacer()
         return HStack {
             Text("Shortcut name")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
 
             Spacer()
 
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                    .fill(isFocused ? colors.hoveredBackground : colors.subtleBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                            .stroke(isFocused ? colors.borderStrong : Color.clear, lineWidth: 1)
                     )
 
                 TextField("", text: Binding(
@@ -1647,10 +1658,11 @@ Spacer()
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 9))
-                .foregroundColor(isEnabled ? .white.opacity(0.6) : .white.opacity(0.22))
+                .foregroundColor(isEnabled ? colors.textSecondary : colors.textDisabled)
                 .frame(width: soundControlHeight, height: soundControlHeight)
-                .background(Color.white.opacity(isEnabled ? 0.1 : 0.03))
+                .background(isEnabled ? colors.hoveredBackground : colors.subtleBackground)
                 .cornerRadius(4)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(colors.divider, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.25)
@@ -1662,12 +1674,13 @@ Spacer()
                 .font(.system(size: 9))
                 .foregroundColor(
                     isDisabled
-                    ? .white.opacity(0.22)
-                    : (isEnabled ? .orange : .white.opacity(0.6))
+                    ? colors.textDisabled
+                    : (isEnabled ? .orange : colors.textSecondary)
                 )
                 .frame(width: soundControlHeight, height: soundControlHeight)
-                .background(Color.white.opacity(isDisabled ? 0.03 : 0.1))
+                .background(isDisabled ? colors.subtleBackground : colors.hoveredBackground)
                 .cornerRadius(4)
+                .overlay(RoundedRectangle(cornerRadius: 4).stroke(colors.divider, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.25)
@@ -2082,28 +2095,29 @@ fileprivate final class SoundSelectionControl: NSControl {
         NSSize(width: 60, height: 22)
     }
 
+    private var isDarkMode: Bool {
+        effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+
     private func setup() {
         focusRingType = .none
         wantsLayer = true
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         layer?.cornerRadius = 4
-        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.06).cgColor
-        layer?.borderWidth = 1
-        layer?.borderColor = NSColor.white.withAlphaComponent(0.08).cgColor
+        applyAppearanceColors()
 
         titleField.translatesAutoresizingMaskIntoConstraints = false
         titleField.font = .systemFont(ofSize: 13)
-        titleField.textColor = NSColor.white.withAlphaComponent(0.92)
         titleField.lineBreakMode = .byTruncatingTail
         titleField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         chevronView.translatesAutoresizingMaskIntoConstraints = false
         chevronView.image = NSImage(systemSymbolName: "chevron.down", accessibilityDescription: "Show sounds")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .medium))
-        chevronView.contentTintColor = NSColor.white.withAlphaComponent(0.5)
 
         addSubview(titleField)
         addSubview(chevronView)
+        applyAppearanceColors()
 
         NSLayoutConstraint.activate([
             titleField.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
@@ -2116,6 +2130,20 @@ fileprivate final class SoundSelectionControl: NSControl {
 
     func setTitle(_ title: String) {
         titleField.stringValue = title
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        applyAppearanceColors()
+    }
+
+    private func applyAppearanceColors() {
+        let dark = isDarkMode
+        layer?.backgroundColor = (dark ? NSColor.white.withAlphaComponent(0.06) : NSColor.black.withAlphaComponent(0.05)).cgColor
+        layer?.borderWidth = 1
+        layer?.borderColor = (dark ? NSColor.white.withAlphaComponent(0.08) : NSColor.black.withAlphaComponent(0.1)).cgColor
+        titleField.textColor = dark ? NSColor.white.withAlphaComponent(0.92) : NSColor.labelColor
+        chevronView.contentTintColor = dark ? NSColor.white.withAlphaComponent(0.5) : NSColor.secondaryLabelColor
     }
 
     override func mouseDown(with event: NSEvent) {

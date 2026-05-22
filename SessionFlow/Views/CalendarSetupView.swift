@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct CalendarSetupView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     
@@ -30,12 +33,8 @@ struct CalendarSetupView: View {
     var body: some View {
         ZStack {
             // Background gradient
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
             
             // Main content container with frosted glass effect
             VStack(spacing: 0) {
@@ -44,10 +43,10 @@ struct CalendarSetupView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Quick Setup")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(.white)
+                            .foregroundColor(colors.textPrimary)
                         Text("Configure your sessions and calendars")
                             .font(.system(size: 14))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(colors.textSecondary)
                     }
                     
                     Spacer()
@@ -59,10 +58,10 @@ struct CalendarSetupView: View {
                         Text("All settings can be changed later")
                             .font(.system(size: 12, weight: .medium))
                     }
-                    .foregroundColor(Color(hex: "60A5FA"))
+                    .foregroundColor(colors.isDark ? Color(hex: "60A5FA") : Color(hex: "1D4ED8"))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(Color(hex: "3B82F6").opacity(0.15))
+                    .background(Color(hex: "3B82F6").opacity(colors.isDark ? 0.15 : 0.1))
                     .cornerRadius(8)
                 }
                 .padding(.horizontal, 32)
@@ -81,11 +80,11 @@ struct CalendarSetupView: View {
                             HStack {
                                 Text("Calendars")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.9))
-                                
+                                    .foregroundColor(colors.textPrimary)
+
                                 Text("Where sessions will be created")
                                     .font(.system(size: 13))
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .foregroundColor(colors.textSecondary)
                                 
                                 Spacer()
                                 
@@ -101,10 +100,10 @@ struct CalendarSetupView: View {
                                         Text("Reload")
                                             .font(.system(size: 11, weight: .semibold))
                                     }
-                                    .foregroundColor(.white.opacity(0.7))
+                                    .foregroundColor(colors.textSecondary)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
-                                    .background(Color.white.opacity(0.1))
+                                    .background(colors.subtleBackground)
                                     .cornerRadius(6)
                                 }
                                 .buttonStyle(.plain)
@@ -160,7 +159,7 @@ struct CalendarSetupView: View {
                                 .foregroundColor(Color(hex: "EF4444"))
                             Text(errorMessage)
                                 .font(.system(size: 13, weight: .medium))
-                                .foregroundColor(.white)
+                                .foregroundColor(colors.textPrimary)
                         }
                         .padding(.horizontal, 32)
                     }
@@ -190,7 +189,7 @@ struct CalendarSetupView: View {
                                         endPoint: .bottomTrailing
                                     ) :
                                     LinearGradient(
-                                        colors: [Color.white.opacity(0.1), Color.white.opacity(0.05)],
+                                        colors: [colors.subtleBackground, colors.subtleBackground],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -208,22 +207,12 @@ struct CalendarSetupView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(hex: "1E293B").opacity(0.95))
+                    .fill(colors.panelBackground.opacity(0.95))
                     .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.2),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(colors.borderStrong, lineWidth: 1)
             )
             .padding(40)
             .frame(width: 800)
@@ -241,11 +230,11 @@ struct CalendarSetupView: View {
             HStack {
                 Text("Session Defaults")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white.opacity(0.9))
-                
+                    .foregroundColor(colors.textPrimary)
+
                 Text("How your day is structured")
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                 
                 Spacer()
             }
@@ -257,7 +246,7 @@ struct CalendarSetupView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Sessions")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     
                     NumericInputField(
                         value: $basicSessions,
@@ -271,7 +260,7 @@ struct CalendarSetupView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Duration")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     
                     NumericInputField(
                         value: $workDuration,
@@ -285,7 +274,7 @@ struct CalendarSetupView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Rest")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                     
                     NumericInputField(
                         value: $restDuration,
@@ -300,10 +289,10 @@ struct CalendarSetupView: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(colors.subtleBackground)
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(colors.divider, lineWidth: 1)
                     )
             )
             .padding(.horizontal, 32)
@@ -339,10 +328,10 @@ struct CalendarSetupView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                     Text(description)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                 }
                 
                 Spacer()
@@ -351,8 +340,8 @@ struct CalendarSetupView: View {
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(color.opacity(0.3))
-                    .foregroundColor(.white)
+                    .background(color.opacity(colors.isDark ? 0.3 : 0.15))
+                    .foregroundColor(colors.isDark ? .white : color)
                     .cornerRadius(8)
             }
             
@@ -360,7 +349,7 @@ struct CalendarSetupView: View {
             HStack(spacing: 10) {
                 Text("Calendar")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.8))
+                    .foregroundColor(colors.textSecondary)
                     .textCase(.uppercase)
                     .tracking(0.5)
                 
@@ -378,7 +367,7 @@ struct CalendarSetupView: View {
         .padding(26)
         .background(
             RoundedRectangle(cornerRadius: 18)
-                .fill(Color.white.opacity(0.06))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 18)
                         .stroke(

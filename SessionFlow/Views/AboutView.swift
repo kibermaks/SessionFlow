@@ -2,6 +2,9 @@ import SwiftUI
 import AppKit
 
 struct AboutView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     private let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     private let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
     private let repoURL = "https://github.com/kibermaks/SessionFlow"
@@ -27,20 +30,19 @@ struct AboutView: View {
             // App name
             Text("SessionFlow")
                 .font(.system(size: 22, weight: .semibold))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
 
             // Tagline
             Text("Smart scheduling for productive days")
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
 
             // Version
             Text(displayedVersion)
                 .font(.system(size: 12, design: .monospaced))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textMuted)
 
             Divider()
-                .background(Color.white.opacity(0.2))
                 .frame(width: 200)
 
             // Links
@@ -53,7 +55,7 @@ struct AboutView: View {
         }
         .padding(32)
         .frame(minWidth: 320, minHeight: 380)
-        .background(Color(hex: "0F172A"))
+        .background(colors.windowBackground)
     }
 
     private func linkRow(icon: String, title: String, url: String) -> some View {
@@ -69,15 +71,15 @@ struct AboutView: View {
                     .frame(width: 24, alignment: .center)
                 Text(title)
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Spacer()
                 Image(systemName: "arrow.up.right")
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
-            .background(Color.white.opacity(0.08))
+            .background(colors.subtleBackground)
             .cornerRadius(8)
         }
         .buttonStyle(.plain)

@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct ProductivityCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @Environment(\.openSettings) private var openSettings
@@ -63,7 +66,7 @@ struct ProductivityCard: View {
                     .foregroundColor(.orange)
                 Text("Productivity")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 Spacer()
 
@@ -72,7 +75,7 @@ struct ProductivityCard: View {
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -94,11 +97,11 @@ struct ProductivityCard: View {
 
                         VStack(alignment: .leading, spacing: 4) {
                             Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
-                                .foregroundColor(.orange)
+                                .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
                             Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                             Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
-                                .foregroundColor(.yellow)
+                                .foregroundColor(colors.isDark ? .yellow : Color(hex: "D97706"))
                             Label("Skipped — counts \(w.skippedPercent)%", systemImage: "xmark.circle.fill")
                                 .foregroundColor(.red)
                         }
@@ -161,7 +164,7 @@ struct ProductivityCard: View {
                                 .foregroundColor(type.color)
                         }
                     }
-                    .foregroundColor(isFiltering ? .accentColor : .white.opacity(0.4))
+                    .foregroundColor(isFiltering ? .accentColor : colors.textMuted)
                     .frame(height: 24)
                     .contentShape(Rectangle())
                 }
@@ -174,7 +177,7 @@ struct ProductivityCard: View {
                 } label: {
                     Image(systemName: "calendar")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                         .frame(width: 24, height: 24)
                         .contentShape(Rectangle())
                 }
@@ -197,7 +200,7 @@ struct ProductivityCard: View {
                     } label: {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(colors.textMuted)
                     }
                     .buttonStyle(.plain)
                     .focusable(false)
@@ -218,24 +221,24 @@ struct ProductivityCard: View {
                 HStack(spacing: 6) {
                     Image(systemName: "target")
                         .font(.system(size: 12))
-                        .foregroundColor(.green.opacity(0.8))
+                        .foregroundColor(colors.isDark ? .green.opacity(0.8) : Color(hex: "15803D"))
                     Text("Focus Time")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     Text(focusTimeFormatted)
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
+                        .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                 }
             }
         }
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        .stroke(colors.divider, lineWidth: 1)
                 )
         )
         .sheet(isPresented: $showingMonthly) {
@@ -257,7 +260,7 @@ struct ProductivityCard: View {
                         .foregroundColor(ratingColor(rating))
                     Text("\(count)")
                         .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(count > 0 ? 0.9 : 0.3))
+                        .foregroundColor(count > 0 ? colors.textPrimary : colors.textMuted)
                 }
                 .frame(maxWidth: .infinity)
                 .help(rating.label)
@@ -267,10 +270,10 @@ struct ProductivityCard: View {
             VStack(spacing: 4) {
                 Image(systemName: "questionmark.circle")
                     .font(.system(size: 14))
-                    .foregroundColor(.white.opacity(0.3))
+                    .foregroundColor(colors.textMuted)
                 Text("\(unratedCount)")
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                    .foregroundColor(.white.opacity(unratedCount > 0 ? 0.6 : 0.3))
+                    .foregroundColor(unratedCount > 0 ? colors.textSecondary : colors.textMuted)
             }
             .frame(maxWidth: .infinity)
             .help("Unrated")
@@ -290,7 +293,7 @@ struct ProductivityCard: View {
         switch rating {
         case .rocket: return .orange
         case .completed: return .green
-        case .partial: return .yellow
+        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
         case .skipped: return .red
         }
     }
@@ -302,6 +305,8 @@ struct MonthlyStatsView: View {
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     @Binding var selectedSessionType: SessionType?
 
@@ -480,7 +485,7 @@ struct MonthlyStatsView: View {
                 .padding(.vertical, 5)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.06))
+                        .fill(Color.primary.opacity(0.06))
                 )
                 .contentShape(Rectangle())
             }
@@ -737,12 +742,25 @@ struct MonthlyStatsView: View {
     private func focusColor(_ minutes: Double) -> Color {
         guard maxDayFocusMinutes > 0 else { return .secondary }
         let ratio = minutes / maxDayFocusMinutes
-        if ratio < 0.5 {
-            let t = ratio / 0.5
-            return Color(red: 1.0, green: t * 0.85, blue: 0)
+        if colors.isDark {
+            // Dark mode: vibrant bright colors on dark bg
+            if ratio < 0.5 {
+                let t = ratio / 0.5
+                return Color(red: 1.0, green: t * 0.85, blue: 0)
+            } else {
+                let t = (ratio - 0.5) / 0.5
+                return Color(red: 1.0 - t * 0.7, green: 0.85 + t * 0.15, blue: t * 0.2)
+            }
         } else {
-            let t = (ratio - 0.5) / 0.5
-            return Color(red: 1.0 - t * 0.7, green: 0.85 + t * 0.15, blue: t * 0.2)
+            // Light mode: deep saturated colors for contrast on white bg
+            // low → deep red, mid → dark amber, high → deep green
+            if ratio < 0.5 {
+                let t = ratio / 0.5
+                return Color(red: 0.82, green: 0.10 + t * 0.28, blue: 0.04)
+            } else {
+                let t = (ratio - 0.5) / 0.5
+                return Color(red: 0.82 - t * 0.74, green: 0.38 + t * 0.17, blue: 0.04 + t * 0.11)
+            }
         }
     }
 
@@ -812,10 +830,10 @@ struct MonthlyStatsView: View {
                         HStack(spacing: 3) {
                             Image(systemName: "target")
                                 .font(.system(size: 10))
-                                .foregroundColor(.green.opacity(0.8))
+                                .foregroundColor(colors.isDark ? .green.opacity(0.8) : Color(hex: "15803D"))
                             Text(formatFocusTime(focusMin))
                                 .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                .foregroundColor(.green)
+                                .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                         }
                     } else {
                         Text("\(stat?.totalEvents ?? 0)")
@@ -889,10 +907,10 @@ struct MonthlyStatsView: View {
                 HStack(spacing: 3) {
                     Image(systemName: "target")
                         .font(.system(size: 12))
-                        .foregroundColor(.green)
+                        .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                     Text(formatFocusTime(totals.focusMinutes))
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.green)
+                        .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
                 }
             }
         }
@@ -987,7 +1005,7 @@ struct MonthlyStatsView: View {
         switch rating {
         case .rocket: return .orange
         case .completed: return .green
-        case .partial: return .yellow
+        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
         case .skipped: return .red
         }
     }

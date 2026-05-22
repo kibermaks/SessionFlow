@@ -51,12 +51,21 @@ final class EventCreationCoordinator: ObservableObject {
     }
 }
 
+@MainActor
+final class TimelineActionContext: ObservableObject {
+    var selectedDate: Date = Date()
+    var startTime: Date = Date()
+}
+
 struct TimelineView: View {
     let selectedDate: Date
     let startTime: Date
     var useNowTime: Bool = true
     var onCopySuccess: ((CopyToastInfo) -> Void)? = nil
     var onModeToast: ((String) -> Void)? = nil
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
@@ -123,6 +132,7 @@ struct TimelineView: View {
     @State private var keyDownMonitor: Any? = nil
     @State private var mouseDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
+    @StateObject private var actionContext = TimelineActionContext()
     @State private var eventsLocked: Bool = false
     @State private var showingUnfreezeConfirmation: Bool = false
     @State private var showingCopyDatePicker: Bool = false
@@ -166,7 +176,17 @@ struct TimelineView: View {
     }
     
     private var showingDetailSheet: Bool {
-        selectedSession != nil || selectedBusySlot != nil
+        currentSelectedSession != nil || currentSelectedBusySlot != nil
+    }
+
+    private var currentSelectedSession: ScheduledSession? {
+        guard let selectedSession else { return nil }
+        return filteredProjectedSessions.first { $0.id == selectedSession.id }
+    }
+
+    private var currentSelectedBusySlot: BusyTimeSlot? {
+        guard let selectedBusySlot else { return nil }
+        return filteredBusySlots.first { $0.id == selectedBusySlot.id }
     }
     
     var body: some View {
@@ -187,6 +207,8 @@ struct TimelineView: View {
 
             }
             .onAppear {
+                actionContext.selectedDate = selectedDate
+                actionContext.startTime = startTime
                 containerWidth = geo.size.width
                 flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                     isShiftHeld = event.modifierFlags.contains(.shift)
@@ -227,7 +249,9 @@ struct TimelineView: View {
                             return event
                         }
                         if !selectedBusySlotIds.isEmpty {
-                            let slotsToDelete = calendarService.busySlots.filter { selectedBusySlotIds.contains($0.id) }
+                            let slotsToDelete = calendarService
+                                .busySlotsForFetchedDate(actionContext.selectedDate)
+                                .filter { selectedBusySlotIds.contains($0.id) }
                             deleteSelectedSlots(slotsToDelete)
                             return nil
                         }
@@ -283,6 +307,7 @@ struct TimelineView: View {
                 containerWidth = newWidth
             }
             .onChange(of: selectedDate) { _, _ in
+                actionContext.selectedDate = selectedDate
                 eventUndoManager.clear()
                 selectedBusySlotIds.removeAll()
                 if eventCreationCoordinator.isActive {
@@ -291,12 +316,24 @@ struct TimelineView: View {
                     }
                 }
             }
-            .onChange(of: calendarService.busySlots.map { $0.id }) { _, newIds in
+            .onChange(of: startTime) { _, _ in
+                actionContext.startTime = startTime
+            }
+            .onChange(of: calendarService.busySlots.map { $0.id }) { _, _ in
                 // Prune selection of slots that no longer exist.
-                let live = Set(newIds)
+                let live = Set(calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { $0.id })
                 let pruned = selectedBusySlotIds.intersection(live)
                 if pruned.count != selectedBusySlotIds.count {
                     selectedBusySlotIds = pruned
+                }
+                if let selectedBusySlot, !live.contains(selectedBusySlot.id) {
+                    self.selectedBusySlot = nil
+                    resetEditingState()
+                }
+            }
+            .onChange(of: schedulingEngine.projectedSessions.map { $0.id }) { _, sessionIds in
+                if let selectedSession, !sessionIds.contains(selectedSession.id) {
+                    self.selectedSession = nil
                 }
             }
             .onAppear {
@@ -332,7 +369,7 @@ struct TimelineView: View {
                                 let result = calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate)
                                 if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
                                     onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: label, targetDate: copyTargetDate, targetStartTime: targetStart, newEventId: eventId))
-                                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                                    Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
                                 } else {
                                     schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
                                 }
@@ -367,7 +404,7 @@ struct TimelineView: View {
         HStack(spacing: 12) {
             Text(formattedDate)
                 .font(.system(size: isNarrow ? 17 : 20, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .layoutPriority(1)
@@ -399,14 +436,14 @@ struct TimelineView: View {
                     Text("Existing Events")
                         .font(.system(size: textSize, weight: .medium))
                 }
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .help("Events from your selected calendars appear on the left side")
                 
                 // Center divider
                 Rectangle()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(colors.border)
                     .frame(width: 1, height: 20)
                 
                 // Right half label
@@ -418,7 +455,7 @@ struct TimelineView: View {
                     Image(systemName: "arrow.turn.right.down")
                         .font(.system(size: iconSize))
                 }
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
                 .frame(maxWidth: .infinity)
                 .contentShape(Rectangle())
                 .help("Smartly scheduled tasks appear on the right side, ready to be added to your calendars")
@@ -433,7 +470,7 @@ struct TimelineView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
                     .padding(6)
             }
             .buttonStyle(.plain)
@@ -482,7 +519,7 @@ struct TimelineView: View {
         }
         .background(
             GeometryReader { geo in
-                Color.white.opacity(0.02)
+                colors.subtleBackground
                     .onAppear { scrollViewFrame = geo.frame(in: .global) }
                     .onChange(of: geo.frame(in: .global)) { _, newFrame in scrollViewFrame = newFrame }
             }
@@ -547,7 +584,7 @@ struct TimelineView: View {
                         path.addLine(to: CGPoint(x: geometry.size.width, y: snapY))
                     }
                     .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .foregroundColor(Color.blue.opacity(0.4))
+                    .foregroundColor(colors.isDark ? Color.blue.opacity(0.4) : Color.blue.opacity(0.7))
                     .allowsHitTesting(false)
 
                     // Preview block at new position (anchor)
@@ -586,7 +623,7 @@ struct TimelineView: View {
                         path.addLine(to: CGPoint(x: geometry.size.width, y: snapY))
                     }
                     .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .foregroundColor(Color.blue.opacity(0.4))
+                    .foregroundColor(colors.isDark ? Color.blue.opacity(0.4) : Color.blue.opacity(0.7))
                     .allowsHitTesting(false)
 
                     sessionDragPreviewBlock(
@@ -628,12 +665,12 @@ struct TimelineView: View {
                     HStack(spacing: 3) {
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(colors.isDark ? .white : slot.calendarColor)
                             .lineLimit(1)
                         Spacer(minLength: 2)
                         Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(colors.isDark ? .white.opacity(0.9) : slot.calendarColor.opacity(0.8))
                             .lineLimit(1)
                             .layoutPriority(1)
                     }
@@ -642,12 +679,12 @@ struct TimelineView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(slot.title)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(colors.isDark ? .white : slot.calendarColor)
                             .lineLimit(1)
                         if blockHeight > 30 {
                             Text(startAndDurationString(start: newStart, end: newEnd))
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white.opacity(0.9))
+                                .foregroundColor(colors.isDark ? .white.opacity(0.9) : slot.calendarColor.opacity(0.8))
                         }
                     }
                     .padding(4)
@@ -684,18 +721,18 @@ struct TimelineView: View {
                         .stroke(color.opacity(0.9), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                 )
 
-            DiagonalStripesPattern(color: color.opacity(0.12), stripeWidth: 4, gapWidth: 6)
+            DiagonalStripesPattern(color: color.opacity(colors.isDark ? 0.12 : 0.06), stripeWidth: 4, gapWidth: 6)
                 .clipShape(RoundedRectangle(cornerRadius: 4))
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(displayTitle)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(colors.textPrimary)
                     .lineLimit(1)
 
                 Text(startAndDurationString(start: startTime, end: endTime))
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(.white.opacity(0.65))
+                    .foregroundColor(colors.textSecondary)
                     .lineLimit(1)
             }
             .padding(4)
@@ -727,7 +764,7 @@ struct TimelineView: View {
                             .frame(height: 2)
                     } else {
                         Rectangle()
-                            .fill(Color.white.opacity(0.1))
+                            .fill(colors.divider)
                             .frame(height: 1)
                     }
                     Spacer()
@@ -736,7 +773,7 @@ struct TimelineView: View {
             }
             // Bottom edge line
             Rectangle()
-                .fill(Color.white.opacity(0.1))
+                .fill(colors.divider)
                 .frame(height: 1)
         }
     }
@@ -825,8 +862,8 @@ struct TimelineView: View {
                     }
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.15))
-                    .foregroundColor(.white)
+                    .background(colors.border)
+                    .foregroundColor(colors.textPrimary)
                     .cornerRadius(6)
                 }
                 .buttonStyle(.plain)
@@ -851,9 +888,9 @@ struct TimelineView: View {
                 Image(systemName: eventsLocked ? "hand.raised.slash" : "hand.draw")
                     .frame(width: 16, height: 16)
                     .padding(8)
-                    .background(eventsLocked ? Color.white.opacity(0.05) : Color.white.opacity(0.1))
+                    .background(eventsLocked ? colors.subtleBackground : colors.divider)
                     .cornerRadius(6)
-                    .foregroundColor(eventsLocked ? .white.opacity(0.35) : .white)
+                    .foregroundColor(eventsLocked ? colors.textMuted : colors.textPrimary)
             }
             .buttonStyle(.plain)
             .hoverEffect(brightness: 0.2)
@@ -868,7 +905,7 @@ struct TimelineView: View {
             }) {
                 Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
                     .padding(8)
-                    .background(Color.white.opacity(0.1))
+                    .background(colors.divider)
                     .cornerRadius(6)
             }
             .buttonStyle(.plain)
@@ -881,9 +918,9 @@ struct TimelineView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Session Types")
                 .font(.system(size: 13, weight: .bold))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
             
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(colors.divider)
             
             ForEach(SessionType.allCases) { type in
                 HStack(spacing: 8) {
@@ -892,7 +929,7 @@ struct TimelineView: View {
                         .frame(width: 14, height: 14)
                     Text(type.rawValue)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(colors.textPrimary)
                     Spacer()
                 }
             }
@@ -907,7 +944,7 @@ struct TimelineView: View {
                 .fill(color)
                 .frame(width: 12, height: 12)
             Text(label)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
                 .fixedSize(horizontal: true, vertical: false)
         }
     }
@@ -931,8 +968,9 @@ extension TimelineView {
     
     private var filteredBusySlots: [BusyTimeSlot] {
         let excluded = calendarService.excludedCalendarIDs
-        guard !excluded.isEmpty else { return calendarService.busySlots }
-        return calendarService.busySlots.filter { slot in
+        let slots = calendarService.busySlotsForFetchedDate(selectedDate)
+        guard !excluded.isEmpty else { return slots }
+        return slots.filter { slot in
             guard let identifier = slot.calendarIdentifier else { return true }
             return !excluded.contains(identifier)
         }
@@ -963,12 +1001,12 @@ extension TimelineView {
                     if hour == 24 && effectiveEndHour > 24 {
                         Text("next day")
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.orange.opacity(0.6))
+                            .foregroundColor(colors.isDark ? .orange.opacity(0.6) : Color(hex: "C2410C"))
                             .offset(y: -7)
                     } else {
                         Text(formattedHour(hour))
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
-                            .foregroundColor(hour >= 24 ? .orange.opacity(0.5) : .white.opacity(0.5))
+                            .foregroundColor(hour >= 24 ? (colors.isDark ? .orange.opacity(0.5) : Color(hex: "C2410C")) : colors.textSecondary)
                             .offset(y: -7)
                     }
                 }
@@ -981,7 +1019,7 @@ extension TimelineView {
             HStack {
                 Text(formattedHour(effectiveEndHour))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(effectiveEndHour >= 24 ? .orange.opacity(0.5) : .white.opacity(0.5))
+                    .foregroundColor(effectiveEndHour >= 24 ? (colors.isDark ? .orange.opacity(0.5) : Color(hex: "C2410C")) : colors.textSecondary)
                     .offset(y: -7)
             }
             .frame(width: timeColumnWidth, height: 0, alignment: .topTrailing)
@@ -1197,12 +1235,12 @@ extension TimelineView {
                     HStack(spacing: 3) {
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white)
+                            .foregroundColor(colors.textPrimary)
                             .lineLimit(1)
                         Spacer(minLength: 2)
                         Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                             .font(.system(size: 10))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(colors.textSecondary)
                             .lineLimit(1)
                             .layoutPriority(1)
                             .padding(.trailing, showsFeedbackBadge ? 16 : 0)
@@ -1210,13 +1248,13 @@ extension TimelineView {
                 } else {
                     Text(slot.title)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: true)
 
                     Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                 }
 
                 if let url = slot.url, height > 35 {
@@ -1230,7 +1268,7 @@ extension TimelineView {
                 if let notes = SessionAwarenessService.strippedNotes(slot.notes), height > 45 {
                     Text(notes)
                         .font(.system(size: 9))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: false)
                 }
@@ -1284,7 +1322,7 @@ extension TimelineView {
                             }
                             // Snapshot original times for every selected slot (for group drag).
                             if selectedBusySlotIds.count > 1 {
-                                let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlots.map { ($0.id, $0) })
+                                let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { ($0.id, $0) })
                                 var snapshot: [String: (start: Date, end: Date)] = [:]
                                 for id in selectedBusySlotIds {
                                     if let s = slotsById[id] {
@@ -1378,11 +1416,7 @@ extension TimelineView {
                     selectedBusySlotIds.insert(slot.id)
                 }
             } else {
-                if selectedBusySlotIds == [slot.id] {
-                    selectedBusySlotIds.removeAll()
-                } else {
-                    selectedBusySlotIds = [slot.id]
-                }
+                selectedBusySlotIds = [slot.id]
             }
         }
         .contextMenu {
@@ -1406,7 +1440,7 @@ extension TimelineView {
                             let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
                             if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
                                 onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
-                                Task { await calendarService.fetchEvents(for: selectedDate) }
+                                Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
                             } else {
                                 schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
                             }
@@ -1417,7 +1451,7 @@ extension TimelineView {
                 Button("Custom...") {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         copySlotId = slot.id
-                        copyTargetDate = Date()
+                        copyTargetDate = actionContext.selectedDate
                         showingCopyDatePicker = true
                     }
                 }
@@ -1457,10 +1491,10 @@ extension TimelineView {
             } else {
                 // Striped background for projected sessions
                 RoundedRectangle(cornerRadius: 4)
-                    .fill(session.type.color.opacity(0.55))
+                    .fill(session.type.color.opacity(colors.isDark ? 0.55 : 0.22))
                     .overlay(
                         DiagonalStripesPattern(
-                            color: session.type.color.opacity(0.4),
+                            color: session.type.color.opacity(colors.isDark ? 0.4 : 0.12),
                             stripeWidth: 5,
                             gapWidth: 5,
                             angle: 45
@@ -1485,11 +1519,11 @@ extension TimelineView {
                     Spacer(minLength: 2)
                     Text(startAndDurationString(start: session.startTime, end: session.endTime))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(colors.textPrimary)
                         .lineLimit(1)
                         .layoutPriority(1)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .padding(3)
             } else {
                 VStack(alignment: .leading, spacing: 2) {
@@ -1502,11 +1536,11 @@ extension TimelineView {
                             .lineLimit(nil)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                     Text(startAndDurationString(start: session.startTime, end: session.endTime))
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(colors.textPrimary)
                 }
                 .padding(4)
             }
@@ -1598,8 +1632,8 @@ extension TimelineView {
                                 draggedSessionId: session.id,
                                 draggedStart: previewStart,
                                 draggedEnd: previewEnd,
-                                busySlots: calendarService.busySlots,
-                                earliestTime: startTime
+                                busySlots: calendarService.busySlotsForFetchedDate(actionContext.selectedDate),
+                                earliestTime: actionContext.startTime
                             )
                         }
                     }
@@ -1665,24 +1699,28 @@ extension TimelineView {
                 .ignoresSafeArea()
                 .onTapGesture {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        selectedSession = nil
-                        selectedBusySlot = nil
-                        resetEditingState()
+                        if selectedBusySlot != nil {
+                            closeBusySlotDetailSavingDirty()
+                        } else {
+                            selectedSession = nil
+                            selectedBusySlot = nil
+                            resetEditingState()
+                        }
                     }
                 }
             
             // Detail card
             VStack(alignment: .leading, spacing: 12) {
-                if let session = selectedSession {
+                if let session = currentSelectedSession {
                     sessionDetailContent(session)
-                } else if let slot = selectedBusySlot {
+                } else if let slot = currentSelectedBusySlot {
                     busySlotDetailContent(slot)
                 }
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: "1E293B"))
+                    .fill(colors.panelBackground)
                     .shadow(color: .black.opacity(0.3), radius: 20, y: 10)
             )
             .frame(maxWidth: 280)
@@ -1704,7 +1742,7 @@ extension TimelineView {
             }
             onModeToast?("Scheduled \(session.title)")
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                await calendarService.fetchEvents(for: actionContext.selectedDate)
             }
         } else {
             onModeToast?("Failed to schedule \(session.title)")
@@ -1730,7 +1768,7 @@ extension TimelineView {
             }
             onModeToast?("Scheduled \(result.success) session\(result.success == 1 ? "" : "s")")
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                await calendarService.fetchEvents(for: actionContext.selectedDate)
             }
         } else {
             onModeToast?("Failed to schedule sessions")
@@ -1746,20 +1784,20 @@ extension TimelineView {
                     .frame(width: 18)
                 Text(session.title)
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Spacer()
                 Button {
                     selectedSession = nil
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
             }
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(colors.divider)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -1787,7 +1825,7 @@ extension TimelineView {
                 }
             }
             .font(.system(size: 14))
-            .foregroundColor(.white.opacity(0.8))
+            .foregroundColor(colors.textSecondary)
         }
     }
     
@@ -1804,7 +1842,7 @@ extension TimelineView {
                     TextField("Event title", text: $editingTitle)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .focused($focusedField, equals: .title)
                         .onSubmit {
                             saveTitle(for: slot)
@@ -1816,7 +1854,7 @@ extension TimelineView {
                 } else {
                     Text(slot.title)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -1829,18 +1867,17 @@ extension TimelineView {
                 
                 Spacer()
                 Button {
-                    selectedBusySlot = nil
-                    resetEditingState()
+                    closeBusySlotDetailSavingDirty()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
             }
             
-            Divider().background(Color.white.opacity(0.1))
+            Divider().background(colors.divider)
             
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
@@ -1859,18 +1896,18 @@ extension TimelineView {
                 
                 // Notes section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
-                    Divider().background(Color.white.opacity(0.1))
+                    Divider().background(colors.divider)
                     
                     if isEditingNotes {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(colors.textSecondary)
                             TextEditor(text: $editingNotes)
                                 .font(.system(size: 12))
-                                .foregroundColor(.white)
+                                .foregroundColor(colors.textPrimary)
                                 .scrollContentBackground(.hidden)
-                                .background(Color.white.opacity(0.05))
+                                .background(colors.subtleBackground)
                                 .cornerRadius(4)
                                 .frame(minHeight: 60, maxHeight: 100)
                                 .focused($focusedField, equals: .notes)
@@ -1897,7 +1934,7 @@ extension TimelineView {
                                 .font(.system(size: 12, weight: .bold))
                             Text(displayNotes)
                                 .font(.system(size: 12))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(colors.textSecondary)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
@@ -1915,7 +1952,7 @@ extension TimelineView {
                             Text("Add note")
                                 .font(.system(size: 12))
                         }
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -1930,26 +1967,26 @@ extension TimelineView {
                 // Feedback rating picker
                 if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
                     VStack(alignment: .leading, spacing: 4) {
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(colors.divider)
                         feedbackPicker(for: slot)
                     }
                 }
 
                 // URL section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
-                    Divider().background(Color.white.opacity(0.1))
+                    Divider().background(colors.divider)
 
                     if isEditingURL {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("URL:")
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(colors.textSecondary)
                             TextField("https://example.com", text: $editingURL)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.8))
+                                .foregroundColor(colors.textSecondary)
                                 .padding(6)
-                                .background(Color.white.opacity(0.05))
+                                .background(colors.subtleBackground)
                                 .cornerRadius(4)
                                 .focused($focusedField, equals: .url)
                                 .onSubmit {
@@ -1984,7 +2021,7 @@ extension TimelineView {
                             Text("Add URL")
                                 .font(.system(size: 12))
                         }
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
@@ -1997,7 +2034,7 @@ extension TimelineView {
                 }
             }
             .font(.system(size: 14))
-            .foregroundColor(.white.opacity(0.8))
+            .foregroundColor(colors.textSecondary)
         }
         .onChange(of: focusedField) { oldValue, newValue in
             // Don't auto-save if we're canceling
@@ -2084,9 +2121,8 @@ extension TimelineView {
         )
         if calendarService.deleteEvent(identifier: slot.id) {
             eventUndoManager.recordDelete(snapshot)
-            selectedBusySlot = nil
-            selectedSession = nil
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+            dismissTransientInteractionState()
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
         }
     }
 
@@ -2106,10 +2142,8 @@ extension TimelineView {
         }
         guard !snapshots.isEmpty else { return }
         eventUndoManager.recordDeleteBatch(snapshots)
-        selectedBusySlot = nil
-        selectedSession = nil
-        selectedBusySlotIds.removeAll()
-        Task { await calendarService.fetchEvents(for: selectedDate) }
+        dismissTransientInteractionState()
+        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
     }
 
     // MARK: - Event Creation from Timeline
@@ -2208,7 +2242,7 @@ extension TimelineView {
             eventCreationCoordinator.dismiss()
         }
         onModeToast?("Created \"\(title)\"")
-        Task { await calendarService.fetchEvents(for: selectedDate) }
+        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
     }
 
     // MARK: - Position Calculations
@@ -2273,13 +2307,11 @@ extension TimelineView {
             if let rating = rating {
                 feedbackBadgeIcon(for: rating)
             } else {
-                // No feedback yet — show subtle empty badge
+                // No feedback yet — white badge for visibility on any calendar color
                 Circle()
-                    .fill(Color.white.opacity(0.1))
+                    .fill(Color.white.opacity(0.75))
                     .frame(width: 14, height: 14)
-                    .overlay(
-                        Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
-                    )
+                    .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
             }
         }
         .buttonStyle(.plain)
@@ -2294,13 +2326,14 @@ extension TimelineView {
             switch rating {
             case .rocket: return (.orange, "flame.fill")
             case .completed: return (.green, "checkmark")
-            case .partial: return (.yellow, "circle.lefthalf.filled")
+            case .partial: return (colors.isDark ? .yellow : Color(hex: "92400E"), "circle.lefthalf.filled")
             case .skipped: return (.red, "xmark")
             }
         }()
 
+        // White background ensures visibility on any calendar event color in both themes
         return Circle()
-            .fill(color.opacity(0.25))
+            .fill(Color.white.opacity(0.88))
             .frame(width: 14, height: 14)
             .overlay(
                 Image(systemName: icon)
@@ -2321,10 +2354,14 @@ extension TimelineView {
                     Button {
                         if existingRating == rating {
                             calendarService.clearFeedbackTag(eventId: slot.id)
+                            eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+                                eventId: slot.id, oldRating: existingRating, newRating: nil))
                         } else {
                             calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                            eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+                                eventId: slot.id, oldRating: existingRating, newRating: rating))
                         }
-                        Task { await calendarService.fetchEvents(for: selectedDate) }
+                        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
                         feedbackPopoverEventId = nil
                     } label: {
                         HStack(spacing: 5) {
@@ -2360,7 +2397,7 @@ extension TimelineView {
         switch rating {
         case .rocket: return .orange
         case .completed: return .green
-        case .partial: return .yellow
+        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
         case .skipped: return .red
         }
     }
@@ -2373,7 +2410,7 @@ extension TimelineView {
         return HStack(spacing: 6) {
             Text("Feedback:")
                 .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(colors.textSecondary)
 
             Spacer()
 
@@ -2383,13 +2420,13 @@ extension TimelineView {
             } label: {
                 Text("–")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(currentRating == nil ? 0.8 : 0.35))
+                    .foregroundColor(currentRating == nil ? colors.textSecondary : colors.textMuted)
                     .frame(width: 24, height: 22)
-                    .background(currentRating == nil ? Color.white.opacity(0.12) : Color.clear)
+                    .background(currentRating == nil ? colors.divider : Color.clear)
                     .cornerRadius(4)
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
-                            .stroke(Color.white.opacity(currentRating == nil ? 0.25 : 0.1), lineWidth: 1)
+                            .stroke(currentRating == nil ? colors.borderStrong : colors.divider, lineWidth: 1)
                     )
                     .contentShape(Rectangle())
             }
@@ -2399,9 +2436,12 @@ extension TimelineView {
 
             ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                 Button {
+                    let oldRating = currentRating
                     calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
+                    eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+                        eventId: slot.id, oldRating: oldRating, newRating: rating))
                     Task {
-                        await calendarService.fetchEvents(for: selectedDate)
+                        await calendarService.fetchEvents(for: actionContext.selectedDate)
                         if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                             selectedBusySlot = updated
                         }
@@ -2427,9 +2467,12 @@ extension TimelineView {
     }
 
     private func clearFeedbackTag(for slot: BusyTimeSlot) {
+        let oldRating = SessionRating.fromNotes(slot.notes)
         calendarService.clearFeedbackTag(eventId: slot.id)
+        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+            eventId: slot.id, oldRating: oldRating, newRating: nil))
         Task {
-            await calendarService.fetchEvents(for: selectedDate)
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
             if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                 selectedBusySlot = updated
             }
@@ -2461,10 +2504,15 @@ extension TimelineView {
             notes: nil,
             url: nil
         )
-        
+
         if success {
+            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                eventId: slot.id,
+                change: .title(old: originalTitle, new: editingTitle),
+                description: "Rename Event"
+            ))
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                await calendarService.fetchEvents(for: actionContext.selectedDate)
                 // Update the selected slot with fresh data
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
@@ -2480,7 +2528,7 @@ extension TimelineView {
             originalTitle = ""
         }
     }
-    
+
     private func saveNotes(for slot: BusyTimeSlot) {
         // Normalize empty strings to nil for comparison
         let normalizedNew = editingNotes.isEmpty ? nil : editingNotes
@@ -2501,17 +2549,23 @@ extension TimelineView {
             if rawNotes.contains(tag) { feedbackTag = " " + tag; break }
         }
         let finalNotes = (normalizedNew ?? "") + feedbackTag
+        let notesToSave: String? = finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes
 
         let success = calendarService.updateEvent(
             eventId: slot.id,
             title: nil,
-            notes: finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes,
+            notes: notesToSave,
             url: nil
         )
-        
+
         if success {
+            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                eventId: slot.id,
+                change: .notes(old: normalizedOriginal, new: notesToSave),
+                description: "Edit Notes"
+            ))
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                await calendarService.fetchEvents(for: actionContext.selectedDate)
                 // Update the selected slot with fresh data
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
@@ -2565,10 +2619,16 @@ extension TimelineView {
             url: urlToSave,
             updateURL: true
         )
-        
+
         if success {
+            let oldURL: URL? = originalURL.isEmpty ? nil : URL(string: originalURL)
+            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                eventId: slot.id,
+                change: .url(old: oldURL, new: urlToSave),
+                description: "Edit URL"
+            ))
             Task {
-                await calendarService.fetchEvents(for: selectedDate)
+                await calendarService.fetchEvents(for: actionContext.selectedDate)
                 // Update the selected slot with fresh data
                 if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
                     selectedBusySlot = updatedSlot
@@ -2598,6 +2658,115 @@ extension TimelineView {
         isCanceling = false
         focusedField = nil
         autoFocusField = nil
+    }
+
+    private func dismissTransientInteractionState() {
+        if dragMode != .none {
+            resetDragState()
+        }
+        selectedSession = nil
+        selectedBusySlot = nil
+        selectedBusySlotIds.removeAll()
+        feedbackPopoverEventId = nil
+        showingCopyDatePicker = false
+        copySlotId = nil
+        renamingSessionId = nil
+        showingLegendPopover = false
+        if eventCreationCoordinator.isActive {
+            eventCreationCoordinator.dismiss()
+        }
+        resetEditingState()
+    }
+
+    /// Closes the busy-slot detail popover, auto-saving any uncommitted edits
+    /// (rename / notes / URL). Mirrors save{Title,Notes,URL} logic but bypasses
+    /// the popover re-selection that those helpers do, since we're closing.
+    /// ESC dismissals must call resetEditingState() directly (cancel semantics).
+    private func closeBusySlotDetailSavingDirty() {
+        guard let slot = selectedBusySlot else {
+            selectedSession = nil
+            selectedBusySlot = nil
+            resetEditingState()
+            return
+        }
+
+        // Suppress focus-loss onChange auto-save; we're saving synchronously here.
+        isCanceling = true
+        var didChange = false
+
+        // Title
+        if isEditingTitle, !editingTitle.isEmpty, editingTitle != originalTitle {
+            if calendarService.updateEvent(eventId: slot.id, title: editingTitle, notes: nil, url: nil) {
+                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                    eventId: slot.id,
+                    change: .title(old: originalTitle, new: editingTitle),
+                    description: "Rename Event"
+                ))
+                didChange = true
+            }
+        }
+
+        // Notes
+        if isEditingNotes {
+            let normalizedNew: String? = editingNotes.isEmpty ? nil : editingNotes
+            let normalizedOriginal: String? = originalNotes.isEmpty ? nil : originalNotes
+            if normalizedNew != normalizedOriginal {
+                let rawNotes = slot.notes ?? ""
+                var feedbackTag = ""
+                for tag in SessionRating.allTags {
+                    if rawNotes.contains(tag) { feedbackTag = " " + tag; break }
+                }
+                let finalNotes = (normalizedNew ?? "") + feedbackTag
+                let notesToSave: String? = finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes
+                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: notesToSave, url: nil) {
+                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                        eventId: slot.id,
+                        change: .notes(old: normalizedOriginal, new: notesToSave),
+                        description: "Edit Notes"
+                    ))
+                    didChange = true
+                }
+            }
+        }
+
+        // URL
+        if isEditingURL {
+            let originalURLString = originalURL.isEmpty ? nil : originalURL
+            let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
+            if newURLString != originalURLString {
+                let urlToSave: URL?
+                if editingURL.isEmpty {
+                    urlToSave = nil
+                } else {
+                    var urlString = editingURL.trimmingCharacters(in: .whitespaces)
+                    if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
+                        urlString = "https://" + urlString
+                    }
+                    if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
+                        urlToSave = URL(string: encoded)
+                    } else {
+                        urlToSave = URL(string: urlString)
+                    }
+                }
+                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: urlToSave, updateURL: true) {
+                    let oldURL: URL? = originalURLString.flatMap { URL(string: $0) }
+                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                        eventId: slot.id,
+                        change: .url(old: oldURL, new: urlToSave),
+                        description: "Edit URL"
+                    ))
+                    didChange = true
+                }
+            }
+        }
+
+        selectedSession = nil
+        selectedBusySlot = nil
+        resetEditingState()
+
+        if didChange {
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+        }
     }
     
     private func cancelTitleEdit() {
@@ -2675,7 +2844,7 @@ extension TimelineView {
         }
 
         Task {
-            await calendarService.fetchEvents(for: selectedDate)
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
         }
 
         resetDragState()
@@ -2683,7 +2852,7 @@ extension TimelineView {
 
     /// Commit a group drag — every selected slot moves by the same translation atomically.
     private func commitGroupDrag() {
-        let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlots.map { ($0.id, $0) })
+        let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { ($0.id, $0) })
 
         var changes: [EventUndoManager.EventTimeChange] = []
         var committed: [(id: String, newStart: Date, newEnd: Date)] = []
@@ -2721,7 +2890,7 @@ extension TimelineView {
         }
 
         Task {
-            await calendarService.fetchEvents(for: selectedDate)
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
         }
 
         resetDragState()
@@ -2755,9 +2924,11 @@ extension TimelineView {
 
     /// Recalculates schedule using the original (unmodified) busy slots.
     private func recalculateWithOriginalSlots() {
-        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let operationDate = actionContext.selectedDate
+        let operationStartTime = actionContext.startTime
+        let planningExists = calendarService.hasPlanningSession(for: operationDate)
         let existing = calendarService.countExistingSessions(
-            for: selectedDate,
+            for: operationDate,
             workCalendar: CalendarDescriptor(
                 name: schedulingEngine.workCalendarName,
                 identifier: schedulingEngine.workCalendarIdentifier
@@ -2769,9 +2940,9 @@ extension TimelineView {
             deepConfig: schedulingEngine.deepSessionConfig
         )
         _ = schedulingEngine.generateSchedule(
-            startTime: startTime,
-            baseDate: selectedDate,
-            busySlots: calendarService.busySlots,
+            startTime: operationStartTime,
+            baseDate: operationDate,
+            busySlots: calendarService.busySlotsForFetchedDate(operationDate),
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
             existingTitles: existing.titles
@@ -2783,7 +2954,9 @@ extension TimelineView {
     private func recalculateWithDraggedSlots(_ updates: [String: (start: Date, end: Date)]) {
         guard !schedulingEngine.sessionsFrozen else { return }
 
-        var modifiedSlots = calendarService.busySlots
+        let operationDate = actionContext.selectedDate
+        let operationStartTime = actionContext.startTime
+        var modifiedSlots = calendarService.busySlotsForFetchedDate(operationDate)
         for i in modifiedSlots.indices {
             if let target = updates[modifiedSlots[i].id] {
                 let old = modifiedSlots[i]
@@ -2795,9 +2968,9 @@ extension TimelineView {
             }
         }
 
-        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let planningExists = calendarService.hasPlanningSession(for: operationDate)
         let existing = calendarService.countExistingSessions(
-            for: selectedDate,
+            for: operationDate,
             workCalendar: CalendarDescriptor(
                 name: schedulingEngine.workCalendarName,
                 identifier: schedulingEngine.workCalendarIdentifier
@@ -2810,8 +2983,8 @@ extension TimelineView {
         )
 
         _ = schedulingEngine.generateSchedule(
-            startTime: startTime,
-            baseDate: selectedDate,
+            startTime: operationStartTime,
+            baseDate: operationDate,
             busySlots: modifiedSlots,
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
@@ -2824,7 +2997,9 @@ extension TimelineView {
         guard !schedulingEngine.sessionsFrozen else { return }
 
         // Build modified busy slots with the dragged event at its new position
-        var modifiedSlots = calendarService.busySlots
+        let operationDate = actionContext.selectedDate
+        let operationStartTime = actionContext.startTime
+        var modifiedSlots = calendarService.busySlotsForFetchedDate(operationDate)
         if let idx = modifiedSlots.firstIndex(where: { $0.id == slot.id }) {
             let old = modifiedSlots[idx]
             modifiedSlots[idx] = BusyTimeSlot(
@@ -2834,9 +3009,9 @@ extension TimelineView {
             )
         }
 
-        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
+        let planningExists = calendarService.hasPlanningSession(for: operationDate)
         let existing = calendarService.countExistingSessions(
-            for: selectedDate,
+            for: operationDate,
             workCalendar: CalendarDescriptor(
                 name: schedulingEngine.workCalendarName,
                 identifier: schedulingEngine.workCalendarIdentifier
@@ -2849,8 +3024,8 @@ extension TimelineView {
         )
 
         _ = schedulingEngine.generateSchedule(
-            startTime: startTime,
-            baseDate: selectedDate,
+            startTime: operationStartTime,
+            baseDate: operationDate,
             busySlots: modifiedSlots,
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
@@ -2891,8 +3066,8 @@ extension TimelineView {
             draggedSessionId: session.id,
             draggedStart: newStart,
             draggedEnd: newEnd,
-            busySlots: calendarService.busySlots,
-            earliestTime: startTime
+            busySlots: calendarService.busySlotsForFetchedDate(actionContext.selectedDate),
+            earliestTime: actionContext.startTime
         )
 
         // Record undo with pre-drag snapshot and post-displacement snapshot
@@ -2946,11 +3121,11 @@ extension TimelineView {
                     Spacer(minLength: 2)
                     Text(startAndDurationString(start: newStart, end: newEnd))
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(colors.isDark ? .white.opacity(0.9) : session.type.color.opacity(0.8))
                         .lineLimit(1)
                         .layoutPriority(1)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(colors.isDark ? .white : session.type.color)
                 .padding(3)
             } else if blockHeight >= 16 {
                 VStack(alignment: .leading, spacing: 1) {
@@ -2962,11 +3137,11 @@ extension TimelineView {
                             .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.isDark ? .white : session.type.color)
                     if blockHeight > 30 {
                         Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.white.opacity(0.9))
+                            .foregroundColor(colors.isDark ? .white.opacity(0.9) : session.type.color.opacity(0.8))
                     }
                 }
                 .padding(4)
@@ -2981,7 +3156,9 @@ extension TimelineView {
     // MARK: - Undo / Redo
 
     private func performUndo() {
+        let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.undo() else { return }
+        dismissTransientInteractionState()
         switch change {
         case .time(let tc):
             if tc.sessionId != nil {
@@ -3003,7 +3180,7 @@ extension TimelineView {
                 )
                 if success {
                     optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                    Task { await calendarService.fetchEvents(for: operationDate) }
                 }
             }
         case .timeBatch(let items):
@@ -3012,11 +3189,11 @@ extension TimelineView {
                     optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
                 }
             }
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+            Task { await calendarService.fetchEvents(for: operationDate) }
         case .delete(let snap):
             if let newId = calendarService.restoreEvent(snap) {
                 eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
             }
         case .deleteBatch(let snaps):
             var newIds: [String] = []
@@ -3028,7 +3205,7 @@ extension TimelineView {
             if !newIds.isEmpty {
                 let restoredSnaps = Array(snaps.prefix(newIds.count))
                 eventUndoManager.pushRedoForRestoredDeleteBatch(originals: restoredSnaps, newEventIds: newIds)
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
             }
         case .schedule(let snap):
             // Undo: delete created events, restore projected sessions.
@@ -3041,18 +3218,34 @@ extension TimelineView {
             schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
             schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
             schedulingEngine.sessionsFrozen = true
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+            Task { await calendarService.fetchEvents(for: operationDate) }
         case .create(let snap):
             // Undo create = delete the event
             if calendarService.deleteEvent(identifier: snap.eventId) {
                 eventUndoManager.pushRedoForUndoneCreate(snap)
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
             }
+        case .feedback(let fc):
+            if let rating = fc.newRating {
+                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
+            } else {
+                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
+            }
+            Task {
+                await calendarService.fetchEvents(for: operationDate)
+                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
+                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
+                }
+            }
+        case .content(let cc):
+            applyContentChange(cc)
         }
     }
 
     private func performRedo() {
+        let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.redo() else { return }
+        dismissTransientInteractionState()
         switch change {
         case .time(let tc):
             if tc.sessionId != nil {
@@ -3074,7 +3267,7 @@ extension TimelineView {
                 )
                 if success {
                     optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: selectedDate) }
+                    Task { await calendarService.fetchEvents(for: operationDate) }
                 }
             }
         case .timeBatch(let items):
@@ -3083,17 +3276,17 @@ extension TimelineView {
                     optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
                 }
             }
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+            Task { await calendarService.fetchEvents(for: operationDate) }
         case .delete(let snap):
             if calendarService.deleteEvent(identifier: snap.eventId) {
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
             }
         case .deleteBatch(let snaps):
             var anyDeleted = false
             for snap in snaps {
                 if calendarService.deleteEvent(identifier: snap.eventId) { anyDeleted = true }
             }
-            if anyDeleted { Task { await calendarService.fetchEvents(for: selectedDate) } }
+            if anyDeleted { Task { await calendarService.fetchEvents(for: operationDate) } }
         case .schedule(let snap):
             // Redo: re-create the sessions and remove them from projected
             let result = calendarService.createSessions(snap.sessions)
@@ -3104,7 +3297,19 @@ extension TimelineView {
                     eventIds: result.eventIds,
                     sessions: snap.sessions
                 ))
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
+            }
+        case .feedback(let fc):
+            if let rating = fc.newRating {
+                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
+            } else {
+                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
+            }
+            Task {
+                await calendarService.fetchEvents(for: operationDate)
+                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
+                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
+                }
             }
         case .create(let snap):
             // Redo create = restore the event
@@ -3122,7 +3327,33 @@ extension TimelineView {
                 )
                 // Replace the top of the undo stack with updated ID
                 eventUndoManager.updateTopUndoCreateId(updatedSnap)
-                Task { await calendarService.fetchEvents(for: selectedDate) }
+                Task { await calendarService.fetchEvents(for: operationDate) }
+            }
+        case .content(let cc):
+            applyContentChange(cc)
+        }
+    }
+
+    /// Applies a content (title/notes/URL) change to the underlying calendar event.
+    /// Used by both undo (inverted change) and redo (original change).
+    private func applyContentChange(_ cc: EventUndoManager.EventContentChange) {
+        let success: Bool
+        switch cc.change {
+        case .title(_, let new):
+            success = calendarService.updateEvent(eventId: cc.eventId, title: new, notes: nil, url: nil)
+        case .notes(_, let new):
+            // updateEvent skips nil notes — pass empty string to clear.
+            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: new ?? "", url: nil)
+        case .url(_, let new):
+            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: nil, url: new, updateURL: true)
+        }
+        guard success else { return }
+        let operationDate = actionContext.selectedDate
+        Task {
+            await calendarService.fetchEvents(for: operationDate)
+            if let updated = calendarService.busySlots.first(where: { $0.id == cc.eventId }),
+               selectedBusySlot?.id == cc.eventId {
+                selectedBusySlot = updated
             }
         }
     }
@@ -3144,5 +3375,5 @@ extension TimelineView {
         .environmentObject(CalendarService())
         .environmentObject(SchedulingEngine())
         .frame(width: 600, height: 800)
-        .background(Color(hex: "0F172A"))
+
 }

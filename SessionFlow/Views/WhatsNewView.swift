@@ -2,6 +2,9 @@ import SwiftUI
 
 struct WhatsNewView: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @ObservedObject var changelog: ChangelogService
 
     private var displayEntries: [ChangelogEntry] {
@@ -10,12 +13,8 @@ struct WhatsNewView: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
 
             VStack(spacing: 0) {
                 header
@@ -23,7 +22,6 @@ struct WhatsNewView: View {
             }
         }
         .frame(width: 520, height: 560)
-        .preferredColorScheme(.dark)
         .onAppear { changelog.fetchIfNeeded() }
     }
 
@@ -34,10 +32,10 @@ struct WhatsNewView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("What's New")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text("SessionFlow v\(ChangelogService.currentVersion)")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textMuted)
             }
 
             Spacer()
@@ -47,9 +45,9 @@ struct WhatsNewView: View {
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
                     .padding(8)
-                    .background(Circle().fill(Color.white.opacity(0.1)))
+                    .background(Circle().fill(colors.subtleBackground))
             }
             .buttonStyle(.plain)
             .hoverEffect(brightness: 0.2)
@@ -71,16 +69,16 @@ struct WhatsNewView: View {
                     .scaleEffect(0.8)
                 Text("Loading changelog…")
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
                 Spacer()
             } else if displayEntries.isEmpty {
                 Spacer()
                 Image(systemName: "doc.text")
                     .font(.system(size: 32))
-                    .foregroundColor(.white.opacity(0.2))
+                    .foregroundColor(colors.textDisabled)
                 Text("No changelog available")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
                 Spacer()
             } else {
                 ScrollView {
@@ -104,10 +102,10 @@ struct WhatsNewView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("v\(entry.version)")
                     .font(.system(size: 16, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text(entry.date)
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.35))
+                    .foregroundColor(colors.textMuted)
             }
 
             ForEach(entry.sections) { section in
@@ -118,10 +116,10 @@ struct WhatsNewView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.05))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                        .strokeBorder(colors.divider, lineWidth: 1)
                 )
         )
     }
@@ -141,11 +139,11 @@ struct WhatsNewView: View {
                 HStack(alignment: .top, spacing: 8) {
                     Text("•")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(colors.textMuted)
                         .padding(.top, 1)
                     Text(item)
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -167,14 +165,26 @@ struct WhatsNewView: View {
     }
 
     private func colorForCategory(_ category: String) -> Color {
-        switch category.lowercased() {
-        case "added": return Color(hex: "34D399")
-        case "changed": return Color(hex: "60A5FA")
-        case "fixed": return Color(hex: "FBBF24")
-        case "removed": return Color(hex: "F87171")
-        case "deprecated": return Color(hex: "FB923C")
-        case "security": return Color(hex: "A78BFA")
-        default: return .white.opacity(0.6)
+        if colors.isDark {
+            switch category.lowercased() {
+            case "added":      return Color(hex: "34D399")
+            case "changed":    return Color(hex: "60A5FA")
+            case "fixed":      return Color(hex: "FBBF24")
+            case "removed":    return Color(hex: "F87171")
+            case "deprecated": return Color(hex: "FB923C")
+            case "security":   return Color(hex: "A78BFA")
+            default: return Color.secondary
+            }
+        } else {
+            switch category.lowercased() {
+            case "added":      return Color(hex: "059669")
+            case "changed":    return Color(hex: "2563EB")
+            case "fixed":      return Color(hex: "D97706")
+            case "removed":    return Color(hex: "DC2626")
+            case "deprecated": return Color(hex: "EA580C")
+            case "security":   return Color(hex: "7C3AED")
+            default: return Color.secondary
+            }
         }
     }
 }

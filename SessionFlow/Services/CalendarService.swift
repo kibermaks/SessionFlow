@@ -33,6 +33,7 @@ class CalendarService: ObservableObject {
     @Published var busySlots: [BusyTimeSlot] = []
     @Published var isLoading = false
     @Published var lastRefresh: Date = Date()
+    @Published private(set) var fetchedDate: Date?
     @Published var excludedCalendarIDs: Set<String> = []
 
     /// Last EventKit failure — not observed by any view today; assignments are kept
@@ -265,11 +266,24 @@ class CalendarService: ObservableObject {
         }
     }
     
-    private func refreshCurrentEvents() {
+    func refreshCurrentEvents() {
         guard let date = currentFetchDate else { return }
         Task { [weak self] in
             guard let self else { return }
             await self.fetchEvents(for: date)
+        }
+    }
+
+    func busySlotsForFetchedDate(_ date: Date) -> [BusyTimeSlot] {
+        guard let fetchedDate,
+              Calendar.current.isDate(fetchedDate, inSameDayAs: date) else {
+            return []
+        }
+
+        let start = Calendar.current.startOfDay(for: date)
+        let end = effectiveEndOfDay(for: date)
+        return busySlots.filter { slot in
+            slot.endTime > start && slot.startTime < end
         }
     }
     
@@ -283,6 +297,7 @@ class CalendarService: ObservableObject {
         await MainActor.run {
             self.isLoading = true
             self.currentFetchDate = date
+            self.fetchedDate = date
 
             let startOfDay = Calendar.current.startOfDay(for: date)
             let endOfDay = self.effectiveEndOfDay(for: date)

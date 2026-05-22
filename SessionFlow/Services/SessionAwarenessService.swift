@@ -882,7 +882,7 @@ class SessionAwarenessService: ObservableObject {
     func submitFeedback(rating: SessionRating) {
         guard let feedback = sessionFeedbackPending else { return }
         calendarService?.setFeedbackTag(eventId: feedback.eventId, rating: rating)
-        if let cs = calendarService { Task { await cs.fetchEvents(for: Date()) } }
+        calendarService?.refreshCurrentEvents()
         feedbackDismissTimer?.invalidate()
         sessionFeedbackPending = nil
     }

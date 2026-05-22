@@ -1,16 +1,19 @@
 import SwiftUI
 
 struct PresetManagerView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var schedulingEngine: SchedulingEngine
-    
+
     @State private var presets: [Preset] = []
     @State private var showingNewPresetSheet = false
-    
+
     var body: some View {
         NavigationStack {
             ZStack {
-                Color(hex: "0F172A")
+                colors.windowBackground
                     .ignoresSafeArea()
                 
                 ScrollView {
@@ -79,7 +82,7 @@ struct PresetManagerView: View {
                     .foregroundColor(Color(hex: "8B5CF6"))
                 Text(title)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
             }
             
             content()
@@ -92,11 +95,11 @@ struct PresetManagerView: View {
         VStack(spacing: 12) {
             Image(systemName: "tray")
                 .font(.system(size: 32))
-                .foregroundColor(.white.opacity(0.3))
-            
+                .foregroundColor(colors.textDisabled)
+
             Text("No presets found")
                 .font(.system(size: 14))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colors.textSecondary)
             
             Button("Create Preset") {
                 showingNewPresetSheet = true
@@ -138,11 +141,14 @@ struct PresetManagerView: View {
 // MARK: - Preset Card
 
 struct PresetCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     let preset: Preset
     let isCustom: Bool
     let onApply: () -> Void
     var onDelete: (() -> Void)?
-    
+
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @State private var isHovered = false
     
@@ -157,7 +163,7 @@ struct PresetCard: View {
                 HStack(spacing: 4) {
                     Text(preset.name)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .lineLimit(1)
                     
                     if schedulingEngine.currentPresetId == preset.id && schedulingEngine.isPresetModified(preset) {
@@ -195,7 +201,7 @@ struct PresetCard: View {
                 Text("Pattern: \(preset.pattern.rawValue)")
             }
             .font(.system(size: 11))
-            .foregroundColor(.white.opacity(0.6))
+            .foregroundColor(colors.textSecondary)
             
             // Calendar mapping
             HStack {
@@ -221,11 +227,11 @@ struct PresetCard: View {
             .hoverEffect(brightness: 0.12)
         }
         .padding(12)
-        .background(Color.white.opacity(isHovered ? 0.08 : 0.05))
+        .background(isHovered ? colors.hoveredBackground : colors.subtleBackground)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(Color.white.opacity(0.1), lineWidth: 1)
+                .strokeBorder(colors.divider, lineWidth: 1)
         )
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -275,8 +281,8 @@ struct NewPresetSheet: View {
                                     Image(systemName: icon)
                                         .font(.system(size: 18))
                                         .frame(width: 40, height: 40)
-                                        .background(selectedIcon == icon ? Color(hex: "8B5CF6") : Color.white.opacity(0.1))
-                                        .foregroundColor(.white)
+                                        .background(selectedIcon == icon ? Color(hex: "8B5CF6") : Color.primary.opacity(0.1))
+                                        .foregroundColor(selectedIcon == icon ? .white : .primary)
                                         .cornerRadius(8)
                                         .onTapGesture {
                                             selectedIcon = icon

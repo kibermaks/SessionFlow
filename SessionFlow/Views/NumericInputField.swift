@@ -5,7 +5,10 @@ struct NumericInputField: View {
     let range: ClosedRange<Int>
     var step: Int = 1
     var unit: String = ""
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @State private var textValue: String = ""
     @FocusState private var isFocused: Bool
 
@@ -25,9 +28,9 @@ struct NumericInputField: View {
             } label: {
                 Image(systemName: "minus")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(value <= range.lowerBound ? 0.3 : 0.8))
+                    .foregroundColor(value <= range.lowerBound ? colors.textMuted : colors.textSecondary)
                     .frame(width: 20, height: 20)
-                    .background(Color.white.opacity(0.1))
+                    .background(colors.divider)
                     .cornerRadius(4)
                     .contentShape(Rectangle())
             }
@@ -41,7 +44,7 @@ struct NumericInputField: View {
                 .multilineTextAlignment(.center)
                 .lineLimit(1)
                 .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .focused($isFocused)
                 .padding(0)
                 .labelsHidden()
@@ -52,10 +55,10 @@ struct NumericInputField: View {
                 }
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(isFocused ? 0.2 : 0.15))
+                        .fill(isFocused ? colors.hoveredBackground : colors.border)
                         .overlay(
                             RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white.opacity(isFocused ? 0.4 : 0), lineWidth: 1)
+                                .stroke(isFocused ? colors.borderStrong : Color.clear, lineWidth: 1)
                         )
                 )
             .onChange(of: textValue) { _, newValue in
@@ -79,9 +82,9 @@ struct NumericInputField: View {
             } label: {
                 Image(systemName: "plus")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundColor(.white.opacity(value >= range.upperBound ? 0.3 : 0.8))
+                    .foregroundColor(value >= range.upperBound ? colors.textMuted : colors.textSecondary)
                     .frame(width: 20, height: 20)
-                    .background(Color.white.opacity(0.1))
+                    .background(colors.divider)
                     .cornerRadius(4)
                     .contentShape(Rectangle())
             }
@@ -92,7 +95,7 @@ struct NumericInputField: View {
             if !unit.isEmpty {
                 Text(unit)
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
             }
         }
         .padding(0)

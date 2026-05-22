@@ -6,6 +6,9 @@ struct MiniPlayerView: View {
     @ObservedObject private var timeState: SessionTimeState
     var onHeightChange: ((CGFloat) -> Void)? = nil
 
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     init(awarenessService: SessionAwarenessService, audioService: SessionAudioService, onHeightChange: ((CGFloat) -> Void)? = nil) {
         _awarenessService = ObservedObject(wrappedValue: awarenessService)
         _audioService = ObservedObject(wrappedValue: audioService)
@@ -42,7 +45,7 @@ struct MiniPlayerView: View {
         .background(miniBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(colors.divider, lineWidth: 1)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
@@ -169,13 +172,7 @@ struct MiniPlayerView: View {
     private var miniBackground: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 10)
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
+                .fill(colors.backgroundGradient)
                 .shadow(color: .black.opacity(0.5), radius: 8, x: 0, y: 2)
             RoundedRectangle(cornerRadius: 10)
                 .fill(flashColor.opacity(flashOpacity))
@@ -190,9 +187,9 @@ struct MiniPlayerView: View {
         } label: {
             Image(systemName: "arrow.up.left.and.arrow.down.right")
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(colors.textMuted)
                 .frame(width: 28, height: 28)
-                .background(Color.white.opacity(0.06))
+                .background(colors.subtleBackground)
                 .cornerRadius(5)
                 .contentShape(Rectangle())
         }
@@ -210,7 +207,7 @@ struct MiniPlayerView: View {
 
         return ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.08), lineWidth: lineWidth)
+                .stroke(colors.divider, lineWidth: lineWidth)
             Circle()
                 .trim(from: 0, to: CGFloat(awarenessService.progress))
                 .stroke(barColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
@@ -222,7 +219,7 @@ struct MiniPlayerView: View {
                 Text("%")
                     .font(.system(size: 6, weight: .medium, design: .monospaced))
             )
-            .foregroundColor(.white.opacity(0.5))
+            .foregroundColor(colors.textSecondary)
         }
         .frame(width: size, height: size)
     }

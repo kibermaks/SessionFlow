@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct CalendarPermissionView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @State private var isRequesting = false
     
@@ -11,12 +14,8 @@ struct CalendarPermissionView: View {
     var body: some View {
         ZStack {
             // Background gradient
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
             
             // Main content container with frosted glass effect
             VStack(spacing: 32) {
@@ -31,13 +30,13 @@ struct CalendarPermissionView: View {
                 VStack(spacing: 16) {
                     Text(wasExplicitlyDenied ? "Permission Denied" : "Calendar Access Required")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
-                    
-                    Text(wasExplicitlyDenied 
+                        .foregroundColor(colors.textPrimary)
+
+                    Text(wasExplicitlyDenied
                          ? "You previously denied calendar access. To use SessionFlow, please enable it in System Settings."
                          : "SessionFlow needs access to your calendar to schedule sessions and detect busy time slots.")
                         .font(.system(size: 16))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
                         .lineSpacing(4)
@@ -61,7 +60,7 @@ struct CalendarPermissionView: View {
                         
                         Text("The app only modifies your calendar when you explicitly schedule sessions or drag events. You're always in control.")
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(colors.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(16)
@@ -178,22 +177,12 @@ struct CalendarPermissionView: View {
             }
             .background(
                 RoundedRectangle(cornerRadius: 20)
-                    .fill(Color(hex: "1E293B").opacity(0.95))
+                    .fill(colors.panelBackground.opacity(0.95))
                     .shadow(color: .black.opacity(0.3), radius: 30, y: 10)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 20)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color.white.opacity(0.2),
-                                Color.white.opacity(0.05)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(colors.borderStrong, lineWidth: 1)
             )
             .padding(40)
             .frame(width: 600, height: 700)
@@ -209,13 +198,13 @@ struct CalendarPermissionView: View {
             
             Text(text)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(0.9))
+                .foregroundColor(colors.textPrimary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.08))
+                .fill(colors.subtleBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(Color(hex: "10B981").opacity(0.3), lineWidth: 1)
@@ -233,30 +222,30 @@ struct CalendarPermissionView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text(description)
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-    
+
     private func manualPermissionStep(icon: String, title: String, description: String) -> some View {
         HStack(alignment: .top, spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 24))
                 .foregroundColor(Color(hex: "F59E0B"))
                 .frame(width: 32)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text(description)
                     .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(colors.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }

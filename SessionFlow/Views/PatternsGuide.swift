@@ -2,6 +2,9 @@ import SwiftUI
 
 struct PatternsGuide: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @State private var currentPage = 0
     @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     
@@ -28,24 +31,20 @@ struct PatternsGuide: View {
     
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
             
             VStack(spacing: 10) {
                 HStack {
                     Spacer()
-                    Button { 
+                    Button {
                         handleClose()
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(colors.divider))
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.2)
@@ -72,7 +71,7 @@ struct PatternsGuide: View {
                     HStack(spacing: 8) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Circle()
-                                .fill(currentPage == index ? pages[index].color : Color.white.opacity(0.2))
+                                .fill(currentPage == index ? pages[index].color : colors.border)
                                 .frame(width: 8, height: 8)
                                 .animation(.spring(), value: currentPage)
                         }
@@ -85,12 +84,12 @@ struct PatternsGuide: View {
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(colors.textSecondary)
                                     .frame(width: 100)
                                     .padding(.vertical, 14)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.white.opacity(0.1))
+                                            .fill(colors.divider)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -102,7 +101,7 @@ struct PatternsGuide: View {
                         } label: {
                             Text(currentPage == pages.count - 1 ? "Got it" : "Next")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(colors.textPrimary)
                                 .frame(width: currentPage > 0 ? 180 : 280)
                                 .padding(.vertical, 14)
                                 .background(
@@ -163,11 +162,11 @@ struct PatternsGuide: View {
             VStack(spacing: 12) {
                 Text(page.title)
                     .font(.system(size: 32, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                
+                    .foregroundColor(colors.textPrimary)
+
                 Text(page.subtitle)
                     .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colors.textSecondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 40)
                     .lineSpacing(4)

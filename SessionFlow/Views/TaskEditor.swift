@@ -11,10 +11,13 @@ struct TaskEditor: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     @ObservedObject var action: TaskEditorAction
-    
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     var body: some View {
         TaskEditorInternal(text: $text, isFocused: $isFocused, moveUpTrigger: action.moveUp, moveDownTrigger: action.moveDown)
-            .background(Color.white.opacity(0.05))
+            .background(colors.subtleBackground)
             .cornerRadius(8)
     }
 }
@@ -33,14 +36,14 @@ struct TaskEditorInternal: NSViewRepresentable {
         let textView = TaskTextView()
         textView.isRichText = false
         textView.font = .systemFont(ofSize: 13)
-        textView.textColor = .white
+        textView.textColor = .labelColor
         textView.backgroundColor = .clear
         textView.drawsBackground = false
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.autoresizingMask = [.width]
         textView.delegate = context.coordinator
-        textView.insertionPointColor = .white
+        textView.insertionPointColor = .controlAccentColor
         textView.textContainerInset = NSSize(width: 8, height: 8)
         
         textView.onMoveUp = { moveLine(textView: textView, direction: -1) }

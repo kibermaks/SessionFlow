@@ -5,6 +5,9 @@ import AppKit
 /// Inline popover for creating calendar events directly from the timeline.
 /// Features Spotlight-like autocomplete from recently created events.
 struct EventCreationPopover: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Binding var startTime: Date
     @Binding var durationMinutes: Int
     let onCommit: (String, Date, Date, CalendarDescriptor) -> Void
@@ -107,26 +110,26 @@ struct EventCreationPopover: View {
             HStack {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(.blue)
+                    .foregroundColor(colors.isDark ? Color(hex: "60A5FA") : Color(hex: "2563EB"))
                 Text("New Event")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Spacer()
                 draggableStartTimeLabel
             }
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider()
 
             // Title field with autocomplete
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                     TextField("Event name", text: $eventTitle)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                         .focused($titleFieldFocused)
                         .autocorrectionDisabled()
                         .onSubmit { commitEvent() }
@@ -152,7 +155,7 @@ struct EventCreationPopover: View {
                         }
                 }
                 .padding(8)
-                .background(Color.white.opacity(0.08))
+                .background(colors.subtleBackground)
                 .cornerRadius(6)
 
                 // Suggestions dropdown
@@ -164,11 +167,11 @@ struct EventCreationPopover: View {
                                 .onTapGesture { applySuggestion(suggestion) }
                         }
                     }
-                    .background(Color(hex: "1A2332"))
+                    .background(colors.popoverBackground)
                     .cornerRadius(6)
                     .overlay(
                         RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                            .stroke(colors.divider, lineWidth: 1)
                     )
                     .padding(.top, 2)
                 }
@@ -190,7 +193,7 @@ struct EventCreationPopover: View {
                 HStack {
                     Text("Duration")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(colors.textSecondary)
                     Spacer()
                     NumericInputField(value: $durationMinutes, range: 5...480, step: 5, unit: "min")
                 }
@@ -207,17 +210,17 @@ struct EventCreationPopover: View {
             HStack {
                 Text("\(timeFormatter.string(from: startTime)) – \(timeFormatter.string(from: endTime))")
                     .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                 Spacer()
             }
 
-            Divider().background(Color.white.opacity(0.1))
+            Divider()
 
             // Action buttons
             HStack {
                 Button("Cancel") { onCancel() }
                     .buttonStyle(.plain)
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
                     .font(.system(size: 12))
                     .hoverEffect(brightness: 0.3)
 
@@ -244,12 +247,12 @@ struct EventCreationPopover: View {
         .frame(width: 300)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(hex: "1E293B"))
+                .fill(colors.popoverBackground)
                 .shadow(color: .black.opacity(0.4), radius: 16, y: 6)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(colors.divider, lineWidth: 1)
         )
         .onAppear {
             // Use persisted calendar if still valid, otherwise fall back to first
@@ -309,10 +312,10 @@ struct EventCreationPopover: View {
     private var draggableStartTimeLabel: some View {
         Text(timeFormatter.string(from: startTime))
             .font(.system(size: 12, weight: .medium, design: .monospaced))
-            .foregroundColor(.white.opacity(0.65))
+            .foregroundColor(colors.textSecondary)
             .padding(.horizontal, 6)
             .padding(.vertical, 3)
-            .background(Color.white.opacity(0.06))
+            .background(colors.subtleBackground)
             .cornerRadius(4)
             .contentShape(Rectangle())
             .onContinuousHover { phase in
@@ -361,10 +364,10 @@ struct EventCreationPopover: View {
         } label: {
             Text("\(minutes)")
                 .font(.system(size: 10, weight: .medium))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                .foregroundColor(isSelected ? .white : colors.textSecondary)
                 .padding(.horizontal, 6)
                 .padding(.vertical, 3)
-                .background(isSelected ? Color.blue.opacity(0.5) : Color.white.opacity(0.06))
+                .background(isSelected ? Color.blue.opacity(0.5) : colors.subtleBackground)
                 .cornerRadius(4)
                 .contentShape(Rectangle())
         }
@@ -393,7 +396,7 @@ struct EventCreationPopover: View {
                 Spacer()
                 Text("\(liveDuration)m")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -414,7 +417,7 @@ struct EventCreationPopover: View {
                 Spacer()
                 Text("calendar")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(.white.opacity(0.3))
+                    .foregroundColor(colors.textDisabled)
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -434,15 +437,15 @@ struct EventCreationPopover: View {
             let match = String(title[range.lowerBound..<range.upperBound])
             let after = String(title[range.upperBound...])
 
-            return (Text(before).foregroundColor(.white.opacity(0.6)) +
-                    Text(match).foregroundColor(.white).bold() +
-                    Text(after).foregroundColor(.white.opacity(0.6)))
+            return (Text(before).foregroundColor(colors.textSecondary) +
+                    Text(match).foregroundColor(colors.textPrimary).bold() +
+                    Text(after).foregroundColor(colors.textSecondary))
                 .font(.system(size: 12))
         }
 
         return Text(title)
             .font(.system(size: 12))
-            .foregroundColor(.white.opacity(0.6))
+            .foregroundColor(colors.textSecondary)
     }
 
     private func navigateSuggestion(delta: Int) {

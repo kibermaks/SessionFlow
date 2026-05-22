@@ -53,6 +53,9 @@ private struct CopyToastView: View {
 
 // MARK: - Main Content View
 struct ContentView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var updateService: UpdateService
@@ -256,6 +259,9 @@ struct ContentView: View {
 
 // MARK: - Content View Body (Extracted)
 struct ContentViewBody: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
@@ -340,7 +346,7 @@ struct ContentViewBody: View {
                     toast: toast,
                     onUndo: {
                         _ = calendarService.deleteEvent(identifier: toast.newEventId)
-                        Task { await calendarService.fetchEvents(for: toast.targetDate) }
+                        Task { await calendarService.fetchEvents(for: selectedDate) }
                         copyToast = nil
                     },
                     onJumpTo: {
@@ -362,7 +368,6 @@ struct ContentViewBody: View {
         }
         .animation(.easeOut(duration: 0.25), value: copyToast?.id)
         .animation(.easeOut(duration: 0.25), value: modeToast)
-        .preferredColorScheme(.dark)
         .sheet(isPresented: $showingNewPresetSheet) {
             NewPresetSheet { preset in
                 PresetStorage.shared.addPreset(preset)
@@ -422,6 +427,8 @@ struct ContentViewBody: View {
                 lastCustomDate = newDate
             }
 
+            alignStartTimeWithSelectedDate()
+
             Task {
                 // If we are in custom mode, we might want to update startTime's day to match selectedDate
                 // so that the scheduler doesn't look at a different day's 08:00
@@ -443,10 +450,17 @@ struct ContentViewBody: View {
         }
         .onChange(of: useNowTime) { _, isNow in
             if isNow { startTime = roundedNowTime() }
+            alignStartTimeWithSelectedDate()
             if autoPreview { updateProjectedSchedule() }
         }
         .onChange(of: calendarService.lastRefresh) { _, _ in
             // Calendar events changed externally (from Calendar.app)
+            if let fetchedDate = calendarService.fetchedDate,
+               !Calendar.current.isDate(fetchedDate, inSameDayAs: selectedDate) {
+                Task { await calendarService.fetchEvents(for: selectedDate) }
+                return
+            }
+            alignStartTimeWithSelectedDate()
             if autoPreview { updateProjectedSchedule() }
         }
         .onChange(of: eventCreationCoordinator.startTime) { _, _ in
@@ -483,6 +497,7 @@ struct ContentViewBody: View {
                 if useNowTime && dateSelection == .today {
                     startTime = roundedNowTime()
                 }
+                alignStartTimeWithSelectedDate()
                 
                 Task {
                     await calendarService.fetchEvents(for: selectedDate)
@@ -519,6 +534,26 @@ struct ContentViewBody: View {
             }
         }
     }
+
+    private func alignStartTimeWithSelectedDate() {
+        let calendar = Calendar.current
+        let selectedIsToday = calendar.isDateInToday(selectedDate)
+        let wasUsingNow = useNowTime
+
+        if !selectedIsToday && useNowTime {
+            useNowTime = false
+        }
+
+        guard !calendar.isDate(startTime, inSameDayAs: selectedDate) || (wasUsingNow && !selectedIsToday) else {
+            return
+        }
+
+        let hour = (wasUsingNow && !selectedIsToday) ? schedulingEngine.defaultStartHour : calendar.component(.hour, from: startTime)
+        let minute = (wasUsingNow && !selectedIsToday) ? 0 : calendar.component(.minute, from: startTime)
+        if let aligned = calendar.date(bySettingHour: hour, minute: minute, second: 0, of: selectedDate) {
+            startTime = aligned
+        }
+    }
     
     @ViewBuilder
     private func eventCreationModalLayer(startTime: Date) -> some View {
@@ -551,12 +586,8 @@ struct ContentViewBody: View {
     }
 
     private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        colors.backgroundGradient
+            .ignoresSafeArea()
     }
     
     private var mainHStack: some View {
@@ -574,18 +605,18 @@ struct ContentViewBody: View {
                 showingTasksGuide: $showingTasksGuide
             )
             
-            Divider().background(Color.white.opacity(0.1))
-            
+            Divider().background(colors.divider)
+
             TimelineView(
                 selectedDate: selectedDate,
                 startTime: effectiveStartTime,
-                useNowTime: useNowTime && dateSelection == .today,
+                useNowTime: useNowTime && dateSelection == .today && Calendar.current.isDateInToday(selectedDate),
                 onCopySuccess: { info in copyToast = info },
                 onModeToast: { modeToast = $0 }
             )
             .padding()
-            
-            Divider().background(Color.white.opacity(0.1))
+
+            Divider().background(colors.divider)
             
             RightPanel(
                 selectedDate: selectedDate,
@@ -600,16 +631,38 @@ struct ContentViewBody: View {
     }
     
     var effectiveStartTime: Date {
-        if useNowTime && dateSelection == .today {
+        let calendar = Calendar.current
+        let selectedIsToday = calendar.isDateInToday(selectedDate)
+
+        if useNowTime && !selectedIsToday {
+            return calendar.date(
+                bySettingHour: schedulingEngine.defaultStartHour,
+                minute: 0,
+                second: 0,
+                of: selectedDate
+            ) ?? selectedDate
+        }
+
+        if useNowTime && dateSelection == .today && selectedIsToday {
             // Dev override: use fixed time for demos/screenshots (also drives planning start)
             if devNowLineOverrideEnabled {
-                let cal = Calendar.current
-                let dayStart = cal.startOfDay(for: selectedDate)
-                return cal.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
-                    .flatMap { cal.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? roundedNowTime()
+                let dayStart = calendar.startOfDay(for: selectedDate)
+                return calendar.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
+                    .flatMap { calendar.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? roundedNowTime()
             }
             return roundedNowTime()
         }
+
+        if !calendar.isDate(startTime, inSameDayAs: selectedDate),
+           let aligned = calendar.date(
+                bySettingHour: calendar.component(.hour, from: startTime),
+                minute: calendar.component(.minute, from: startTime),
+                second: 0,
+                of: selectedDate
+           ) {
+            return aligned
+        }
+
         return startTime
     }
     
@@ -692,6 +745,12 @@ struct ContentViewBody: View {
     }
 
     func updateProjectedSchedule() {
+        if let fetchedDate = calendarService.fetchedDate,
+           !Calendar.current.isDate(fetchedDate, inSameDayAs: selectedDate) {
+            Task { await calendarService.fetchEvents(for: selectedDate) }
+            return
+        }
+
         let planningExists = calendarService.hasPlanningSession(for: selectedDate)
         
         let existing = calendarService.countExistingSessions(
@@ -721,14 +780,14 @@ struct ContentViewBody: View {
         guard let draftStart = eventCreationCoordinator.startTime,
               Calendar.current.isDate(draftStart, inSameDayAs: selectedDate)
         else {
-            return calendarService.busySlots
+            return calendarService.busySlotsForFetchedDate(selectedDate)
         }
 
         let durationMinutes = max(5, eventCreationCoordinator.durationMinutes)
         let draftEnd = draftStart.addingTimeInterval(Double(durationMinutes) * 60)
         let title = eventCreationCoordinator.draftTitle.isEmpty ? "New Event" : eventCreationCoordinator.draftTitle
 
-        var slots = calendarService.busySlots
+        var slots = calendarService.busySlotsForFetchedDate(selectedDate)
         slots.append(BusyTimeSlot(
             id: "sessionflow-event-creation-draft",
             title: title,
@@ -805,9 +864,12 @@ struct ContentViewBody: View {
                 requireSessionTag: true
             )
         } else {
+            let cutoff = Calendar.current.isDateInToday(selectedDate)
+                ? Date()
+                : Calendar.current.startOfDay(for: selectedDate)
             result = calendarService.deleteFutureSessionEvents(
                 for: selectedDate,
-                after: Date(),
+                after: cutoff,
                 sessionNames: nil,
                 fromCalendars: uniqueCalendars,
                 requireSessionTag: true
@@ -917,6 +979,9 @@ struct SettingsChangeModifier: ViewModifier {
 
 // MARK: - Header View
 struct HeaderView: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var updateService: UpdateService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @Binding var dateSelection: ContentView.DateSelection
@@ -941,9 +1006,9 @@ struct HeaderView: View {
             SettingsLink {
                 Image(systemName: "gearshape.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
                     .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.1)))
+                    .background(RoundedRectangle(cornerRadius: 8).fill(colors.subtleBackground))
             }
             .buttonStyle(.plain)
             .hoverEffect(brightness: 0.2)
@@ -952,7 +1017,7 @@ struct HeaderView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
         .background(WindowDragView())
-        .background(Color.black.opacity(0.2))
+        .background(colors.overlayBackground)
         #if DEBUG
         .task {
             let branch = Self.resolveGitBranch()
@@ -987,15 +1052,15 @@ struct HeaderView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("SessionFlow")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text(displayedHeaderVersion)
                     .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(colors.textMuted)
             }
             HStack(spacing: 6) {
                 Text("Plan your productive day")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(colors.textSecondary)
                 #if DEBUG
                 if let branch = gitBranch {
                     Text(branch)
@@ -1014,7 +1079,7 @@ struct HeaderView: View {
                         .progressViewStyle(.circular)
                     Text(status.message)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.85))
+                        .foregroundColor(colors.textSecondary)
                 }
             }
         }
@@ -1039,8 +1104,8 @@ struct HeaderView: View {
                     .font(.system(size: 14, weight: .medium))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.1))
-                    .foregroundColor(.white)
+                    .background(colors.hoveredBackground)
+                    .foregroundColor(colors.textPrimary)
                     .cornerRadius(8)
                     .contentShape(Rectangle())
             }
@@ -1056,8 +1121,8 @@ struct HeaderView: View {
                         .fixedSize(horizontal: true, vertical: false)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(dateSelection == sel ? Color(hex: "8B5CF6") : Color.white.opacity(0.1))
-                        .foregroundColor(.white)
+                        .background(dateSelection == sel ? Color(hex: "8B5CF6") : colors.hoveredBackground)
+                        .foregroundColor(dateSelection == sel ? .white : colors.textPrimary)
                         .cornerRadius(8)
                         .contentShape(Rectangle())
                 }
@@ -1110,9 +1175,9 @@ struct HeaderView: View {
     }
 
     private var startTimeControls: some View {
-        let nowDisabled = dateSelection != .today
+        let nowDisabled = dateSelection != .today || !Calendar.current.isDateInToday(selectedDate)
         return HStack(spacing: 8) {
-            Text("Start:").foregroundColor(.white.opacity(0.7))
+            Text("Start:").foregroundColor(colors.textSecondary)
             Picker("", selection: $useNowTime) {
                 Text("Now").tag(true)
                 Text("Set").tag(false)
@@ -1171,6 +1236,9 @@ struct HeaderView: View {
 
 // MARK: - Left Panel
 struct LeftPanel: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @Binding var presets: [Preset]
     @Binding var selectedPreset: Preset?
@@ -1200,7 +1268,7 @@ struct LeftPanel: View {
                 if selectedTab == .settings {
                     VStack(spacing: 0) {
                         presetDropdown
-                        Divider().background(Color.white.opacity(0.1))
+                        Divider().background(colors.divider)
                         SettingsPanel(
                             hasSeenPatternsGuide: $hasSeenPatternsGuide,
                             showingPatternsGuide: $showingPatternsGuide,
@@ -1223,13 +1291,13 @@ struct LeftPanel: View {
                 VStack(spacing: 12) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.white.opacity(0.8))
+                        .foregroundColor(colors.textSecondary)
                     Text("Manual alignment active")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.9))
+                        .foregroundColor(colors.textPrimary)
                     Text("Settings are locked while you adjust projected sessions")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(colors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                     Button {
@@ -1292,7 +1360,7 @@ struct LeftPanel: View {
                     VStack(spacing: 8) {
                         Text(tab.rawValue)
                             .font(.system(size: 13, weight: selectedTab == tab ? .bold : .medium))
-                            .foregroundColor(selectedTab == tab ? .white : .white.opacity(0.5))
+                            .foregroundColor(selectedTab == tab ? colors.textPrimary : colors.textMuted)
 
                         Rectangle()
                             .fill(selectedTab == tab ? Color(hex: "8B5CF6") : Color.clear)
@@ -1312,7 +1380,7 @@ struct LeftPanel: View {
         HStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "bookmark.fill").foregroundColor(Color(hex: "8B5CF6"))
-                Text("Preset").font(.headline).foregroundColor(.white)
+                Text("Preset").font(.headline).foregroundColor(colors.textPrimary)
             }
             Spacer()
             presetMenu
@@ -1338,14 +1406,14 @@ struct LeftPanel: View {
                 if let p = selectedPreset {
                     Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
                     let modified = schedulingEngine.isPresetModified(p)
-                    Text(p.name + (modified ? " ＊" : "")).foregroundColor(.white)
+                    Text(p.name + (modified ? " ＊" : "")).foregroundColor(colors.textPrimary)
                 } else {
-                    Image(systemName: "doc").foregroundColor(.white.opacity(0.5))
-                    Text("No Preset Selected").foregroundColor(.white.opacity(0.5))
+                    Image(systemName: "doc").foregroundColor(colors.textSecondary)
+                    Text("No Preset Selected").foregroundColor(colors.textSecondary)
                 }
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
             }
             .frame(maxWidth: .infinity, minHeight: 24, maxHeight: 24, alignment: .trailing)
             .font(.system(size: 13, weight: .medium))
@@ -1393,6 +1461,9 @@ struct LeftPanel: View {
 
 // MARK: - Right Panel
 struct RightPanel: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
@@ -1471,7 +1542,7 @@ struct RightPanel: View {
                 VStack(spacing: 20) {
                     availabilityCard
                     sessionsSummaryCard
-                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlots.contains(where: { SessionRating.fromNotes($0.notes) != nil }) {
+                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlotsForFetchedDate(selectedDate).contains(where: { SessionRating.fromNotes($0.notes) != nil }) {
                         ProductivityCard()
                     }
                     if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
@@ -1496,20 +1567,20 @@ struct RightPanel: View {
     }
     
     private var availabilityCard: some View {
-        let avail = schedulingEngine.calculateAvailability(startTime: effectiveStartTime, baseDate: selectedDate, busySlots: calendarService.busySlots)
+        let avail = schedulingEngine.calculateAvailability(startTime: effectiveStartTime, baseDate: selectedDate, busySlots: calendarService.busySlotsForFetchedDate(selectedDate))
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "clock.fill").foregroundColor(Color(hex: "3B82F6"))
-                Text("Availability").font(.headline).foregroundColor(.white)
-                
+                Text("Availability").font(.headline).foregroundColor(colors.textPrimary)
+
                 Spacer()
-                
+
                 Button {
                     showingAvailabilityHelp.toggle()
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -1519,7 +1590,7 @@ struct RightPanel: View {
                         if schedulingEngine.scheduleEndHour > 24 {
                             Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
                                 .font(.system(size: 12))
-                                .foregroundColor(.orange.opacity(0.9))
+                                .foregroundColor(colors.isDark ? .orange.opacity(0.9) : Color(hex: "C2410C"))
                                 .italic()
                         }
                     }
@@ -1536,13 +1607,13 @@ struct RightPanel: View {
                     row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
                 }
             }
-            .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
+            .font(.system(size: 13)).foregroundColor(colors.textSecondary)
         }
-        .padding().background(Color.white.opacity(0.05)).cornerRadius(12)
+        .padding().background(colors.subtleBackground).cornerRadius(12)
     }
     
     private func row(_ label: String, _ val: String, _ color: Color? = nil) -> some View {
-        HStack { Text(label); Spacer(); Text(val).fontWeight(.semibold).foregroundColor(color ?? .white.opacity(0.8)) }
+        HStack { Text(label); Spacer(); Text(val).fontWeight(.semibold).foregroundColor(color ?? colors.textSecondary) }
     }
 
     private func formattedHourForCard(_ hour: Int) -> String {
@@ -1580,16 +1651,16 @@ struct RightPanel: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "list.bullet.clipboard.fill").foregroundColor(Color(hex: "8B5CF6"))
-                Text("Projected Sessions").font(.headline).foregroundColor(.white)
-                
+                Text("Projected Sessions").font(.headline).foregroundColor(colors.textPrimary)
+
                 Spacer()
-                
+
                 Button {
                     showingProjectionHelp.toggle()
                 } label: {
                     Image(systemName: "info.circle")
                         .font(.system(size: 13))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.3)
@@ -1604,7 +1675,7 @@ struct RightPanel: View {
                 if schedulingEngine.hasNoSessionTargets {
                     Text("No sessions configured")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                         .padding(.vertical, 8)
                 } else if schedulingEngine.quotasSatisfied {
                     quotaSatisfiedStats
@@ -1612,19 +1683,19 @@ struct RightPanel: View {
                 } else if !schedulingEngine.schedulingMessage.isEmpty {
                     Text("No additional sessions projected")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                         .padding(.vertical, 8)
                 } else {
                     Text("Scheduling preview will appear here")
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                         .padding(.vertical, 8)
                 }
             } else {
                 sessionStats(sessions)
             }
             if !schedulingEngine.schedulingMessage.isEmpty {
-                Text(schedulingEngine.schedulingMessage).font(.system(size: 11)).foregroundColor(.yellow.opacity(0.8))
+                Text(schedulingEngine.schedulingMessage).font(.system(size: 11)).foregroundColor(colors.isDark ? .yellow.opacity(0.8) : Color(hex: "92400E"))
             }
             
             if schedulingEngine.awareExistingTasks {
@@ -1632,17 +1703,17 @@ struct RightPanel: View {
                     Image(systemName: "brain.head.profile").font(.system(size: 10))
                     Text("Accounting for existing sessions from calendar").font(.system(size: 10)).italic()
                 }
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(colors.textMuted)
                 .padding(.top, -4)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                .foregroundColor(Color.white.opacity(0.15))
+                .foregroundColor(colors.border)
         )
     }
     
@@ -1661,14 +1732,14 @@ struct RightPanel: View {
             countRow(.work, wc)
             countRow(.side, sc)
             if dc > 0 { countRow(.deep, dc) }
-            Divider().background(Color.white.opacity(0.2))
+            Divider().background(colors.borderStrong)
             HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessionCount) sessions").fontWeight(.semibold) }
             if lrc > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "pause.circle.fill").font(.system(size: 9)).foregroundColor(SessionType.bigRest.color.opacity(0.6))
                     Text("\(lrc) long \(lrc == 1 ? "rest" : "rests") between sessions")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(colors.textMuted)
                 }
             }
             if let last = sessions.last {
@@ -1684,16 +1755,16 @@ struct RightPanel: View {
                             Text("+1d")
                                 .font(.caption2)
                                 .fontWeight(.bold)
-                                .foregroundColor(.orange)
+                                .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
                         }
                         Text(formatter.string(from: last.endTime)).fontWeight(.semibold).foregroundColor(Color(hex: "10B981"))
                     }
                 }
             }
         }
-        .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
+        .font(.system(size: 13)).foregroundColor(colors.textSecondary)
     }
-    
+
     private var quotaSatisfiedStats: some View {
         let counts = schedulingEngine.quotaCounts
         return VStack(alignment: .leading, spacing: 6) {
@@ -1705,7 +1776,7 @@ struct RightPanel: View {
             if schedulingEngine.sideSessions > 0 { countRow(.side, counts.side) }
             if schedulingEngine.deepSessionConfig.enabled { countRow(.deep, counts.deep) }
         }
-        .font(.system(size: 13)).foregroundColor(.white.opacity(0.8))
+        .font(.system(size: 13)).foregroundColor(colors.textSecondary)
     }
 
     private func isCalendarHidden(for type: SessionType) -> Bool {
@@ -1773,7 +1844,7 @@ struct RightPanel: View {
                 .help("Add all projected sessions to your Calendar")
 
                 Rectangle()
-                    .fill(Color.white.opacity(0.2))
+                    .fill(colors.borderStrong)
                     .frame(width: 1)
                     .padding(.vertical, 6)
 
@@ -1786,6 +1857,7 @@ struct RightPanel: View {
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
                         .frame(maxWidth: 36, maxHeight: .infinity)
                 }
                 .menuStyle(.borderlessButton)
@@ -1796,6 +1868,7 @@ struct RightPanel: View {
             .frame(height: 44)
             .background(disabled ? Color.gray.opacity(0.3) : accent)
             .foregroundColor(.white)
+            .environment(\.colorScheme, .dark)
             .cornerRadius(10)
             .hoverEffect(brightness: disabled ? 0 : 0.12)
 
@@ -1819,7 +1892,7 @@ struct RightPanel: View {
             type: .planning,
             startTime: effectiveStartTime,
             baseDate: selectedDate,
-            busySlots: calendarService.busySlots
+            busySlots: calendarService.busySlotsForFetchedDate(selectedDate)
         ) {
             let result = calendarService.createSessions([session])
             if result.failed == 0 {
@@ -1845,13 +1918,16 @@ private struct DidYouKnowFact: Identifiable, Equatable {
 }
 
 private struct DidYouKnowCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     let fact: DidYouKnowFact
     let factIndex: Int
     let totalFacts: Int
     let onNext: () -> Void
     let onPrevious: () -> Void
     let onClose: () -> Void
-    
+
     @State private var rotationTimer: Timer?
     private let rotationInterval: TimeInterval = 12
     
@@ -1864,29 +1940,29 @@ private struct DidYouKnowCard: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 10, height: 10)
-                            .foregroundColor(.yellow.opacity(0.7))
+                            .foregroundColor(colors.isDark ? .yellow.opacity(0.7) : Color(hex: "92400E"))
                         Text("Did you know?")
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.white.opacity(0.6))
+                            .foregroundColor(colors.textSecondary)
                     }
                     Text(fact.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                 }
                 Spacer()
                 controlButtons
             }
             Text(fact.message)
                 .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.trailing, 8)
-            
+
             if totalFacts > 1 {
                 HStack(spacing: 4) {
                     ForEach(0..<totalFacts, id: \.self) { idx in
                         Capsule()
-                            .fill(idx == factIndex ? Color.white.opacity(0.9) : Color.white.opacity(0.25))
+                            .fill(idx == factIndex ? colors.textPrimary : colors.textDisabled)
                             .frame(width: idx == factIndex ? 16 : 8, height: 3)
                     }
                     Spacer(minLength: 0)
@@ -1895,11 +1971,11 @@ private struct DidYouKnowCard: View {
             }
         }
         .padding(14)
-        .background(Color.white.opacity(0.04))
+        .background(colors.subtleBackground)
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                .stroke(colors.divider, lineWidth: 1)
         )
         .onAppear(perform: restartTimer)
         .onDisappear(perform: stopTimer)
@@ -1911,7 +1987,7 @@ private struct DidYouKnowCard: View {
         HStack(spacing: 6) {
             controlButton(icon: "chevron.right", disabled: totalFacts < 2, action: onNext)
             Rectangle()
-                .fill(Color.white.opacity(0.1))
+                .fill(colors.divider)
                 .frame(width: 1, height: 14)
                 .padding(.horizontal, 2)
             controlButton(icon: "xmark", action: onClose)
@@ -1922,11 +1998,11 @@ private struct DidYouKnowCard: View {
         Button(action: action) {
             Image(systemName: icon)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(.white.opacity(disabled ? 0.25 : 0.8))
+                .foregroundColor(disabled ? colors.textDisabled : colors.textSecondary)
                 .frame(width: 24, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(disabled ? 0.05 : 0.12))
+                        .fill(disabled ? colors.subtleBackground : colors.hoveredBackground)
                 )
         }
         .buttonStyle(.plain)
@@ -1994,7 +2070,7 @@ struct DeleteConfirmationSheet: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.white.opacity(0.1))
+                .background(Color.primary.opacity(0.07))
                 .cornerRadius(8)
                 
                 Text("This action cannot be undone.")

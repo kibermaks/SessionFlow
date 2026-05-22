@@ -25,6 +25,23 @@ class EventUndoManager: ObservableObject {
         let sessions: [ScheduledSession]  // projected sessions to restore on undo
     }
 
+    struct FeedbackChange: Equatable {
+        let eventId: String
+        let oldRating: SessionRating?
+        let newRating: SessionRating?
+    }
+
+    struct EventContentChange: Equatable {
+        enum FieldChange: Equatable {
+            case title(old: String, new: String)
+            case notes(old: String?, new: String?)
+            case url(old: URL?, new: URL?)
+        }
+        let eventId: String
+        let change: FieldChange
+        let description: String
+    }
+
     enum UndoableChange: Equatable {
         case time(EventTimeChange)
         case timeBatch([EventTimeChange])  // atomic multi-event move (e.g. group drag)
@@ -32,6 +49,8 @@ class EventUndoManager: ObservableObject {
         case deleteBatch([EventDeleteSnapshot])  // atomic multi-event delete
         case schedule(ScheduleSnapshot)
         case create(EventDeleteSnapshot)  // undo = delete, redo = restore
+        case feedback(FeedbackChange)
+        case content(EventContentChange)
     }
 
     struct EventTimeChange: Equatable {
@@ -150,6 +169,20 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    func recordFeedback(_ change: FeedbackChange) {
+        undoStack.append(.feedback(change))
+        if undoStack.count > maxStackSize { undoStack.removeFirst() }
+        redoStack.removeAll()
+        updateState()
+    }
+
+    func recordContent(_ change: EventContentChange) {
+        undoStack.append(.content(change))
+        if undoStack.count > maxStackSize { undoStack.removeFirst() }
+        redoStack.removeAll()
+        updateState()
+    }
+
     func recordSchedule(_ snapshot: ScheduleSnapshot) {
         undoStack.append(.schedule(snapshot))
         if undoStack.count > maxStackSize {
@@ -175,6 +208,10 @@ class EventUndoManager: ObservableObject {
             redoStack.append(change)
         case .create:
             break  // Caller will push redo after delete (needs new eventId after re-create)
+        case .feedback:
+            redoStack.append(change)
+        case .content:
+            redoStack.append(change)
         }
         updateState()
         switch change {
@@ -219,6 +256,19 @@ class EventUndoManager: ObservableObject {
             return .schedule(snap)
         case .create(let snap):
             return .create(snap)
+        case .feedback(let fc):
+            return .feedback(FeedbackChange(eventId: fc.eventId, oldRating: fc.newRating, newRating: fc.oldRating))
+        case .content(let cc):
+            let inverted: EventContentChange.FieldChange
+            switch cc.change {
+            case .title(let old, let new):
+                inverted = .title(old: new, new: old)
+            case .notes(let old, let new):
+                inverted = .notes(old: new, new: old)
+            case .url(let old, let new):
+                inverted = .url(old: new, new: old)
+            }
+            return .content(EventContentChange(eventId: cc.eventId, change: inverted, description: "Undo \(cc.description)"))
         }
     }
 
@@ -273,6 +323,10 @@ class EventUndoManager: ObservableObject {
             return .schedule(snap)
         case .create(let snap):
             return .create(snap)
+        case .feedback:
+            return change
+        case .content:
+            return change
         }
     }
 

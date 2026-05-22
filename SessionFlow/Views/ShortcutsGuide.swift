@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ShortcutsGuide: View {
     @Environment(\.dismiss) var dismiss
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @State private var currentPage = 0
     @State private var selectedTrigger: Int? = nil
 
@@ -28,12 +31,8 @@ struct ShortcutsGuide: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
 
             VStack(spacing: 10) {
                 // Close button
@@ -44,9 +43,9 @@ struct ShortcutsGuide: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(colors.divider))
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.2)
@@ -91,7 +90,7 @@ struct ShortcutsGuide: View {
                     HStack(spacing: 8) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Circle()
-                                .fill(currentPage == index ? pages[index].color : Color.white.opacity(0.2))
+                                .fill(currentPage == index ? pages[index].color : colors.border)
                                 .frame(width: 8, height: 8)
                                 .animation(.spring(), value: currentPage)
                         }
@@ -105,12 +104,12 @@ struct ShortcutsGuide: View {
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(colors.textSecondary)
                                     .frame(width: 100)
                                     .padding(.vertical, 14)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.white.opacity(0.1))
+                                            .fill(colors.divider)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -126,7 +125,7 @@ struct ShortcutsGuide: View {
                         } label: {
                             Text(currentPage == pages.count - 1 ? "Got it" : "Next")
                                 .font(.system(size: 16, weight: .bold))
-                                .foregroundColor(.white)
+                                .foregroundColor(colors.textPrimary)
                                 .frame(width: currentPage > 0 ? 180 : 280)
                                 .padding(.vertical, 14)
                                 .background(
@@ -156,11 +155,11 @@ struct ShortcutsGuide: View {
 
             Text(page.title)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
 
             Text(page.subtitle)
                 .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
                 .frame(maxWidth: 380)
@@ -182,12 +181,12 @@ struct ShortcutsGuide: View {
                 Text("3 rest triggers")
                     .font(.system(size: 11))
             }
-            .foregroundColor(.white.opacity(0.35))
+            .foregroundColor(colors.textMuted)
             .padding(.top, 2)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 16)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -206,13 +205,13 @@ struct ShortcutsGuide: View {
 
                 Text(label)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
 
                 Spacer()
 
                 Image(systemName: selectedTrigger == index ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 14))
-                    .foregroundColor(selectedTrigger == index ? color : .white.opacity(0.2))
+                    .foregroundColor(selectedTrigger == index ? color : colors.border)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -238,7 +237,7 @@ struct ShortcutsGuide: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 16)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -252,13 +251,13 @@ struct ShortcutsGuide: View {
 
             Text(label)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
 
             Spacer()
 
             Text(detail)
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.35))
+                .foregroundColor(colors.textMuted)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -283,7 +282,7 @@ struct ShortcutsGuide: View {
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 16)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -292,13 +291,13 @@ struct ShortcutsGuide: View {
         HStack(spacing: 12) {
             Text(number)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(Color(hex: "10B981").opacity(0.3)))
 
             Text(text)
                 .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(colors.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
 
             Spacer()

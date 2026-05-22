@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct SessionAwarenessGuide: View {
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
     @Environment(\.dismiss) var dismiss
     @State private var currentPage = 0
     @State private var remainingMinutes: Int = Self.demoSessionMinutes
@@ -34,12 +37,8 @@ struct SessionAwarenessGuide: View {
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [Color(hex: "0F172A"), Color(hex: "1E293B")],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            colors.backgroundGradient
+                .ignoresSafeArea()
 
             VStack(spacing: 10) {
                 // Close button
@@ -50,9 +49,9 @@ struct SessionAwarenessGuide: View {
                     } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.4))
+                            .foregroundColor(colors.textMuted)
                             .padding(8)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+                            .background(Circle().fill(colors.subtleBackground))
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.2)
@@ -97,7 +96,7 @@ struct SessionAwarenessGuide: View {
                     HStack(spacing: 8) {
                         ForEach(0..<pages.count, id: \.self) { index in
                             Circle()
-                                .fill(currentPage == index ? pages[index].color : Color.white.opacity(0.2))
+                                .fill(currentPage == index ? pages[index].color : colors.textDisabled)
                                 .frame(width: 8, height: 8)
                                 .animation(.spring(), value: currentPage)
                         }
@@ -111,12 +110,12 @@ struct SessionAwarenessGuide: View {
                             } label: {
                                 Text("Back")
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(.white.opacity(0.6))
+                                    .foregroundColor(colors.textSecondary)
                                     .frame(width: 100)
                                     .padding(.vertical, 14)
                                     .background(
                                         RoundedRectangle(cornerRadius: 12)
-                                            .fill(Color.white.opacity(0.1))
+                                            .fill(colors.subtleBackground)
                                     )
                             }
                             .buttonStyle(.plain)
@@ -182,11 +181,11 @@ struct SessionAwarenessGuide: View {
 
             Text(page.title)
                 .font(.system(size: 28, weight: .bold, design: .rounded))
-                .foregroundColor(.white)
+                .foregroundColor(colors.textPrimary)
 
             Text(page.subtitle)
                 .font(.system(size: 16))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colors.textSecondary)
                 .multilineTextAlignment(.center)
                 .lineSpacing(4)
                 .frame(maxWidth: 380)
@@ -207,10 +206,10 @@ struct SessionAwarenessGuide: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Deep Work Session")
                         .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(colors.textPrimary)
                     Text("10:00 - 10:40")
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(colors.textSecondary)
                 }
 
                 Spacer()
@@ -225,7 +224,7 @@ struct SessionAwarenessGuide: View {
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color.white.opacity(0.1))
+                        .fill(colors.divider)
 
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color(hex: "8B5CF6"))
@@ -237,7 +236,7 @@ struct SessionAwarenessGuide: View {
             .padding(.horizontal, 16)
         }
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -267,15 +266,15 @@ struct SessionAwarenessGuide: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Mountain Atmosphere")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.white)
+                    .foregroundColor(colors.textPrimary)
                 Text("Deep Work")
                     .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(colors.textSecondary)
             }
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -307,7 +306,7 @@ struct SessionAwarenessGuide: View {
             }
         }
         .padding(.vertical, 12)
-        .background(Color.white.opacity(0.05))
+        .background(colors.subtleBackground)
         .cornerRadius(16)
         .padding(.horizontal, 40)
     }
@@ -324,11 +323,11 @@ struct SessionAwarenessGuide: View {
                 Text(label)
                     .font(.system(size: 11, weight: .medium))
             }
-            .foregroundColor(selectedFeedback == label ? color : .white.opacity(0.6))
+            .foregroundColor(selectedFeedback == label ? color : colors.textSecondary)
             .frame(width: 80, height: 60)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(selectedFeedback == label ? color.opacity(0.15) : Color.white.opacity(0.05))
+                    .fill(selectedFeedback == label ? color.opacity(0.15) : colors.subtleBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
