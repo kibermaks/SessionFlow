@@ -5,6 +5,24 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.5.22] - 2026-05-22
+
+### Added
+
+- Light theme is finally here, with System, Light, and Dark appearance modes
+- Year overview in the Productivity Calendar for monthly focus totals and rating trends
+
+### Changed
+
+- Clicking an already selected calendar event keeps it selected; click empty timeline space to clear selection
+
+### Fixed
+
+- Undo and redo for calendar event changes no longer leave the timeline stuck or unclickable
+- Timeline actions on Tomorrow, past days, and custom dates now stay on the selected day
+- Calendar events no longer disappear from non-today timelines after delete, copy, feedback, undo, or redo
+- The start-time guide line now shows the selected start time on non-today dates
+
 ## [2026.5.21] - 2026-05-21
 
 ### Added
