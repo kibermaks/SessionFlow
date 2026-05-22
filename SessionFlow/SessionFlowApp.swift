@@ -39,7 +39,7 @@ struct SessionFlowApp: App {
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
     @State private var didInitializeServices = false
     private let dockProgressController = DockProgressController()
-    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.dark.rawValue
+    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.system.rawValue
 
     private var preferredScheme: ColorScheme? {
         AppearanceMode(rawValue: appearanceModeRaw)?.colorScheme
@@ -269,7 +269,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 private extension SessionFlowApp {
     func applyAppearance(_ raw: String) {
-        let mode = AppearanceMode(rawValue: raw) ?? .dark
+        let mode = AppearanceMode(rawValue: raw) ?? .system
         switch mode {
         case .system: NSApp.appearance = nil
         case .light:  NSApp.appearance = NSAppearance(named: .aqua)

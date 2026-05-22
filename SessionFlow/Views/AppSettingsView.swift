@@ -8,7 +8,7 @@ struct AppSettingsView: View {
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var sessionAudioService: SessionAudioService
 
-    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.dark.rawValue
+    @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.system.rawValue
     @Environment(\.colorScheme) var colorScheme
     var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
