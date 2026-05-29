@@ -7,7 +7,7 @@
 
 **Smart scheduling for productive days**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-13.0+-blue.svg)](https://www.apple.com/macos) [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org) [![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg?branch=main&event=push)](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![macOS](https://img.shields.io/badge/macOS-14.0+-blue.svg)](https://www.apple.com/macos) [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org) [![Build](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml/badge.svg?branch=main&event=push)](https://github.com/kibermaks/SessionFlow/actions/workflows/build.yml) [![Release](https://img.shields.io/github/v/release/kibermaks/SessionFlow)](https://github.com/kibermaks/SessionFlow/releases/latest)
 
 SessionFlow is a native macOS app that helps you plan, execute, and reflect on productive days. It automatically schedules work, side, and deep sessions around your existing calendar events, tracks them in real time with ambient sounds and progress indicators, and captures feedback so you can see how your time actually felt.
 
@@ -360,7 +360,7 @@ See [Agents.md](Agents.md) for detailed instructions.
 
 ### System Requirements
 
-- **macOS**: 13.0 (Ventura) or later
+- **macOS**: 14.0 (Sonoma) or later
 - **Processor**: Apple Silicon (M1/M2/M3) or Intel
 - **Permissions**: Calendar access (requested on first launch)
 
@@ -377,8 +377,8 @@ Swift Package Manager dependencies are resolved by Xcode and pinned in `SessionF
 
 ### Prerequisites
 
-- Xcode 16.3 or later (the MCP Swift SDK requires a Swift 6.1-capable toolchain)
-- macOS 13.0 or later
+- Xcode 26.5 or later (the MCP Swift SDK needs a Swift 6.1-capable toolchain, and the app icon uses the current Icon Composer `.icon` format)
+- macOS 14.0 or later
 - Git
 - Apple Developer Team ID (update the `TEAM_ID="RGFAX8X946"` placeholder in `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)
 

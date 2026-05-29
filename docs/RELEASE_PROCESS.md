@@ -139,7 +139,7 @@ File: `.github/workflows/release.yml`
 
 **What it does:**
 1. Checks out code
-2. Sets up the latest stable Xcode
+2. Sets up Xcode 26.5 on the `macos-26` runner
 3. Extracts version from tag
 4. Updates project version
 5. Builds Release configuration
@@ -211,7 +211,7 @@ If the release includes new features:
 **Solutions:**
 - Check the Actions log for specific errors
 - Ensure project.pbxproj is valid
-- Verify code compiles locally with Xcode 16.3 or later
+- Verify code compiles locally with Xcode 26.5 or later
 - Check for missing files or broken references
 
 ### DMG Creation Fails

@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     
     steps:
       - name: Checkout code
@@ -21,7 +21,7 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          xcode-version: '26.5'
       
       - name: Build
         run: |
@@ -29,6 +29,7 @@ jobs:
           SCHEME="SessionFlow"
           PROJECT="SessionFlow.xcodeproj"
           
+          set +e
           xcodebuild -project "$PROJECT" \
                      -scheme "$SCHEME" \
                      -configuration Debug \
@@ -37,4 +38,14 @@ jobs:
                      CODE_SIGN_IDENTITY="-" \
                      CODE_SIGNING_REQUIRED="NO" \
                      CODE_SIGNING_ALLOWED="NO" \
-                     | xcpretty
+                     SWIFT_ENABLE_EXPLICIT_MODULES=NO \
+                     2>&1 | tee xcodebuild.log
+          build_status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$build_status" -ne 0 ]; then
+            echo "::group::Raw xcodebuild tail"
+            tail -n 300 xcodebuild.log
+            echo "::endgroup::"
+            exit "$build_status"
+          fi
