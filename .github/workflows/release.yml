@@ -58,7 +58,8 @@ jobs:
           set -o pipefail
           SCHEME="SessionFlow"
           PROJECT="SessionFlow.xcodeproj"
-          BUILD_DIR="./build_output"
+          DERIVED_DATA_DIR="./build_derived_data"
+          rm -rf "$DERIVED_DATA_DIR"
           
           CURRENT_BUILD=$(grep "CURRENT_PROJECT_VERSION =" "$PROJECT/project.pbxproj" | head -n 1 | sed 's/.*= //;s/;//' | tr -d '[:space:]')
           NEW_BUILD_NUMBER=$((CURRENT_BUILD + 1))
@@ -70,17 +71,18 @@ jobs:
                      -scheme "$SCHEME" \
                      -configuration Release \
                      -destination 'platform=macOS,arch=arm64' \
+                     -derivedDataPath "$DERIVED_DATA_DIR" \
                      clean build \
                      CODE_SIGN_IDENTITY="-" \
                      CODE_SIGNING_REQUIRED="NO" \
                      CODE_SIGNING_ALLOWED="NO" \
-                     CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
+                     SWIFT_ENABLE_EXPLICIT_MODULES=NO \
                      MARKETING_VERSION="${{ steps.version.outputs.marketing_version }}" \
                      CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER" \
                      | xcpretty
           
-          APP_PATH=$(find "$BUILD_DIR" -maxdepth 1 -name "*.app" | head -n 1)
-          if [ -z "$APP_PATH" ]; then
+          APP_PATH="$DERIVED_DATA_DIR/Build/Products/Release/$SCHEME.app"
+          if [ ! -d "$APP_PATH" ]; then
             echo "Build failed - no .app found"
             exit 1
           fi
