@@ -15,9 +15,9 @@ This document describes the complete release process for SessionFlow, from prepa
 
 SessionFlow uses a semi-automated release process:
 
-1. **Local**: Build and version the app, create DMG, commit changes
-2. **GitHub**: Push tag to trigger automated build and release
-3. **GitHub Actions**: Builds app, creates DMG/ZIP, publishes GitHub Release
+1. **Local**: Build and version the app, notarize it, create notarized DMG/ZIP artifacts, commit changes
+2. **GitHub**: Push `main` and the release tag, then publish the local artifacts with `gh release create`
+3. **GitHub Actions**: Verifies Debug builds on branch pushes/PRs and Release builds for tags/manual dispatch
 
 ## Quick Release (Automated)
 
@@ -31,9 +31,10 @@ This interactive script will:
 1. Ask you to choose today's date, a custom date version, or keep the current marketing version
 2. Check your pre-release checklist
 3. Build the app with updated version
-4. Create DMG installer
+4. Notarize the app, create a DMG installer and ZIP archive, then notarize the DMG
 5. Create git commit and tag
-6. Push to GitHub (triggers automated release)
+6. Push to GitHub
+7. Upload the local DMG/ZIP to a GitHub Release via `gh` when confirmed
 
 ### Pre-Release Checklist
 
@@ -74,23 +75,33 @@ Move items from `[Unreleased]` section to a new version section:
 Choose the appropriate version increment:
 
 ```bash
-# Use today's date version and bump build number
-./build_app.sh
+# Use today's date version, bump build number, and create ./release/SessionFlow.app
+./build_app.sh --release
 
 # Keep current marketing version and bump build number only
-./build_app.sh current
+./build_app.sh current --release
 
 # Build with a dedicated date version
-./build_app.sh dedicated-version 2026.4.9
+./build_app.sh dedicated-version 2026.4.9 --release
 ```
 
-### 3. Create DMG
+### 3. Notarize and Package
 
 ```bash
-./create_dmg.sh
+# Notarize and staple the app
+./notarize.sh ./release/SessionFlow.app
+
+# Create the DMG from the Release app
+DMG_VERSION_OVERRIDE=YYYY.M.D APP_SOURCE_OVERRIDE=./release/SessionFlow.app ./create_dmg.sh
+
+# Notarize and staple the DMG
+./notarize.sh dmg_output/SessionFlow-YYYY.M.D.dmg
+
+# Create the ZIP artifact
+(cd release && zip -r ../SessionFlow-YYYY.M.D.zip SessionFlow.app -q)
 ```
 
-This creates `dmg_output/SessionFlow-YYYY.M.D.dmg`.
+This creates `dmg_output/SessionFlow-YYYY.M.D.dmg` and `SessionFlow-YYYY.M.D.zip`.
 
 ### 4. Commit Version Changes
 
@@ -117,19 +128,28 @@ git tag -a vYYYY.M.D-2 -m "Release version YYYY.M.D (build BUILD)"
 git push origin vYYYY.M.D-2
 ```
 
-### 6. Wait for GitHub Actions
+### 6. Publish GitHub Release
 
-Once you push the tag, GitHub Actions will:
-- Build the app
-- Create DMG and ZIP archives
-- Generate release notes from CHANGELOG.md
-- Create a GitHub Release with artifacts
+```bash
+gh release create vYYYY.M.D \
+  dmg_output/SessionFlow-YYYY.M.D.dmg \
+  SessionFlow-YYYY.M.D.zip \
+  --title "SessionFlow vYYYY.M.D (build BUILD)" \
+  --notes-file RELEASE_NOTES.md \
+  --verify-tag
+```
+
+Use the matching CHANGELOG section for `RELEASE_NOTES.md`.
+
+### 7. Wait for GitHub Actions
+
+Once you push `main` or a release tag, GitHub Actions will validate that the app builds in CI. It does not publish DMG/ZIP artifacts; the release artifacts come from the local notarized build.
 
 Monitor progress at: `https://github.com/kibermaks/SessionFlow/actions`
 
 ## GitHub Actions Workflow
 
-### Automated Build Workflow
+### Release Validation Workflow
 
 File: `.github/workflows/release.yml`
 
@@ -143,14 +163,9 @@ File: `.github/workflows/release.yml`
 3. Extracts version from tag
 4. Updates project version
 5. Builds Release configuration
-6. Creates DMG installer
-7. Creates ZIP archive
-8. Extracts changelog for this version
-9. Creates GitHub Release with artifacts
+6. Fails with raw `xcodebuild` output if CI cannot compile the app
 
-**Artifacts:**
-- `SessionFlow-YYYY.M.D.dmg` - DMG installer
-- `SessionFlow-YYYY.M.D.zip` - ZIP archive
+This workflow is a validation gate only. It does not upload artifacts or create GitHub Releases.
 
 ### Build Check Workflow
 
@@ -166,7 +181,7 @@ File: `.github/workflows/build.yml`
 
 ## Post-Release Tasks
 
-After GitHub Actions completes the release:
+After the GitHub Release is published:
 
 ### 1. Review GitHub Release
 
