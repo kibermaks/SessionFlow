@@ -9,6 +9,20 @@ Supplementary domain knowledge for SessionFlow. For build commands, architecture
 - `ContentView` delegates its body to `ContentViewBody` to manage complex layout states and bindings.
 - Settings changes flow through `.onChange` observers → `trigger()` → `generateSchedule()` → `projectedSessions` update.
 
+## AI Control (MCP)
+
+SessionFlow has an optional local MCP server for trusted agents. It is off by default and is enabled from Settings → General → **AI Control (MCP)**.
+
+- Default endpoint: `http://127.0.0.1:8787/mcp`; use the active endpoint shown in Settings if the port was changed.
+- Auth: bearer token shown in Settings. Claude Code setup command is available from the same section.
+- Server lifecycle: `MCPServerController` is a `@StateObject` in `SessionFlowApp`; if `MCPSettings.enabled` is true, the app starts the server on launch.
+- Tool implementation: `SessionFlow/Services/MCP/MCPTools.swift`.
+- Calendar write coordination: `SessionFlow/Services/MCP/ScheduleCoordinator.swift` behind the `CalendarWriting` protocol for testability.
+- Agent guide: `SessionFlow/Resources/MCP/AgentGuide.md` is served by the `learn` tool and the `sessionflow://guide` resource. Agents should call `learn` first after connecting.
+- Tests: `SessionFlowTests` covers tools, listener behavior, coordinator behavior, and guide coverage. Run `xcodebuild test -scheme SessionFlow -destination 'platform=macOS'` after MCP changes.
+
+When adding or changing an MCP tool, update both the tool catalog/dispatch and `AgentGuide.md`; the tests enforce that tool names appear in the guide.
+
 ## Developer Mode
 
 Hidden settings panel for development and testing. Activate by quadruple-clicking the **"General"** heading in Settings (toggles `showDevSettings` in `AppStorage`).

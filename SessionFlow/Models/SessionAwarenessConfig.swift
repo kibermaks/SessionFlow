@@ -11,6 +11,7 @@ struct SessionSoundConfig: Codable, Equatable {
     static let off = SessionSoundConfig(sound: "Off", volume: 0.0, enabled: false)
 
     static let availableSounds = [
+        "Campfire",
         "Clock Ticking",
         "Clock Ticking Slow",
         "Creek Atmosphere",

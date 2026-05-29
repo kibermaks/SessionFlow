@@ -7,6 +7,7 @@ final class UpdateService: ObservableObject {
     enum LatestReleaseStatus: Equatable {
         case unknown
         case current
+        case newerThanLatestRelease
         case updateAvailable
         case unavailable
     }
@@ -183,6 +184,14 @@ final class UpdateService: ObservableObject {
             _ = await MainActor.run {
                 self.latestReleaseStatus = .updateAvailable
                 self.pendingAlert = UpdateAlert(kind: .updateAvailable(info))
+            }
+        case .orderedAscending:
+            _ = await MainActor.run {
+                self.latestReleaseStatus = .newerThanLatestRelease
+            }
+            guard userInitiated else { return }
+            _ = await MainActor.run {
+                self.pendingAlert = UpdateAlert(kind: .upToDate(currentDisplayVersion))
             }
         default:
             _ = await MainActor.run {

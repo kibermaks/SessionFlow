@@ -42,6 +42,7 @@ class SessionAudioService: ObservableObject {
     private let ambientRestartDelays: [TimeInterval] = [0.5, 1.0, 2.0, 4.0]
 
     // Preview pause/resume state
+    private var previewActive = false
     private var previewPausedConfig: SessionSoundConfig?
     private var previewPausedShouldPlay = false
     private var previewPausedRate: Float = 1.0
@@ -59,6 +60,7 @@ class SessionAudioService: ObservableObject {
     // MARK: - Sound file mapping
 
     private static let ambientFiles: [String: (name: String, ext: String)] = [
+        "Campfire": ("Campfire", "mp3"),
         "Clock Ticking": ("Clock Ticking", "mp3"),
         "Clock Ticking Slow": ("Clock Ticking Slow", "mp3"),
         "Creek Atmosphere": ("Creek Atmosphere", "mp3"),
@@ -423,7 +425,11 @@ class SessionAudioService: ObservableObject {
 
     /// Pause session ambient for demo preview (saves state for later resume)
     func pauseForPreview() {
-        if previewPausedConfig == nil {
+        // Capture session state only when starting a fresh preview. The saved
+        // config may legitimately be nil (no active session) — preview tracking
+        // must not depend on it, or the preview can never be stopped.
+        if !previewActive {
+            previewActive = true
             previewPausedConfig = currentAmbientConfig
             previewPausedShouldPlay = shouldBePlayingAmbient
             previewPausedRate = varispeedNode.rate
@@ -434,7 +440,8 @@ class SessionAudioService: ObservableObject {
     /// Resume session ambient after demo preview ends
     func resumeAfterPreview() {
         // No preview was started — don't touch the active session audio
-        guard previewPausedConfig != nil else { return }
+        guard previewActive else { return }
+        previewActive = false
 
         stopAmbientInternal()
         stopTransition()

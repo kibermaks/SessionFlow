@@ -1,12 +1,20 @@
 import SwiftUI
 import EventKit
 import AppKit
+import UniformTypeIdentifiers
+
+private struct PresetFileAlert: Identifiable {
+    let id = UUID()
+    let title: String
+    let message: String
+}
 
 struct AppSettingsView: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @EnvironmentObject var calendarService: CalendarService
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var sessionAudioService: SessionAudioService
+    @EnvironmentObject var mcpServerController: MCPServerController
 
     @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.system.rawValue
     @Environment(\.colorScheme) var colorScheme
@@ -37,10 +45,14 @@ struct AppSettingsView: View {
     @State private var showingResetPresetsConfirmation = false
     @State private var showingResetAwarenessConfirmation = false
     @State private var showingResetCalendarPermissionsConfirmation = false
+    @State private var presetFileAlert: PresetFileAlert?
     @State private var pendingReplacementContext: CalendarReplacementContext?
     @State private var selectedReplacementCalendarId: String = ""
     @State private var replacementErrorMessage: String?
     @State private var selectedSettingsTab: SettingsTab = .general
+    @State private var mcpEnabled = MCPSettings.enabled
+    @State private var mcpPort = Int(MCPSettings.port)
+    @State private var mcpCopyFeedback: String?
 
     static let switchToAwarenessTab = Notification.Name("AppSettingsView.switchToAwarenessTab")
     @State private var activePreviewID: String? = nil
@@ -175,6 +187,83 @@ struct AppSettingsView: View {
         .focusable(false)
     }
 
+    // MARK: - AI Control (MCP)
+
+    @ViewBuilder
+    private var aiControlSection: some View {
+        Section("AI Control (MCP)") {
+            Toggle("Enable MCP server", isOn: $mcpEnabled)
+                .onChange(of: mcpEnabled) { _, enabled in
+                    MCPSettings.enabled = enabled
+                    Task {
+                        if enabled {
+                            await mcpServerController.start(port: MCPSettings.port, token: MCPSettings.token)
+                        } else {
+                            await mcpServerController.stop()
+                        }
+                    }
+                }
+
+            Text("Lets an AI agent (Claude Code, Claude Desktop, …) read and control your schedule over a local connection. Off by default.")
+                .font(.caption)
+                .foregroundColor(.secondary)
+
+            if mcpServerController.isRunning {
+                LabeledContent("Endpoint") {
+                    Text("http://127.0.0.1:\(mcpServerController.activePort)/mcp")
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+                LabeledContent("Token") {
+                    HStack(spacing: 6) {
+                        Text(mcpServerController.token)
+                            .font(.system(.caption, design: .monospaced))
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                        Button { copyMCP(mcpServerController.token, "Token copied") } label: {
+                            Image(systemName: "doc.on.doc")
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+                Button { copyMCP(claudeCodeCommand(), "Command copied") } label: {
+                    Label("Copy Claude Code setup command", systemImage: "terminal")
+                }
+                if let feedback = mcpCopyFeedback {
+                    Text(feedback).font(.caption).foregroundColor(.green)
+                }
+            } else {
+                HStack {
+                    Text("Port:")
+                    NumericInputField(value: $mcpPort, range: 1024...65535)
+                        .onChange(of: mcpPort) { _, newValue in
+                            MCPSettings.port = UInt16(newValue)
+                        }
+                }
+                Button { _ = MCPSettings.regenerateToken() } label: {
+                    Label("Regenerate token", systemImage: "key")
+                }
+            }
+
+            if let error = mcpServerController.lastError, !mcpServerController.isRunning, mcpEnabled {
+                Text("Could not start: \(error)").font(.caption).foregroundColor(.red)
+            }
+        }
+    }
+
+    private func claudeCodeCommand() -> String {
+        "claude mcp add --transport http sessionflow http://127.0.0.1:\(mcpServerController.activePort)/mcp --header \"Authorization: Bearer \(mcpServerController.token)\""
+    }
+
+    private func copyMCP(_ text: String, _ feedback: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+        mcpCopyFeedback = feedback
+        let work = DispatchWorkItem { mcpCopyFeedback = nil }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
+    }
+
     // MARK: - Tab 1: General
 
     private var generalTab: some View {
@@ -272,6 +361,8 @@ struct AppSettingsView: View {
                     .foregroundColor(.secondary)
             }
 
+            aiControlSection
+
             Section("Preset Management") {
                 Button(role: .destructive, action: { showingResetPresetsConfirmation = true }) {
                     Label("Reset Presets", systemImage: "arrow.counterclockwise")
@@ -300,6 +391,20 @@ struct AppSettingsView: View {
                     }
 
                     Text("This will show the calendar setup screen again for testing.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Divider()
+
+                    Button(action: savePresetsToFile) {
+                        Label("Save Presets to File…", systemImage: "square.and.arrow.up")
+                    }
+
+                    Button(action: restorePresetsFromFile) {
+                        Label("Restore Presets from File…", systemImage: "square.and.arrow.down")
+                    }
+
+                    Text("Back up presets to a JSON file and restore them later. Restore replaces all current presets.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -360,6 +465,9 @@ struct AppSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .alert(item: $presetFileAlert) { alert in
+            Alert(title: Text(alert.title), message: Text(alert.message), dismissButton: .default(Text("OK")))
+        }
     }
 
     private var settingsDisplayedVersion: String {
@@ -1840,6 +1948,66 @@ Spacer()
         sessionAudioService.setOutputDevice(uid: nil)
     }
 
+    private func savePresetsToFile() {
+        let data: Data
+        do {
+            data = try PresetStorage.shared.exportPresetsData()
+        } catch {
+            presetFileAlert = PresetFileAlert(title: "Couldn't Export Presets", message: error.localizedDescription)
+            return
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let suggestedName = "SessionFlow-Presets-\(formatter.string(from: Date())).json"
+
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        panel.nameFieldStringValue = suggestedName
+        panel.message = "Save SessionFlow presets to a JSON file"
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            try data.write(to: url, options: .atomic)
+            let count = (try? JSONDecoder().decode([Preset].self, from: data).count) ?? 0
+            presetFileAlert = PresetFileAlert(
+                title: "Presets Saved",
+                message: "Saved \(count) preset\(count == 1 ? "" : "s") to \(url.lastPathComponent)."
+            )
+        } catch {
+            presetFileAlert = PresetFileAlert(title: "Couldn't Save File", message: error.localizedDescription)
+        }
+    }
+
+    private func restorePresetsFromFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.message = "Choose a SessionFlow presets JSON file to restore"
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+
+        do {
+            let data = try Data(contentsOf: url)
+            let count = try PresetStorage.shared.importPresets(from: data)
+            NotificationCenter.default.post(name: Notification.Name("PresetsUpdated"), object: nil)
+            presetFileAlert = PresetFileAlert(
+                title: "Presets Restored",
+                message: "Restored \(count) preset\(count == 1 ? "" : "s") from \(url.lastPathComponent)."
+            )
+        } catch let error as DecodingError {
+            presetFileAlert = PresetFileAlert(
+                title: "Invalid Presets File",
+                message: "The selected file isn't a valid SessionFlow presets export.\n\n\(error.localizedDescription)"
+            )
+        } catch {
+            presetFileAlert = PresetFileAlert(title: "Couldn't Restore Presets", message: error.localizedDescription)
+        }
+    }
+
     private func resetCalendarPermissions() {
         guard let bundleId = Bundle.main.bundleIdentifier else { return }
         let process = Process()
@@ -1862,6 +2030,7 @@ Spacer()
         .environmentObject(CalendarService())
         .environmentObject(SessionAwarenessService())
         .environmentObject(SessionAudioService())
+        .environmentObject(MCPServerController())
 }
 
 extension AppSettingsView {

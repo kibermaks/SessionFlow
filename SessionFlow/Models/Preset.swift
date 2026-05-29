@@ -741,4 +741,27 @@ class PresetStorage {
         guard let str = UserDefaults.standard.string(forKey: lastActivePresetKey) else { return nil }
         return UUID(uuidString: str)
     }
+
+    // MARK: - File Export / Import
+
+    func exportPresetsData() throws -> Data {
+        let presets = loadPresets()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return try encoder.encode(presets)
+    }
+
+    /// Decodes presets from JSON data and replaces the current set on success.
+    /// Runs the same schema migration path as `loadPresets`, so older exports
+    /// gain any fields added in newer schema versions before being saved.
+    /// Returns the number of presets restored.
+    @discardableResult
+    func importPresets(from data: Data) throws -> Int {
+        var imported = try JSONDecoder().decode([Preset].self, from: data)
+        for index in imported.indices {
+            imported[index].migrateToCurrentVersion()
+        }
+        savePresets(imported)
+        return imported.count
+    }
 }

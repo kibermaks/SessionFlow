@@ -64,6 +64,7 @@
 		AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB14C2D3E4F5A6B7C8D9E014 /* Submarine.mp3 */; };
 		AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB15C2D3E4F5A6B7C8D9E015 /* Purr.mp3 */; };
 		AA16B2C3D4E5F6A7B8C9D016 /* Creek Atmosphere.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB16C2D3E4F5A6B7C8D9E016 /* Creek Atmosphere.mp3 */; };
+		AA17B2C3D4E5F6A7B8C9D017 /* Campfire.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB17C2D3E4F5A6B7C8D9E017 /* Campfire.mp3 */; };
 		FF01CHANGELOG002 /* CHANGELOG.md in Resources */ = {isa = PBXBuildFile; fileRef = FF01CHANGELOG001 /* CHANGELOG.md */; };
 		D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E1F2A3B4C5D6E7F8A9B0C1D2 /* DockProgressController.swift */; };
 		D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */; };
@@ -75,6 +76,19 @@
 		EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */; };
 		EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */; };
 		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
+		MCPBLD01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD01 /* MCP */; };
+		MCPS01 /* MCPHTTPListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF01 /* MCPHTTPListener.swift */; };
+		MCPS02 /* MCPServerController.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF02 /* MCPServerController.swift */; };
+		MCPS03 /* MCPTools.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF03 /* MCPTools.swift */; };
+		MCPS04 /* CalendarWriting.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF04 /* CalendarWriting.swift */; };
+		MCPS05 /* ScheduleCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF05 /* ScheduleCoordinator.swift */; };
+		MCPGUIDE2 /* AgentGuide.md in Resources */ = {isa = PBXBuildFile; fileRef = MCPGUIDE1 /* AgentGuide.md */; };
+		TB01 /* MCPTestSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF01 /* MCPTestSupport.swift */; };
+		TB02 /* MCPToolsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF02 /* MCPToolsTests.swift */; };
+		TB03 /* MCPListenerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF03 /* MCPListenerTests.swift */; };
+		TB04 /* ScheduleCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF04 /* ScheduleCoordinatorTests.swift */; };
+		TB05 /* AgentGuideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF05 /* AgentGuideTests.swift */; };
+		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -129,6 +143,7 @@
 		BB06C2D3E4F5A6B7C8D9E0F6 /* Light Rain Falling on Forest Floor.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Light Rain Falling on Forest Floor.mp3"; sourceTree = "<group>"; };
 		BB07C2D3E4F5A6B7C8D9E0F7 /* Mountain Atmosphere.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Mountain Atmosphere.mp3"; sourceTree = "<group>"; };
 		BB16C2D3E4F5A6B7C8D9E016 /* Creek Atmosphere.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Creek Atmosphere.mp3"; sourceTree = "<group>"; };
+		BB17C2D3E4F5A6B7C8D9E017 /* Campfire.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Campfire.mp3"; sourceTree = "<group>"; };
 		BB08C2D3E4F5A6B7C8D9E0F8 /* Ocean Waves.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Ocean Waves.mp3"; sourceTree = "<group>"; };
 		BB09C2D3E4F5A6B7C8D9E0F9 /* Peaceful Wind Atop a Hill.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Peaceful Wind Atop a Hill.mp3"; sourceTree = "<group>"; };
 		BB10C2D3E4F5A6B7C8D9E010 /* Thunder in the Woods.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Thunder in the Woods.mp3"; sourceTree = "<group>"; };
@@ -150,6 +165,18 @@
 		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
 		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
 		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
+		MCPF01 /* MCPHTTPListener.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPHTTPListener.swift; sourceTree = "<group>"; };
+		MCPF02 /* MCPServerController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPServerController.swift; sourceTree = "<group>"; };
+		MCPF03 /* MCPTools.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTools.swift; sourceTree = "<group>"; };
+		MCPF04 /* CalendarWriting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarWriting.swift; sourceTree = "<group>"; };
+		MCPF05 /* ScheduleCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoordinator.swift; sourceTree = "<group>"; };
+		MCPGUIDE1 /* AgentGuide.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AgentGuide.md; sourceTree = "<group>"; };
+		TESTPRODUCT01 /* SessionFlowTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SessionFlowTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		TF01 /* MCPTestSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPTestSupport.swift; sourceTree = "<group>"; };
+		TF02 /* MCPToolsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPToolsTests.swift; sourceTree = "<group>"; };
+		TF03 /* MCPListenerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPListenerTests.swift; sourceTree = "<group>"; };
+		TF04 /* ScheduleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoordinatorTests.swift; sourceTree = "<group>"; };
+		TF05 /* AgentGuideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGuideTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -157,6 +184,15 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				MCPBLD01 /* MCP in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		TESTFWK01 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TESTMCPBLD /* MCP in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -167,6 +203,7 @@
 			isa = PBXGroup;
 			children = (
 				401 /* SessionFlow */,
+				TESTGROUP01 /* SessionFlowTests */,
 				402 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -201,8 +238,21 @@
 			isa = PBXGroup;
 			children = (
 				100 /* SessionFlow.app */,
+				TESTPRODUCT01 /* SessionFlowTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		TESTGROUP01 /* SessionFlowTests */ = {
+			isa = PBXGroup;
+			children = (
+				TF01 /* MCPTestSupport.swift */,
+				TF02 /* MCPToolsTests.swift */,
+				TF03 /* MCPListenerTests.swift */,
+				TF04 /* ScheduleCoordinatorTests.swift */,
+				TF05 /* AgentGuideTests.swift */,
+			);
+			path = SessionFlowTests;
 			sourceTree = "<group>";
 		};
 		403 /* Models */ = {
@@ -269,8 +319,21 @@
 				EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */,
 				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
 				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
+				MCPGRP /* MCP */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		MCPGRP /* MCP */ = {
+			isa = PBXGroup;
+			children = (
+				MCPF01 /* MCPHTTPListener.swift */,
+				MCPF02 /* MCPServerController.swift */,
+				MCPF03 /* MCPTools.swift */,
+				MCPF04 /* CalendarWriting.swift */,
+				MCPF05 /* ScheduleCoordinator.swift */,
+			);
+			path = MCP;
 			sourceTree = "<group>";
 		};
 		C8C8050EED40EF171CC2784D /* Resources */ = {
@@ -278,13 +341,23 @@
 			children = (
 				FF01CHANGELOG001 /* CHANGELOG.md */,
 				DB9FA0D4AF211849B3A47ED1 /* Sounds */,
+				MCPRESGRP /* MCP */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		MCPRESGRP /* MCP */ = {
+			isa = PBXGroup;
+			children = (
+				MCPGUIDE1 /* AgentGuide.md */,
+			);
+			path = MCP;
 			sourceTree = "<group>";
 		};
 		DB9FA0D4AF211849B3A47ED1 /* Sounds */ = {
 			isa = PBXGroup;
 			children = (
+				BB17C2D3E4F5A6B7C8D9E017 /* Campfire.mp3 */,
 				BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */,
 				BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */,
 				BB16C2D3E4F5A6B7C8D9E016 /* Creek Atmosphere.mp3 */,
@@ -321,9 +394,32 @@
 			dependencies = (
 			);
 			name = SessionFlow;
+			packageProductDependencies = (
+				MCPPRD01 /* MCP */,
+			);
 			productName = SessionFlow;
 			productReference = 100 /* SessionFlow.app */;
 			productType = "com.apple.product-type.application";
+		};
+		TESTTARGET01 /* SessionFlowTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = TESTCFGLIST01 /* Build configuration list for PBXNativeTarget "SessionFlowTests" */;
+			buildPhases = (
+				TESTSRC01 /* Sources */,
+				TESTFWK01 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				TESTDEP01 /* PBXTargetDependency */,
+			);
+			name = SessionFlowTests;
+			packageProductDependencies = (
+				MCPPRD02 /* MCP */,
+			);
+			productName = SessionFlowTests;
+			productReference = TESTPRODUCT01 /* SessionFlowTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -338,6 +434,10 @@
 					500 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					TESTTARGET01 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = 500;
+					};
 				};
 			};
 			buildConfigurationList = 701 /* Build configuration list for PBXProject "SessionFlow" */;
@@ -349,14 +449,36 @@
 				Base,
 			);
 			mainGroup = 400;
+			packageReferences = (
+				MCPPKG01 /* XCRemoteSwiftPackageReference "swift-sdk" */,
+			);
 			productRefGroup = 402 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				500 /* SessionFlow */,
+				TESTTARGET01 /* SessionFlowTests */,
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXContainerItemProxy section */
+		TESTPROXY01 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 700 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 500;
+			remoteInfo = SessionFlow;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		TESTDEP01 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 500 /* SessionFlow */;
+			targetProxy = TESTPROXY01 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXResourcesBuildPhase section */
 		502 /* Resources */ = {
@@ -381,7 +503,9 @@
 				AA14B2C3D4E5F6A7B8C9D014 /* Submarine.mp3 in Resources */,
 				AA15B2C3D4E5F6A7B8C9D015 /* Purr.mp3 in Resources */,
 				AA16B2C3D4E5F6A7B8C9D016 /* Creek Atmosphere.mp3 in Resources */,
+				AA17B2C3D4E5F6A7B8C9D017 /* Campfire.mp3 in Resources */,
 				FF01CHANGELOG002 /* CHANGELOG.md in Resources */,
+				MCPGUIDE2 /* AgentGuide.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -441,6 +565,23 @@
 				EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */,
 				EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */,
 				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
+				MCPS01 /* MCPHTTPListener.swift in Sources */,
+				MCPS02 /* MCPServerController.swift in Sources */,
+				MCPS03 /* MCPTools.swift in Sources */,
+				MCPS04 /* CalendarWriting.swift in Sources */,
+				MCPS05 /* ScheduleCoordinator.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		TESTSRC01 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				TB01 /* MCPTestSupport.swift in Sources */,
+				TB02 /* MCPToolsTests.swift in Sources */,
+				TB03 /* MCPListenerTests.swift in Sources */,
+				TB04 /* ScheduleCoordinatorTests.swift in Sources */,
+				TB05 /* AgentGuideTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -579,7 +720,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 921;
+				CURRENT_PROJECT_VERSION = 946;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -598,7 +739,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.5.22;
+				MARKETING_VERSION = 2026.5.29;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
@@ -617,7 +758,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 921;
+				CURRENT_PROJECT_VERSION = 946;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -636,13 +777,47 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.5.22;
+				MARKETING_VERSION = 2026.5.29;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				VERSIONING_SYSTEM = "apple-generic";
+			};
+			name = Release;
+		};
+		TESTDEBUG01 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = RGFAX8X946;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlowTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SessionFlow.app/Contents/MacOS/SessionFlow";
+			};
+			name = Debug;
+		};
+		TESTRELEASE01 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = RGFAX8X946;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlowTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SessionFlow.app/Contents/MacOS/SessionFlow";
 			};
 			name = Release;
 		};
@@ -668,6 +843,39 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		MCPPKG01 /* XCRemoteSwiftPackageReference "swift-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/modelcontextprotocol/swift-sdk";
+			requirement = {
+				kind = upToNextMinorVersion;
+				minimumVersion = 0.12.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		MCPPRD01 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = MCPPKG01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
+		};
+		MCPPRD02 /* MCP */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = MCPPKG01 /* XCRemoteSwiftPackageReference "swift-sdk" */;
+			productName = MCP;
+		};
+/* End XCSwiftPackageProductDependency section */
+		TESTCFGLIST01 /* Build configuration list for PBXNativeTarget "SessionFlowTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				TESTDEBUG01 /* Debug */,
+				TESTRELEASE01 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 	};
 	rootObject = 700 /* Project object */;
 }

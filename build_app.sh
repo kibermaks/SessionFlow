@@ -8,6 +8,7 @@ BUILD_START_TIME=$(date +%s)
 SCHEME="SessionFlow"
 PROJECT="SessionFlow.xcodeproj"
 BUILD_DIR="./build_output"
+DERIVED_DATA_DIR="./build_derived_data"
 # Team ID found in project.pbxproj
 TEAM_ID="RGFAX8X946"
 
@@ -108,6 +109,9 @@ if [ -d "$BUILD_DIR" ]; then
     echo "🧹 Cleaning previous build artifacts..."
     rm -rf "$BUILD_DIR"
 fi
+if [ -d "$DERIVED_DATA_DIR" ]; then
+    rm -rf "$DERIVED_DATA_DIR"
+fi
 
 # 1. Compute Today's Version
 TODAY_VERSION=$(today_version)
@@ -158,23 +162,34 @@ else
 fi
 echo "🚀 Starting $BUILD_CONFIG Build for $SCHEME..."
 
-xcodebuild -project "$PROJECT" \
-           -scheme "$SCHEME" \
-           -configuration "$BUILD_CONFIG" \
-           -destination 'generic/platform=macOS' \
-           ARCHS='arm64 x86_64' \
-           ONLY_ACTIVE_ARCH=NO \
-           clean build \
-           DEVELOPMENT_TEAM="$TEAM_ID" \
-           CODE_SIGN_STYLE="Automatic" \
-           CODE_SIGNING_REQUIRED="YES" \
-           CONFIGURATION_BUILD_DIR="$BUILD_DIR" \
-           MARKETING_VERSION="$NEW_VERSION" \
-           CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER" \
-           -quiet
+# SWIFT_ENABLE_EXPLICIT_MODULES=NO: the universal (x86_64) slice of the transitive
+# swift-nio dependency (pulled in by the MCP SDK via EventSource) fails to resolve
+# modules under explicit modules. The x86_64 package graph also needs a warm-up
+# build before the combined universal build after a clean.
+COMMON_XCODEBUILD_ARGS=(
+    -project "$PROJECT"
+    -scheme "$SCHEME"
+    -configuration "$BUILD_CONFIG"
+    -destination 'generic/platform=macOS'
+    -derivedDataPath "$DERIVED_DATA_DIR"
+    ONLY_ACTIVE_ARCH=NO
+    SWIFT_ENABLE_EXPLICIT_MODULES=NO
+    DEVELOPMENT_TEAM="$TEAM_ID"
+    CODE_SIGN_STYLE="Automatic"
+    CODE_SIGNING_REQUIRED="YES"
+    MARKETING_VERSION="$NEW_VERSION"
+    CURRENT_PROJECT_VERSION="$NEW_BUILD_NUMBER"
+)
+
+xcodebuild "${COMMON_XCODEBUILD_ARGS[@]}" clean -quiet
+
+echo "   Warming x86_64 package build..."
+xcodebuild "${COMMON_XCODEBUILD_ARGS[@]}" ARCHS='x86_64' build -quiet
+
+xcodebuild "${COMMON_XCODEBUILD_ARGS[@]}" ARCHS='arm64 x86_64' build -quiet
 
 # 6. Copy Artifact
-APP_PATH=$(find "$BUILD_DIR" -maxdepth 1 -name "*.app" | head -n 1)
+APP_PATH="$DERIVED_DATA_DIR/Build/Products/$BUILD_CONFIG/$SCHEME.app"
 
 if [ -n "$APP_PATH" ]; then
     APP_NAME=$(basename "$APP_PATH")
@@ -219,6 +234,9 @@ if [ -n "$APP_PATH" ]; then
         rm -f "$RELEASE_ENT"
         echo "   ✓ Signed for distribution"
     fi
+
+    # The derived data directory is only a scratch location for this script.
+    rm -rf "$DERIVED_DATA_DIR"
 
     # Calculate build duration
     BUILD_END_TIME=$(date +%s)

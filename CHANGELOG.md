@@ -5,6 +5,25 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.5.29] - 2026-05-29
+
+### Added
+
+- AI Control: an optional local MCP server lets an AI agent (Claude Code, Claude Desktop, and others) read your schedule and create, adjust, and reschedule sessions in natural language — enable it in Settings → General
+- Presets can now be exported to and imported from JSON files
+- New ambient sound: Campfire
+
+### Changed
+
+- Closing the main window now keeps SessionFlow running, matching standard macOS app behavior
+- Ambient sound assets have been refreshed for more consistent playback
+
+### Fixed
+
+- AI Control now survives repeated Claude Code health checks and reconnects
+- Update checks no longer treat newer local/test builds as update-available states
+- Awareness sound previews now always restore or stop correctly after preview playback
+
 ## [2026.5.22] - 2026-05-22
 
 ### Added
@@ -21,7 +40,6 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 - Undo and redo for calendar event changes no longer leave the timeline stuck or unclickable
 - Timeline actions on Tomorrow, past days, and custom dates now stay on the selected day
 - Calendar events no longer disappear from non-today timelines after delete, copy, feedback, undo, or redo
-- The start-time guide line now shows the selected start time on non-today dates
 
 ## [2026.5.21] - 2026-05-21
 

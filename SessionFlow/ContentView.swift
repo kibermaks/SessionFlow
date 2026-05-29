@@ -222,7 +222,7 @@ struct ContentView: View {
         switch status {
         case .current:
             showWhatsNewIfEligible(for: pendingVersion)
-        case .updateAvailable, .unavailable:
+        case .newerThanLatestRelease, .updateAvailable, .unavailable:
             pendingWhatsNewVersion = nil
         case .unknown:
             break
@@ -800,6 +800,7 @@ struct ContentViewBody: View {
     }
     
     private func requestCalendarAccess() async {
+        guard !ProcessInfo.processInfo.isRunningTests else { return }
         if calendarService.authorizationStatus != .fullAccess {
             let _ = await calendarService.requestAccess()
         }
@@ -1102,6 +1103,8 @@ struct HeaderView: View {
             } label: {
                 Text("⋮")
                     .font(.system(size: 14, weight: .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
                     .background(colors.hoveredBackground)

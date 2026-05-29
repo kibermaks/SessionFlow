@@ -95,6 +95,7 @@ iOSInjectionProject/
 
 # Build outputs
 build_output/
+build_derived_data/
 release/
 dmg_output/
 

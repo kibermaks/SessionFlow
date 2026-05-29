@@ -33,6 +33,7 @@ SessionFlow is a native macOS app that helps you plan, execute, and reflect on p
 - **📊 Interactive Timeline**: Drag-and-drop events, resize sessions, lock layout, and freeze projections for manual fine-tuning
 - **👁 Session Awareness**: Tracks active calendar events—both tagged sessions and your regular calendar events—with ambient sounds, a progress bar, and gentle reminders as sessions approach their end. A progress donut on the dock icon and an optional menu-bar timer let you glance at remaining time without switching windows
 - **🪟 Mini-Player**: Compact floating window that shows session status at a glance—collapse the main window and keep awareness in a small footprint. Displays idle, next-up, active, and feedback states with the same progress and time info as the full panel
+- **🤖 AI Control (MCP)**: Optional local MCP server so trusted agents can inspect the schedule, edit task/config inputs, rebuild previews, and commit tagged sessions with your token
 - **⌘ Shortcuts Integration**: Trigger macOS Shortcuts when sessions start, end, or approach. Each shortcut receives structured JSON with session details—use it to toggle Focus modes, send notifications, control smart home devices, or anything Shortcuts can do. [Template shortcuts](public/shortcuts/) are available for every trigger
 - **🌙 Night-Owl Mode**: Schedule beyond midnight with +1d markers on the timeline (up to 6 am next day)
 - **↩️ Undo/Redo**: Full history for event moves and projected session edits
@@ -138,6 +139,7 @@ See [Building from Source](#-building-from-source) section below.
 - **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
 - **Track Other Events**: Enable “Awareness of your other calendar events” to also track regular (untagged) calendar events with timer, progress, and ambient sound.
 - **Shortcuts**: Set up macOS Shortcuts to automate actions at session boundaries. Go to Settings → Shortcuts, enable a trigger, and name your shortcut. Download [ready-made templates](public/shortcuts/) to get started instantly.
+- **AI Control (MCP)**: Go to Settings → General → AI Control (MCP), enable the server, then copy the endpoint, token, or Claude Code setup command from the app.
 - **Dock & Menu Bar**: Enable the dock progress donut and menu-bar timer in Session Awareness settings so you can monitor remaining time from anywhere.
 - **Mini-Player**: Click the collapse button on the bottom panel to detach a floating mini-player; expand back anytime.
 - **Freeze & Adjust**: After scheduling, freeze projections and drag/resize them by hand for pixel-perfect layouts.
@@ -200,6 +202,41 @@ You can also import your own sound files — drop any audio file into the sound 
 
 Each trigger (session start, end, approaching, rest boundaries) sends a structured JSON payload to your macOS Shortcut. You can use this to toggle Focus modes, send yourself a Slack message, control smart lights, or anything else Shortcuts supports — the app doesn't care what you do with the data.
 
+### AI Control (MCP)
+
+SessionFlow can expose a token-protected local MCP endpoint for trusted agents such as Claude Code or Claude Desktop. The server is off by default, binds to loopback only, and starts automatically on app launch after you enable it.
+
+1. Open SessionFlow.
+2. Go to Settings → General → **AI Control (MCP)**.
+3. Toggle **Enable MCP server**.
+4. Copy the endpoint and token shown in the app. The default endpoint is `http://127.0.0.1:8787/mcp`, but the active port shown in Settings is the source of truth.
+
+Claude Code setup:
+
+```bash
+claude mcp add --transport http sessionflow http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"
+```
+
+Claude Desktop can connect through `mcp-remote`:
+
+```json
+{
+  "mcpServers": {
+    "sessionflow": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://127.0.0.1:<port>/mcp",
+        "--header",
+        "Authorization:Bearer <token>"
+      ]
+    }
+  }
+}
+```
+
+After connecting, call the `learn` tool first. It returns the bundled SessionFlow agent guide with the scheduling concepts, tool list, argument shapes, examples, and safety rules. Agents can also read the `sessionflow://guide` MCP resource. The source copy lives at `SessionFlow/Resources/MCP/AgentGuide.md`.
+
 ## 🏗 Architecture & Key Elements
 
 The project follows a modular architecture with clear separation of concerns:
@@ -222,7 +259,16 @@ SessionFlow/
 │   ├── SessionAudioService.swift
 │   ├── DockProgressController.swift
 │   ├── MenuBarController.swift
-│   └── UpdateService.swift
+│   ├── UpdateService.swift
+│   └── MCP/
+│       ├── MCPServerController.swift
+│       ├── MCPHTTPListener.swift
+│       ├── MCPTools.swift
+│       └── ScheduleCoordinator.swift
+│
+├── Resources/
+│   └── MCP/
+│       └── AgentGuide.md
 │
 └── Views/
     ├── ContentView.swift
@@ -257,6 +303,10 @@ SessionFlow/
 - **`SessionAudioService.swift`**: Ambient sound playback, transition sounds, and accelerando during sessions
 - **`DockProgressController.swift`**: Renders the progress donut overlay on the dock icon
 - **`MenuBarController.swift`**: Manages the optional menu-bar status item with live timer
+- **`MCPServerController.swift`**: Owns the local MCP server, bearer-token settings, and start/stop state for AI Control
+- **`MCPHTTPListener.swift`**: Loopback HTTP adapter for the MCP SDK's stateless transport
+- **`MCPTools.swift`**: Defines the MCP tool catalog, dispatch, and the `learn` guide/resource
+- **`ScheduleCoordinator.swift`**: Mirrors schedule preview/commit/delete flows for MCP without going through SwiftUI views
 
 #### Views
 
@@ -287,6 +337,14 @@ SessionFlow/
 - **Pattern logic**: `SchedulePattern` enum and `SessionOrderGenerator.generateOrder()`
 - **Existing task awareness**: Hashtag parsing in `CalendarService.swift`
 
+### Modifying MCP Tools
+
+- Tool definitions and dispatch live in `SessionFlow/Services/MCP/MCPTools.swift`.
+- Server startup, port, and token behavior live in `SessionFlow/Services/MCP/MCPServerController.swift`.
+- Calendar-writing operations should go through `ScheduleCoordinator` and the `CalendarWriting` protocol so tests can use fakes instead of the real calendar.
+- Update `SessionFlow/Resources/MCP/AgentGuide.md` whenever you add, rename, or materially change a tool. The `learn` tool and `sessionflow://guide` resource serve that file to agents.
+- Run `xcodebuild test -scheme SessionFlow -destination 'platform=macOS'` after MCP changes. The `SessionFlowTests` target covers MCP tools, listener behavior, coordinator behavior, and guide coverage.
+
 ### Adding New Files
 
 **IMPORTANT**: When adding new Swift files, you **must** manually update `SessionFlow.xcodeproj/project.pbxproj`:
@@ -311,8 +369,9 @@ See [Agents.md](Agents.md) for detailed instructions.
 - **SwiftUI**: Main UI framework
 - **EventKit**: macOS Calendar integration
 - **Foundation**: Core logic and date handling
+- **MCP Swift SDK**: Official `modelcontextprotocol/swift-sdk` package, product `MCP`, for the local AI-control server
 
-*No external dependencies or package managers required!*
+Swift Package Manager dependencies are resolved by Xcode and pinned in `SessionFlow.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`.
 
 ## 🛠 Building from Source
 
@@ -330,8 +389,11 @@ See [Agents.md](Agents.md) for detailed instructions.
 git clone https://github.com/kibermaks/SessionFlow.git
 cd SessionFlow
 
-# Build using the build script (creates Release build)
+# Build using the build script (Debug by default)
 ./build_app.sh
+
+# Build a distribution-style Release app
+./build_app.sh --release
 
 # Or open in Xcode
 open SessionFlow.xcodeproj
@@ -341,9 +403,9 @@ open SessionFlow.xcodeproj
 
 The project includes several convenience scripts:
 
-#### `./build_app.sh [current|dedicated-version YYYY.M.D]`
+#### `./build_app.sh [current|dedicated-version YYYY.M.D] [--release]`
 
-Builds a Release version of the app with date-based version management.
+Builds the app with date-based version management. By default it builds Debug, copies `SessionFlow.app` to the repository root, and launches it. Add `--release` to build Release and copy the app to `./release/`.
 
 > ⚠️ Before running, update the `TEAM_ID="RGFAX8X946"` placeholder in both `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` so the script can sign with your Apple Developer account.
 
@@ -356,16 +418,19 @@ Builds a Release version of the app with date-based version management.
 
 # Build with a dedicated version
 ./build_app.sh dedicated-version 2026.4.9
+
+# Build Release instead of Debug
+./build_app.sh current --release
 ```
 
 **What it does:**
 
 - Updates version numbers in project file
-- Builds Release configuration
+- Builds Debug by default, or Release with `--release`
 - Signs the app (if certificates available)
-- Outputs to `./build_output/`
-- Copies app to current directory
-- Launches the built app
+- Uses script-local derived data as scratch space, then removes it
+- Copies Debug builds to `./SessionFlow.app` and Release builds to `./release/SessionFlow.app`
+- Launches the built app for Debug builds
 
 #### `./create_dmg.sh`
 
@@ -391,7 +456,8 @@ Creates a distributable DMG file for the app.
 open SessionFlow.xcodeproj
 
 # 2. Build and test locally
-./build_app.sh
+xcodebuild test -scheme SessionFlow -destination 'platform=macOS'
+./build_app.sh current
 
 # 3. When ready to release, create DMG
 ./create_dmg.sh

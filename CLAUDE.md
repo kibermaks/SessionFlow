@@ -5,19 +5,20 @@ macOS productivity app (SwiftUI, macOS 14.0+) for scheduling focus sessions arou
 ## Build & Run
 
 ```bash
-./build_app.sh           # Set marketing version to today's date, bump build number
-./build_app.sh current   # Keep current marketing version, bump build number
+./build_app.sh           # Set marketing version to today's date, bump build number, build Debug app
+./build_app.sh current   # Keep current marketing version, bump build number, build Debug app
+./build_app.sh --release # Build Release app into ./release/
 ./create_dmg.sh          # Create DMG for distribution
 ./notarize.sh            # Notarize for distribution
 ```
 
-No test targets — verify changes by building and running the app.
+The `SessionFlowTests` target (Swift Testing) covers the MCP layer: `xcodebuild test -scheme SessionFlow -destination 'platform=macOS'`. The rest of the app has no tests — verify by building and running.
 
 **After any code changes**: always finish by running `./build_app.sh` so the user gets a ready-to-test build immediately. Skip only for text-only changes (docs, CHANGELOG, CLAUDE.md, etc.).
 
 ## Architecture
 
-MVVM-like: Models → Services → Views. No external dependencies — only Apple frameworks (EventKit, SwiftUI, AppKit, AVFoundation).
+MVVM-like: Models → Services → Views. Apple frameworks (EventKit, SwiftUI, AppKit, AVFoundation) plus one external dependency: the official MCP Swift SDK (`modelcontextprotocol/swift-sdk`, product `MCP`) for the AI-control feature.
 
 - `SessionFlowApp.swift` — app entry point with AppDelegate
 - `ContentView.swift` — central layout; `.onChange` observers call `trigger()` to regenerate schedule
@@ -30,6 +31,18 @@ MVVM-like: Models → Services → Views. No external dependencies — only Appl
 ### Adding Files to Xcode
 
 Creating a `.swift` file on disk is NOT enough. You must also register it in `project.pbxproj`: `PBXBuildFile`, `PBXFileReference`, `PBXGroup`, and `PBXSourcesBuildPhase`.
+
+## AI Control (MCP server)
+
+`SessionFlow/Services/MCP/` embeds a local MCP server so an AI agent can read and control the app in natural language. Off by default; toggle in Settings → General → "AI Control (MCP)".
+
+- `MCPServerController` — owns the SDK `Server` + handlers; `start(port:token:)`/`stop()`. Created as a `@StateObject` in `SessionFlowApp` and started on launch when `MCPSettings.enabled`.
+- `MCPHTTPListener` — loopback `NWListener` that adapts raw HTTP to the SDK's `StatelessHTTPServerTransport` (the SDK owns JSON-RPC routing/validation). `SharedSecretBearerValidator` enforces the bearer token.
+- `MCPTools` — tool catalog + dispatch (read: `get_config`/`get_state`/`list_presets`/`get_day`; control: `set_tasks`/`set_config`/`apply_preset`/`save_preset`/`regenerate_schedule`/`commit_schedule`/`move_session`/`resize_session`/`delete_sessions`/`set_freeze`; plus `learn`).
+- `ScheduleCoordinator` — regenerate/commit/delete logic mirroring ContentView, behind the `CalendarWriting` seam so tests use a fake (never the real calendar).
+- `Resources/MCP/AgentGuide.md` — the capability guide served by `learn` and the `sessionflow://guide` resource. **Adding a tool requires updating this guide** (a test enforces every tool name appears).
+
+Connect (server enabled, token from Settings): Claude Code `claude mcp add --transport http sessionflow http://127.0.0.1:<port>/mcp --header "Authorization: Bearer <token>"`; Claude Desktop via `npx mcp-remote http://127.0.0.1:<port>/mcp --header "Authorization:Bearer <token>"`. After connecting, call `learn` first or read `sessionflow://guide`.
 
 ## Session Types & Hashtags
 

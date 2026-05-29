@@ -1,6 +1,14 @@
 import SwiftUI
 import AppKit
 
+extension ProcessInfo {
+    /// True when the process is hosting a unit-test bundle, so app side effects
+    /// (single-instance termination, calendar prompts, background services) can be skipped.
+    var isRunningTests: Bool {
+        environment["XCTestConfigurationFilePath"] != nil
+    }
+}
+
 // MARK: - Global Focus Ring Suppression
 
 /// Suppresses default focus rings app-wide by overriding NSView's focusRingType.
@@ -37,6 +45,7 @@ struct SessionFlowApp: App {
     @StateObject private var eventCreationCoordinator = EventCreationCoordinator()
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
+    @StateObject private var mcpServerController = MCPServerController()
     @State private var didInitializeServices = false
     private let dockProgressController = DockProgressController()
     @AppStorage("appearanceMode") private var appearanceModeRaw = AppearanceMode.system.rawValue
@@ -47,36 +56,44 @@ struct SessionFlowApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(calendarService)
-                .environmentObject(schedulingEngine)
-                .environmentObject(updateService)
-                .environmentObject(sessionAwarenessService)
-                .environmentObject(sessionAwarenessService.timeState)
-                .environmentObject(sessionAudioService)
-                .environmentObject(recentEventsStore)
-                .environmentObject(eventCreationCoordinator)
-                .frame(minWidth: 1000, minHeight: 700)
-                .preferredColorScheme(preferredScheme)
-                .focusEffectDisabled()
-                .onAppear { applyAppearance(appearanceModeRaw) }
-                .onChange(of: appearanceModeRaw) { _, new in applyAppearance(new) }
-                .onAppear {
-                    guard !didInitializeServices else { return }
-                    didInitializeServices = true
-                    updateService.startAutomaticChecks()
-                    sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
-                    SessionFlowAppState.awarenessService = sessionAwarenessService
-                    SessionFlowAppState.calendarService = calendarService
-                    menuBarController.setup(awarenessService: sessionAwarenessService)
-                    miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
-                    dockProgressController.setup(awarenessService: sessionAwarenessService)
+            if ProcessInfo.processInfo.isRunningTests {
+                EmptyView()
+            } else {
+                ContentView()
+                    .environmentObject(calendarService)
+                    .environmentObject(schedulingEngine)
+                    .environmentObject(updateService)
+                    .environmentObject(sessionAwarenessService)
+                    .environmentObject(sessionAwarenessService.timeState)
+                    .environmentObject(sessionAudioService)
+                    .environmentObject(recentEventsStore)
+                    .environmentObject(eventCreationCoordinator)
+                    .frame(minWidth: 1100, minHeight: 700)
+                    .preferredColorScheme(preferredScheme)
+                    .focusEffectDisabled()
+                    .onAppear { applyAppearance(appearanceModeRaw) }
+                    .onChange(of: appearanceModeRaw) { _, new in applyAppearance(new) }
+                    .onAppear {
+                        guard !didInitializeServices else { return }
+                        didInitializeServices = true
+                        updateService.startAutomaticChecks()
+                        sessionAwarenessService.start(calendarService: calendarService, audioService: sessionAudioService)
+                        SessionFlowAppState.awarenessService = sessionAwarenessService
+                        SessionFlowAppState.calendarService = calendarService
+                        mcpServerController.configure(engine: schedulingEngine, calendar: calendarService)
+                        if MCPSettings.enabled {
+                            Task { await mcpServerController.start(port: MCPSettings.port, token: MCPSettings.token) }
+                        }
+                        menuBarController.setup(awarenessService: sessionAwarenessService)
+                        miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
+                        dockProgressController.setup(awarenessService: sessionAwarenessService)
 
-                    if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
-                        appDelegate.configureMainWindow(mainWindow)
+                        if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+                            appDelegate.configureMainWindow(mainWindow)
+                        }
+                        appDelegate.awarenessService = sessionAwarenessService
                     }
-                    appDelegate.awarenessService = sessionAwarenessService
-                }
+            }
         }
         .windowStyle(.hiddenTitleBar)
         .commands {
@@ -95,17 +112,17 @@ struct SessionFlowApp: App {
                     openProjectReadme()
                 }
                 .keyboardShortcut("?", modifiers: .command)
-                
+
                 Divider()
-                
+
                 Button("Welcome Guide...") {
                     NotificationCenter.default.post(name: Notification.Name("ShowWelcomeScreen"), object: nil)
                 }
-                
+
                 Button("Patterns Strategy...") {
                     NotificationCenter.default.post(name: Notification.Name("ShowPatternsGuide"), object: nil)
                 }
-                
+
                 Button("Organizing Tasks...") {
                     NotificationCenter.default.post(name: Notification.Name("ShowTasksGuide"), object: nil)
                 }
@@ -129,7 +146,7 @@ struct SessionFlowApp: App {
                 }
             }
         }
-        
+
         Window("About SessionFlow", id: "about") {
             AboutView()
                 .preferredColorScheme(preferredScheme)
@@ -142,6 +159,7 @@ struct SessionFlowApp: App {
                 .environmentObject(schedulingEngine)
                 .environmentObject(sessionAwarenessService)
                 .environmentObject(sessionAudioService)
+                .environmentObject(mcpServerController)
                 .preferredColorScheme(preferredScheme)
         }
         .windowResizability(.contentSize)
@@ -155,6 +173,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowActivationObserver: Any?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Under unit tests the app is only a test host — skip single-instance
+        // enforcement (which would terminate a running real instance) and setup.
+        guard !ProcessInfo.processInfo.isRunningTests else { return }
+
         let bundleID = Bundle.main.bundleIdentifier ?? ""
         let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
         if running.count > 1 {
@@ -198,9 +220,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Don't quit when main window is hidden for mini-player
-        let hasVisiblePanel = NSApp.windows.contains { $0 is NSPanel && $0.isVisible }
-        return !hasVisiblePanel
+        // Behave like a standard Mac app: closing the window keeps the app
+        // running. Reopen via the Dock icon; quit via the Dock context menu or
+        // the menu bar (Quit / ⌘Q).
+        return false
     }
 
     func applicationWillTerminate(_ notification: Notification) {
