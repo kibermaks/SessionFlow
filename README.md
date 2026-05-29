@@ -377,7 +377,7 @@ Swift Package Manager dependencies are resolved by Xcode and pinned in `SessionF
 
 ### Prerequisites
 
-- Xcode 15.0 or later
+- Xcode 16.3 or later (the MCP Swift SDK requires a Swift 6.1-capable toolchain)
 - macOS 13.0 or later
 - Git
 - Apple Developer Team ID (update the `TEAM_ID="RGFAX8X946"` placeholder in `build_app.sh` and `SessionFlow.xcodeproj/project.pbxproj` to your own Team ID before running the build scripts)

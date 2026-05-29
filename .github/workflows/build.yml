@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     
     steps:
       - name: Checkout code
@@ -21,10 +21,11 @@ jobs:
       - name: Setup Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '15.4'
+          xcode-version: latest-stable
       
       - name: Build
         run: |
+          set -o pipefail
           SCHEME="SessionFlow"
           PROJECT="SessionFlow.xcodeproj"
           
@@ -36,4 +37,4 @@ jobs:
                      CODE_SIGN_IDENTITY="-" \
                      CODE_SIGNING_REQUIRED="NO" \
                      CODE_SIGNING_ALLOWED="NO" \
-                     | xcpretty || true
+                     | xcpretty
