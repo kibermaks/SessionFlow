@@ -8,11 +8,14 @@ class MenuBarController: ObservableObject {
     private var flashGeneration = 0
     private var menuTrackingTimer: Timer?
     private weak var awarenessService: SessionAwarenessService?
+    private var openMainWindow: (() -> Void)?
     private lazy var statusStackedLensIcon = makeStackedLensIcon(size: 18)
     private lazy var menuStackedLensIcon = makeStackedLensIcon(size: 16)
     private lazy var smallStackedLensIcon = makeStackedLensIcon(size: 14)
 
-    func setup(awarenessService: SessionAwarenessService) {
+    func setup(awarenessService: SessionAwarenessService, openMainWindow: @escaping () -> Void) {
+        self.openMainWindow = openMainWindow
+
         if self.awarenessService === awarenessService, !cancellables.isEmpty {
             return
         }
@@ -265,14 +268,17 @@ class MenuBarController: ObservableObject {
     @objc private func openSessionFlow() {
         NSApp.activate(ignoringOtherApps: true)
 
-        if let window = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
+        if let window = SessionFlowWindowIdentity.mainWindow(preferVisible: true), window.isVisible {
             window.makeKeyAndOrderFront(nil)
         } else if let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
             // Mini-player mode — flash the panel
             flashPanel(panel)
         } else {
             NSApp.unhide(nil)
-            NSApp.windows.first(where: { !($0 is NSPanel) })?.makeKeyAndOrderFront(nil)
+            openMainWindow?()
+            DispatchQueue.main.async {
+                SessionFlowWindowIdentity.mainWindow(preferVisible: true)?.makeKeyAndOrderFront(nil)
+            }
         }
     }
 

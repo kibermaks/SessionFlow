@@ -13,6 +13,8 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ### Fixed
 
+- Open SessionFlow from the menu bar now recreates the main window after it has been closed
+- Collapsing to the mini-player again hides the main window without interfering with Close-to-background behavior
 - Mini-player rest bar no longer wraps its text vertically one letter at a time in narrow windows
 
 ## [2026.5.29] - 2026-05-29

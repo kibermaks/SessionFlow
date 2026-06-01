@@ -40,7 +40,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private func showPanel(awarenessService: SessionAwarenessService, audioService: SessionAudioService) {
         guard panel == nil else { return }
 
-        if let mainWindow = NSApp.windows.first(where: { $0.isVisible && !($0 is NSPanel) }) {
+        if let mainWindow = SessionFlowWindowIdentity.mainWindow(preferVisible: true) {
             let frame = mainWindow.frame
             awarenessService.config.mainWindowFrame = CodableRect(
                 x: frame.origin.x, y: frame.origin.y,
@@ -125,7 +125,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         ) { [weak self] notification in
             guard let self = self, self.panel != nil,
                   let window = notification.object as? NSWindow,
-                  !(window is NSPanel) else { return }
+                  SessionFlowWindowIdentity.isMainWindow(window) else { return }
             // Restore saved frame if it's still on a connected screen
             if let saved = self.awarenessService?.config.mainWindowFrame {
                 let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
@@ -227,7 +227,7 @@ class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
         panel.orderOut(nil)
         self.panel = nil
 
-        if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+        if let mainWindow = SessionFlowWindowIdentity.mainWindow() {
             if let saved = awarenessService?.config.mainWindowFrame {
                 let rect = NSRect(x: saved.x, y: saved.y, width: saved.width, height: saved.height)
                 if isRectOnScreen(rect) {

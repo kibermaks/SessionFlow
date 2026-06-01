@@ -1,6 +1,45 @@
 import SwiftUI
 import AppKit
 
+enum SessionFlowWindowIdentity {
+    static let mainWindowSceneID = "main"
+    static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("SessionFlow.mainWindow")
+
+    static func mainWindow(preferVisible: Bool = false) -> NSWindow? {
+        if preferVisible,
+           let keyWindow = NSApp.keyWindow,
+           keyWindow.isVisible,
+           isMainWindowCandidate(keyWindow) {
+            return keyWindow
+        }
+
+        let candidates = NSApp.windows.filter(isMainWindowCandidate)
+        if let configured = candidates.first(where: { $0.identifier == mainWindowIdentifier }) {
+            return configured
+        }
+        if preferVisible, let visible = candidates.first(where: \.isVisible) {
+            return visible
+        }
+        return candidates.first
+    }
+
+    static func isMainWindow(_ window: NSWindow) -> Bool {
+        window.identifier == mainWindowIdentifier || isMainWindowCandidate(window)
+    }
+
+    private static func isMainWindowCandidate(_ window: NSWindow) -> Bool {
+        guard !(window is NSPanel),
+              !window.isMiniaturized,
+              window.contentView != nil,
+              window.frame.width >= 900,
+              window.frame.height >= 600
+        else { return false }
+
+        let title = window.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty || title == "SessionFlow"
+    }
+}
+
 extension ProcessInfo {
     /// True when the process is hosting a unit-test bundle, so app side effects
     /// (single-instance termination, calendar prompts, background services) can be skipped.
@@ -55,7 +94,7 @@ struct SessionFlowApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup("SessionFlow", id: SessionFlowWindowIdentity.mainWindowSceneID) {
             if ProcessInfo.processInfo.isRunningTests {
                 EmptyView()
             } else {
@@ -84,11 +123,16 @@ struct SessionFlowApp: App {
                         if MCPSettings.enabled {
                             Task { await mcpServerController.start(port: MCPSettings.port, token: MCPSettings.token) }
                         }
-                        menuBarController.setup(awarenessService: sessionAwarenessService)
+                        menuBarController.setup(
+                            awarenessService: sessionAwarenessService,
+                            openMainWindow: {
+                                openWindow(id: SessionFlowWindowIdentity.mainWindowSceneID)
+                            }
+                        )
                         miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
                         dockProgressController.setup(awarenessService: sessionAwarenessService)
 
-                        if let mainWindow = NSApp.windows.first(where: { !($0 is NSPanel) }) {
+                        if let mainWindow = SessionFlowWindowIdentity.mainWindow(preferVisible: true) {
                             appDelegate.configureMainWindow(mainWindow)
                         }
                         appDelegate.awarenessService = sessionAwarenessService
@@ -167,7 +211,6 @@ struct SessionFlowApp: App {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
-    private static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("SessionFlow.mainWindow")
     private weak var monitoredMainWindow: NSWindow?
     private var titlebarDoubleClickMonitor: Any?
     private var windowActivationObserver: Any?
@@ -204,7 +247,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     weak var awarenessService: SessionAwarenessService?
 
     func configureMainWindow(_ window: NSWindow) {
-        window.identifier = Self.mainWindowIdentifier
+        window.identifier = SessionFlowWindowIdentity.mainWindowIdentifier
         window.setFrameAutosaveName("SessionFlowMainWindow")
         installTitlebarDoubleClickMonitor(for: window)
     }
@@ -265,7 +308,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func isConfiguredMainWindow(_ window: NSWindow) -> Bool {
-        window.identifier == Self.mainWindowIdentifier
+        SessionFlowWindowIdentity.isMainWindow(window)
     }
 
     private func isClickInNativeTitlebar(_ location: NSPoint, of window: NSWindow) -> Bool {
