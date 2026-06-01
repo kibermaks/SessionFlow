@@ -636,31 +636,38 @@ struct AwarenessRestContent<ToggleButton: View>: View {
                 Text("Rest")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(colors.textSecondary)
+                    .lineLimit(1)
 
                 if let type = awarenessService.restAfterSessionType {
                     Text("after \(type.rawValue)")
                         .font(.system(size: 11))
                         .foregroundColor(colors.textMuted)
+                        .lineLimit(1)
                 }
             }
+            .fixedSize(horizontal: true, vertical: false)
 
             if showProgress {
                 AwarenessDivider()
 
                 restProgressBar
+                    .frame(maxWidth: .infinity)
                     .padding(.horizontal, 8)
+            } else {
+                Spacer()
             }
-
-            Spacer()
 
             VStack(spacing: 1) {
                 Text(formatSessionDuration(awarenessService.restRemaining))
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
+                    .lineLimit(1)
                 Text("rest")
                     .font(.system(size: 10))
                     .foregroundColor(colors.textDisabled)
+                    .lineLimit(1)
             }
+            .fixedSize(horizontal: true, vertical: false)
 
             AwarenessSkipSessionButton(awarenessService: awarenessService)
             AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
