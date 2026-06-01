@@ -5,6 +5,12 @@ All notable changes to SessionFlow will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and SessionFlow marketing versions now follow the release date format `YYYY.M.D`.
 
+## [2026.6.1] - 2026-06-01
+
+### Fixed
+
+- Mini-player rest bar no longer wraps its text vertically one letter at a time in narrow windows
+
 ## [2026.5.29] - 2026-05-29
 
 ### Added
