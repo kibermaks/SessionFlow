@@ -474,6 +474,43 @@ class CalendarService: ObservableObject {
         }
     }
 
+    /// Duplicates an event onto the same day at the same time as the original.
+    func duplicateEvent(eventId: String) -> (success: Bool, newEventId: String?, targetStartTime: Date?) {
+        guard let source = eventStore.event(withIdentifier: eventId) else {
+            errorMessage = "Event not found"
+            return (false, nil, nil)
+        }
+        guard let sourceStart = source.startDate, let sourceEnd = source.endDate else {
+            errorMessage = "Event has no start/end date"
+            return (false, nil, nil)
+        }
+
+        let newStart = sourceStart
+        let newEnd = sourceEnd
+
+        var notes = source.notes ?? ""
+        for tag in SessionRating.allTags {
+            notes = notes.replacingOccurrences(of: tag, with: "")
+        }
+        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let copy = EKEvent(eventStore: eventStore)
+        copy.title = source.title
+        copy.startDate = newStart
+        copy.endDate = newEnd
+        copy.calendar = source.calendar
+        copy.notes = notes.isEmpty ? nil : notes
+        copy.url = source.url
+
+        do {
+            try eventStore.save(copy, span: .thisEvent)
+            return (true, copy.eventIdentifier, newStart)
+        } catch {
+            errorMessage = "Failed to duplicate event: \(error.localizedDescription)"
+            return (false, nil, nil)
+        }
+    }
+
     /// Deletes a single event by identifier. Returns true if deleted successfully.
     func deleteEvent(identifier: String) -> Bool {
         guard let event = eventStore.event(withIdentifier: identifier) else { return false }

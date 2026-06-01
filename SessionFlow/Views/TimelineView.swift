@@ -1433,6 +1433,17 @@ extension TimelineView {
                 }
             }
             Divider()
+            Button("Duplicate") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    let result = calendarService.duplicateEvent(eventId: slot.id)
+                    if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
+                        onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: "the same day", targetDate: actionContext.selectedDate, targetStartTime: targetStart, newEventId: eventId))
+                        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+                    } else {
+                        schedulingEngine.schedulingMessage = "Failed to duplicate \"\(slot.title)\""
+                    }
+                }
+            }
             Menu("Copy to...") {
                 ForEach(copyTargetDays(), id: \.date) { target in
                     Button(target.label) {

@@ -7,6 +7,10 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [2026.6.1] - 2026-06-01
 
+### Added
+
+- Right-click an event and choose Duplicate to create an identical copy at the same time
+
 ### Fixed
 
 - Mini-player rest bar no longer wraps its text vertically one letter at a time in narrow windows
