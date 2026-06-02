@@ -7,8 +7,21 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.6.2] - 2026-06-02
+
+### Added
+
+- Projected Sessions card now shows total time for each activity type alongside the session count
+
+### Changed
+
+- Improved readability of session and event labels on the timeline in light mode
+
 ### Fixed
 
+- Presets no longer disappear after an update — presets saved before the calendar-mapping feature now load correctly
+- Update Current Preset now clears the modified indicator next to the preset name
+- Clicking the Dock icon while the mini-player is active now pulses the mini-player to show where it is
 - Open SessionFlow from the menu bar now recreates the main window after it has been closed
 - Collapsing to the mini-player again hides the main window without interfering with Close-to-background behavior
 
