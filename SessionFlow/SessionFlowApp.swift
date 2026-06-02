@@ -253,10 +253,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        // If mini player is active, bring it to front instead of opening the main window
+        // If mini player is active, pulse it instead of opening the main window.
         if awarenessService?.isCollapsed == true,
            let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
-            panel.orderFront(nil)
+            MiniPlayerAttentionEffect.pulse(panel)
             return false
         }
         return true

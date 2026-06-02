@@ -1284,9 +1284,9 @@ struct LeftPanel: View {
             }
 
             if schedulingEngine.sessionsFrozen {
-                // Overlay with same effect as card – allows scroll through
+                // Dim overlay – scheme-aware so the card stays readable in both themes
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.black.opacity(0.75))
+                    .fill((colorScheme == .dark ? Color.black : Color.white).opacity(0.6))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(false)
 
@@ -1320,6 +1320,12 @@ struct LeftPanel: View {
                     .animation(.easeInOut(duration: 0.15), value: isConfirmingReset)
                 }
                 .padding(20)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(colors.panelBackground)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(colors.border, lineWidth: 1))
+                        .shadow(color: Color.black.opacity(0.2), radius: 12, y: 4)
+                )
             }
         }
         .onChange(of: selectedTab) { _, newTab in
@@ -1429,24 +1435,8 @@ struct LeftPanel: View {
     }
     
     private func updateCurrentPreset(_ preset: Preset) {
-        let updated = Preset(id: preset.id, name: preset.name, icon: preset.icon,
-            workSessionCount: schedulingEngine.workSessions, sideSessionCount: schedulingEngine.sideSessions,
-            workSessionName: schedulingEngine.workSessionName, sideSessionName: schedulingEngine.sideSessionName,
-            workSessionDuration: schedulingEngine.workSessionDuration, sideSessionDuration: schedulingEngine.sideSessionDuration,
-            planningDuration: schedulingEngine.planningDuration, restDuration: schedulingEngine.restDuration,
-            sideRestDuration: schedulingEngine.sideRestDuration,
-            deepRestDuration: schedulingEngine.deepRestDuration,
-            schedulePlanning: schedulingEngine.schedulePlanning, pattern: schedulingEngine.pattern,
-            workSessionsPerCycle: schedulingEngine.workSessionsPerCycle,
-            sideSessionsPerCycle: schedulingEngine.sideSessionsPerCycle,
-            sideFirst: schedulingEngine.sideFirst,
-            deepSessionConfig: schedulingEngine.deepSessionConfig,
-            calendarMapping: CalendarMapping(
-                workCalendarName: schedulingEngine.workCalendarName,
-                sideCalendarName: schedulingEngine.sideCalendarName,
-                workCalendarIdentifier: schedulingEngine.workCalendarIdentifier,
-                sideCalendarIdentifier: schedulingEngine.sideCalendarIdentifier
-            ))
+        // Reuse saveAsPreset so the field list stays in one place (preserve id/name/icon).
+        let updated = schedulingEngine.saveAsPreset(id: preset.id, name: preset.name, icon: preset.icon)
         PresetStorage.shared.updatePreset(updated)
         presets = PresetStorage.shared.loadPresets()
         selectedPreset = updated
@@ -1727,16 +1717,20 @@ struct RightPanel: View {
         let dc = sessions.filter { $0.type == .deep }.count
         let lrc = sessions.filter { $0.type == .bigRest }.count
         let sessionCount = sessions.filter { $0.type != .bigRest }.count
+        let minutes: (SessionType) -> Int = { type in
+            sessions.filter { $0.type == type }.reduce(0) { $0 + $1.durationMinutes }
+        }
+        let totalMinutes = sessions.filter { $0.type != .bigRest }.reduce(0) { $0 + $1.durationMinutes }
         let formatter = DateFormatter()
         formatter.dateStyle = .none
         formatter.timeStyle = .short
         return VStack(alignment: .leading, spacing: 6) {
-            if pc > 0 { countRow(.planning, pc) }
-            countRow(.work, wc)
-            countRow(.side, sc)
-            if dc > 0 { countRow(.deep, dc) }
+            if pc > 0 { countRow(.planning, pc, minutes: minutes(.planning)) }
+            countRow(.work, wc, minutes: minutes(.work))
+            countRow(.side, sc, minutes: minutes(.side))
+            if dc > 0 { countRow(.deep, dc, minutes: minutes(.deep)) }
             Divider().background(colors.borderStrong)
-            HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(sessionCount) sessions").fontWeight(.semibold) }
+            HStack { Text("Total:").fontWeight(.medium); Spacer(); Text("\(formatDuration(totalMinutes)) · \(sessionCount) sessions").fontWeight(.semibold) }
             if lrc > 0 {
                 HStack(spacing: 4) {
                     Image(systemName: "pause.circle.fill").font(.system(size: 9)).foregroundColor(SessionType.bigRest.color.opacity(0.6))
@@ -1807,7 +1801,7 @@ struct RightPanel: View {
         return false
     }
 
-    private func countRow(_ type: SessionType, _ count: Int) -> some View {
+    private func countRow(_ type: SessionType, _ count: Int, minutes: Int? = nil) -> some View {
         let hidden = isCalendarHidden(for: type)
         return HStack {
             if hidden {
@@ -1819,8 +1813,24 @@ struct RightPanel: View {
             Circle().fill(type.color).frame(width: 8, height: 8)
             Text("\(type.rawValue):")
             Spacer()
-            Text("\(count)").fontWeight(.medium)
+            HStack(spacing: 6) {
+                if let minutes, minutes > 0 {
+                    Text(formatDuration(minutes))
+                        .font(.system(size: 11))
+                        .foregroundColor(colors.textMuted)
+                }
+                Text("\(count)").fontWeight(.medium)
+            }
         }
+    }
+
+    private func formatDuration(_ minutes: Int) -> String {
+        let hours = minutes / 60
+        let mins = minutes % 60
+        if hours > 0 {
+            return mins > 0 ? "\(hours)h \(mins)m" : "\(hours)h"
+        }
+        return "\(mins)m"
     }
     
     private var actionButtons: some View {

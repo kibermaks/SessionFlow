@@ -295,7 +295,7 @@ struct Preset: Identifiable, Codable, Equatable {
         deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
         flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
         bigRestConfig = try container.decodeIfPresent(BigRestConfig.self, forKey: .bigRestConfig) ?? .default
-        calendarMapping = try container.decode(CalendarMapping.self, forKey: .calendarMapping)
+        calendarMapping = try container.decodeIfPresent(CalendarMapping.self, forKey: .calendarMapping) ?? .default
         // If version is missing, assume v1 (old preset)
         schemaVersion = try container.decodeIfPresent(PresetSchemaVersion.self, forKey: .schemaVersion) ?? .v1
     }

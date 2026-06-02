@@ -2,6 +2,53 @@ import AppKit
 import SwiftUI
 import Combine
 
+enum MiniPlayerAttentionEffect {
+    private static let overlayIdentifier = NSUserInterfaceItemIdentifier("SessionFlow.miniPlayerAttentionOverlay")
+
+    static func pulse(_ window: NSWindow) {
+        window.orderFrontRegardless()
+
+        guard let contentView = window.contentView else { return }
+        contentView.subviews
+            .filter { $0.identifier == overlayIdentifier }
+            .forEach { $0.removeFromSuperview() }
+
+        let overlay = NSView(frame: contentView.bounds)
+        overlay.identifier = overlayIdentifier
+        overlay.wantsLayer = true
+        overlay.alphaValue = 0
+        overlay.autoresizingMask = [.width, .height]
+        overlay.layer?.backgroundColor = NSColor.controlAccentColor.withAlphaComponent(0.18).cgColor
+        overlay.layer?.borderColor = NSColor.controlAccentColor.withAlphaComponent(0.95).cgColor
+        overlay.layer?.borderWidth = 2
+        overlay.layer?.cornerRadius = 10
+
+        contentView.addSubview(overlay, positioned: .above, relativeTo: nil)
+        pulse(overlay, remaining: 3)
+    }
+
+    private static func pulse(_ overlay: NSView, remaining: Int) {
+        guard remaining > 0 else {
+            overlay.removeFromSuperview()
+            return
+        }
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            overlay.animator().alphaValue = 1
+        } completionHandler: {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.28
+                context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+                overlay.animator().alphaValue = 0
+            } completionHandler: {
+                pulse(overlay, remaining: remaining - 1)
+            }
+        }
+    }
+}
+
 class MiniPlayerWindowController: NSObject, ObservableObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var cancellables = Set<AnyCancellable>()

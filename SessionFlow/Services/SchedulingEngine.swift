@@ -142,8 +142,9 @@ class SchedulingEngine: ObservableObject {
     
     // MARK: - Save as Preset
     
-    func saveAsPreset(name: String, icon: String) -> Preset {
+    func saveAsPreset(id: UUID = UUID(), name: String, icon: String) -> Preset {
         return Preset(
+            id: id,
             name: name,
             icon: icon,
             workSessionCount: workSessions,

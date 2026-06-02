@@ -75,29 +75,6 @@ class MenuBarController: ObservableObject {
         showDetailsMenu()
     }
 
-    private func flashPanel(_ window: NSWindow) {
-        guard let contentView = window.contentView else { return }
-        let flash = NSView(frame: contentView.bounds)
-        flash.wantsLayer = true
-        flash.layer?.backgroundColor = NSColor.white.withAlphaComponent(0.25).cgColor
-        flash.layer?.cornerRadius = 10
-        flash.alphaValue = 0
-        contentView.addSubview(flash)
-        flash.autoresizingMask = [.width, .height]
-
-        NSAnimationContext.runAnimationGroup({ ctx in
-            ctx.duration = 0.15
-            flash.animator().alphaValue = 1
-        }, completionHandler: {
-            NSAnimationContext.runAnimationGroup({ ctx in
-                ctx.duration = 0.3
-                flash.animator().alphaValue = 0
-            }, completionHandler: {
-                flash.removeFromSuperview()
-            })
-        })
-    }
-
     private func showDetailsMenu() {
         guard let service = awarenessService else { return }
 
@@ -271,8 +248,8 @@ class MenuBarController: ObservableObject {
         if let window = SessionFlowWindowIdentity.mainWindow(preferVisible: true), window.isVisible {
             window.makeKeyAndOrderFront(nil)
         } else if let panel = NSApp.windows.first(where: { $0 is NSPanel && $0.isVisible }) {
-            // Mini-player mode — flash the panel
-            flashPanel(panel)
+            // Mini-player mode: show where the floating panel is.
+            MiniPlayerAttentionEffect.pulse(panel)
         } else {
             NSApp.unhide(nil)
             openMainWindow?()

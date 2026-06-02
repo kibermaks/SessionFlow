@@ -653,7 +653,7 @@ struct TimelineView: View {
 
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(slot.calendarColor.opacity(0.5))
+                .fill(slot.calendarColor.opacity(colors.isDark ? 0.5 : 0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(Color.blue.opacity(0.8), lineWidth: 2)
@@ -665,12 +665,12 @@ struct TimelineView: View {
                     HStack(spacing: 3) {
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(colors.isDark ? .white : slot.calendarColor)
+                            .foregroundColor(.white)
                             .lineLimit(1)
                         Spacer(minLength: 2)
                         Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(colors.isDark ? .white.opacity(0.9) : slot.calendarColor.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.9))
                             .lineLimit(1)
                             .layoutPriority(1)
                     }
@@ -679,12 +679,12 @@ struct TimelineView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(slot.title)
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(colors.isDark ? .white : slot.calendarColor)
+                            .foregroundColor(.white)
                             .lineLimit(1)
                         if blockHeight > 30 {
                             Text(startAndDurationString(start: newStart, end: newEnd))
                                 .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(colors.isDark ? .white.opacity(0.9) : slot.calendarColor.opacity(0.8))
+                                .foregroundColor(.white.opacity(0.9))
                         }
                     }
                     .padding(4)
@@ -3115,7 +3115,7 @@ extension TimelineView {
 
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
-                .fill(session.type.color.opacity(0.5))
+                .fill(session.type.color.opacity(colors.isDark ? 0.5 : 0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 4)
                         .strokeBorder(Color.blue.opacity(0.8), lineWidth: 2)
@@ -3132,11 +3132,11 @@ extension TimelineView {
                     Spacer(minLength: 2)
                     Text(startAndDurationString(start: newStart, end: newEnd))
                         .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(colors.isDark ? .white.opacity(0.9) : session.type.color.opacity(0.8))
+                        .foregroundColor(.white.opacity(0.9))
                         .lineLimit(1)
                         .layoutPriority(1)
                 }
-                .foregroundColor(colors.isDark ? .white : session.type.color)
+                .foregroundColor(.white)
                 .padding(3)
             } else if blockHeight >= 16 {
                 VStack(alignment: .leading, spacing: 1) {
@@ -3148,11 +3148,11 @@ extension TimelineView {
                             .font(.system(size: 12, weight: .medium))
                             .lineLimit(1)
                     }
-                    .foregroundColor(colors.isDark ? .white : session.type.color)
+                    .foregroundColor(.white)
                     if blockHeight > 30 {
                         Text(startAndDurationString(start: newStart, end: newEnd))
                             .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(colors.isDark ? .white.opacity(0.9) : session.type.color.opacity(0.8))
+                            .foregroundColor(.white.opacity(0.9))
                     }
                 }
                 .padding(4)
