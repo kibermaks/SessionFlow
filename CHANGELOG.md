@@ -7,6 +7,28 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.6.9] - 2026-06-09
+
+### Added
+
+- Set Start time now follows the macOS 12-hour clock setting with AM/PM editing.
+
+### Changed
+
+- Timeline hour labels now use compact AM/PM labels in 12-hour clock mode.
+- `./build_app.sh` now coordinates parallel agent builds with `.agent-build.lock`.
+
+### Fixed
+
+- Ambient audio now resists App Nap while playing, reuses decoded sound buffers, starts after the actual start-sound duration, rebuilds clock ticking loops on a sample grid, and crossfades all other ambient sounds into seamless loops.
+- Changing the Rest ambient sound while a rest period is active now switches playback immediately.
+- Projected sessions now switch to the compact one-line timeline layout at the same height as calendar events.
+- Projected Sessions now shows duration totals in the "Daily quotas satisfied" summary.
+- The disabled Schedule Sessions button is more readable in light mode and explains why it is unavailable when clicked.
+- The preset picker now fits longer preset names before truncating.
+- The Set Start time editor no longer overlaps its hour, minute, and AM/PM controls.
+- Timeline hour labels no longer wrap AM/PM onto a second line.
+
 ## [2026.6.2] - 2026-06-02
 
 ### Added

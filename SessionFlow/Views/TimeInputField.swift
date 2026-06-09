@@ -10,21 +10,37 @@ struct TimeInputField: View {
 
     @State private var hourText: String = ""
     @State private var minuteText: String = ""
+    @State private var period: DayPeriod = .am
     @FocusState private var focusedPart: Part?
     
     private enum Part {
         case hour
         case minute
     }
+
+    private enum DayPeriod: String, CaseIterable, Identifiable {
+        case am = "AM"
+        case pm = "PM"
+
+        var id: String { rawValue }
+    }
     
     private let minuteStep = 5
+
+    static var preferredControlWidth: CGFloat {
+        usesTwelveHourClock() ? 168 : 100
+    }
+
+    private var usesTwelveHourClock: Bool {
+        Self.usesTwelveHourClock()
+    }
     
     var body: some View {
         HStack(alignment: .center, spacing: 6) {
             // Hour field
             timePartField(
                 text: $hourText,
-                placeholder: "00",
+                placeholder: usesTwelveHourClock ? "12" : "00",
                 width: 24,
                 focused: focusedPart == .hour
             )
@@ -44,6 +60,21 @@ struct TimeInputField: View {
             )
             .focused($focusedPart, equals: .minute)
             .onSubmit { focusedPart = nil }
+
+            if usesTwelveHourClock {
+                Picker("", selection: $period) {
+                    ForEach(DayPeriod.allCases) { period in
+                        Text(period.rawValue).tag(period)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 64, height: 24)
+                .controlSize(.small)
+                .onChange(of: period) { _, _ in
+                    applyCurrentTextToDate()
+                }
+            }
             
             // Stepper
             VStack(spacing: 0) {
@@ -70,24 +101,29 @@ struct TimeInputField: View {
                 .hoverEffect(brightness: 0.25)
             }
         }
+        .frame(width: Self.preferredControlWidth, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
         .onAppear {
             syncFromDate()
         }
         .onChange(of: date) { _, _ in
             syncFromDate()
         }
+        .onChange(of: usesTwelveHourClock) { _, _ in
+            syncFromDate()
+        }
         .onChange(of: hourText) { _, newValue in
             let filtered = newValue.filter { "0123456789".contains($0) }
             if filtered != newValue { hourText = filtered }
-            if let h = Int(filtered), (0...23).contains(h) {
-                applyHourMinute(hour: h, minute: currentMinute)
+            if let h = Int(filtered), validHourRange.contains(h) {
+                applyHourMinute(hour: absoluteHour(displayHour: h), minute: currentMinute)
             }
         }
         .onChange(of: minuteText) { _, newValue in
             let filtered = newValue.filter { "0123456789".contains($0) }
             if filtered != newValue { minuteText = filtered }
             if let m = Int(filtered), (0...59).contains(m) {
-                applyHourMinute(hour: currentHour, minute: m)
+                applyHourMinute(hour: absoluteHour(displayHour: currentDisplayHour), minute: m)
             }
         }
         .onChange(of: focusedPart) { _, part in
@@ -118,28 +154,39 @@ struct TimeInputField: View {
         }
     }
     
-    private var currentHour: Int {
+    private var currentDisplayHour: Int {
         Int(hourText.filter { "0123456789".contains($0) }) ?? 0
     }
     
     private var currentMinute: Int {
         Int(minuteText.filter { "0123456789".contains($0) }) ?? 0
     }
+
+    private var validHourRange: ClosedRange<Int> {
+        usesTwelveHourClock ? 1...12 : 0...23
+    }
     
     private func syncFromDate() {
         let cal = Calendar.current
         let comp = cal.dateComponents([.hour, .minute], from: date)
-        hourText = String(format: "%02d", comp.hour ?? 0)
+        let hour = comp.hour ?? 0
+        if usesTwelveHourClock {
+            hourText = "\(displayHour(from: hour))"
+            period = hour < 12 ? .am : .pm
+        } else {
+            hourText = String(format: "%02d", hour)
+        }
         minuteText = String(format: "%02d", comp.minute ?? 0)
     }
     
     private func step(up: Bool) {
         if focusedPart == .hour {
             // Hour focused: step by 1
-            let h = currentHour
-            let newH = up ? min(23, h + 1) : max(0, h - 1)
-            applyHourMinute(hour: newH, minute: currentMinute)
-            hourText = String(format: "%02d", newH)
+            let cal = Calendar.current
+            let hour = cal.component(.hour, from: date)
+            let newHour = up ? min(23, hour + 1) : max(0, hour - 1)
+            applyHourMinute(hour: newHour, minute: currentMinute)
+            syncFromDate()
         } else {
             // Minute focused (or neither): step by 5
             let m = currentMinute
@@ -160,8 +207,7 @@ struct TimeInputField: View {
             if let newDate = cal.date(from: comp) {
                 date = newDate
             }
-            minuteText = String(format: "%02d", newM)
-            hourText = String(format: "%02d", comp.hour ?? 0)
+            syncFromDate()
         }
     }
     
@@ -177,10 +223,42 @@ struct TimeInputField: View {
     }
     
     private func validateAndClamp() {
-        let h = min(23, max(0, currentHour))
+        let h = min(validHourRange.upperBound, max(validHourRange.lowerBound, currentDisplayHour))
         let m = min(59, max(0, currentMinute))
-        hourText = String(format: "%02d", h)
+        hourText = usesTwelveHourClock ? "\(h)" : String(format: "%02d", h)
         minuteText = String(format: "%02d", m)
-        applyHourMinute(hour: h, minute: m)
+        applyHourMinute(hour: absoluteHour(displayHour: h), minute: m)
+    }
+
+    private func applyCurrentTextToDate() {
+        let h = min(validHourRange.upperBound, max(validHourRange.lowerBound, currentDisplayHour))
+        let m = min(59, max(0, currentMinute))
+        applyHourMinute(hour: absoluteHour(displayHour: h), minute: m)
+        syncFromDate()
+    }
+
+    private func absoluteHour(displayHour: Int) -> Int {
+        guard usesTwelveHourClock else {
+            return min(23, max(0, displayHour))
+        }
+
+        let normalizedHour = min(12, max(1, displayHour))
+        switch period {
+        case .am:
+            return normalizedHour == 12 ? 0 : normalizedHour
+        case .pm:
+            return normalizedHour == 12 ? 12 : normalizedHour + 12
+        }
+    }
+
+    private func displayHour(from absoluteHour: Int) -> Int {
+        let hour = ((absoluteHour % 24) + 24) % 24
+        let displayHour = hour % 12
+        return displayHour == 0 ? 12 : displayHour
+    }
+
+    private static func usesTwelveHourClock() -> Bool {
+        let format = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: .autoupdatingCurrent) ?? ""
+        return format.contains("a")
     }
 }

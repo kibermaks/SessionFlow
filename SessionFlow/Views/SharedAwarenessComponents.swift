@@ -4,8 +4,22 @@ import SwiftUI
 
 func formatSessionTime(_ date: Date) -> String {
     let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
+    formatter.dateStyle = .none
+    formatter.timeStyle = .short
     return formatter.string(from: date)
+}
+
+func formatSessionTimeRange(start: Date, end: Date) -> String {
+    return "\(formatSessionTime(start)) – \(formatSessionTime(end))"
+}
+
+var awarenessSessionMetaColumnWidth: CGFloat {
+    uses12HourClock ? 160 : 110
+}
+
+var uses12HourClock: Bool {
+    let format = DateFormatter.dateFormat(fromTemplate: "j", options: 0, locale: Locale.autoupdatingCurrent) ?? ""
+    return format.contains("a")
 }
 
 func formatSessionDuration(_ interval: TimeInterval) -> String {
@@ -252,9 +266,10 @@ struct AwarenessSessionMeta: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             if let start = awarenessService.sessionStartTime, let end = awarenessService.sessionEndTime {
-                Text("\(formatSessionTime(start)) – \(formatSessionTime(end))")
+                Text(formatSessionTimeRange(start: start, end: end))
                     .font(.system(size: 12, design: .monospaced))
                     .foregroundColor(colors.textSecondary)
+                    .lineLimit(1)
             }
             if awarenessService.isBusySlotMode {
                 Text(awarenessService.busySlotCalendarName ?? "Calendar")
@@ -285,8 +300,9 @@ struct AwarenessEventInfoPopover: View {
                     Image(systemName: "clock")
                         .font(.system(size: 11))
                         .foregroundColor(.secondary)
-                    Text("\(formatSessionTime(start)) – \(formatSessionTime(end))")
+                    Text(formatSessionTimeRange(start: start, end: end))
                         .font(.system(size: 12, design: .monospaced))
+                        .lineLimit(1)
                 }
             }
 

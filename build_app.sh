@@ -1,6 +1,62 @@
 #!/bin/bash
 set -e
 
+# Repository-wide build mutex. This protects DerivedData cleanup, build number
+# updates, and app bundle copy when multiple agent chats build at once.
+LOCK_FILE=".agent-build.lock"
+BUILD_LOCK_ACQUIRED=false
+
+is_ancestor_pid() {
+    local candidate="$1"
+    local pid="$$"
+
+    while [ -n "$pid" ] && [ "$pid" -gt 1 ] 2>/dev/null; do
+        if [ "$pid" = "$candidate" ]; then
+            return 0
+        fi
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d '[:space:]')
+    done
+
+    return 1
+}
+
+release_build_lock() {
+    if [ "$BUILD_LOCK_ACQUIRED" = true ]; then
+        rm -f "$LOCK_FILE"
+    fi
+}
+
+acquire_build_lock() {
+    local command="./build_app.sh $*"
+
+    while true; do
+        if ( set -o noclobber; printf 'pid=%s\nstarted=%s\ncmd=%s\nnote=%s\n' "$$" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$command" "build_app.sh self-lock" > "$LOCK_FILE" ) 2>/dev/null; then
+            BUILD_LOCK_ACQUIRED=true
+            trap release_build_lock EXIT
+            return 0
+        fi
+
+        local existing_pid
+        existing_pid=$(awk -F= '/^pid=/{print $2; exit}' "$LOCK_FILE" 2>/dev/null | tr -d '[:space:]' || true)
+
+        if [ -n "$existing_pid" ] && is_ancestor_pid "$existing_pid"; then
+            echo "🔒 Using inherited build lock held by parent PID $existing_pid"
+            return 0
+        fi
+
+        if [ -n "$existing_pid" ] && ps -p "$existing_pid" >/dev/null 2>&1; then
+            echo "⏳ Waiting for active build lock held by PID $existing_pid..."
+            sleep 10
+            continue
+        fi
+
+        echo "🧹 Removing stale build lock${existing_pid:+ held by PID $existing_pid}..."
+        rm -f "$LOCK_FILE"
+    done
+}
+
+acquire_build_lock "$@"
+
 # Start timer
 BUILD_START_TIME=$(date +%s)
 

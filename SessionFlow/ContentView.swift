@@ -625,7 +625,8 @@ struct ContentViewBody: View {
                 scheduleAll: scheduleAllSessions,
                 showingDeleteConfirmation: $showingDeleteConfirmation,
                 deletePastSessions: $deletePastSessions,
-                updatePreview: updateProjectedSchedule
+                updatePreview: updateProjectedSchedule,
+                onModeToast: { modeToast = $0 }
             )
         }
     }
@@ -1208,7 +1209,7 @@ struct HeaderView: View {
                     .help("Click to set a custom start time")
                 }
             }
-            .frame(width: 100)
+            .frame(width: useNowTime ? 100 : TimeInputField.preferredControlWidth, alignment: .leading)
         }
     }
     
@@ -1393,7 +1394,7 @@ struct LeftPanel: View {
             }
             Spacer()
             presetMenu
-                .frame(width: 170)
+                .frame(minWidth: 190, maxWidth: 220)
         }
         .frame(maxWidth: .infinity)
         .padding(.bottom, 12)
@@ -1415,10 +1416,16 @@ struct LeftPanel: View {
                 if let p = selectedPreset {
                     Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
                     let modified = schedulingEngine.isPresetModified(p)
-                    Text(p.name + (modified ? " ＊" : "")).foregroundColor(colors.textPrimary)
+                    Text(p.name + (modified ? " ＊" : ""))
+                        .foregroundColor(colors.textPrimary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 } else {
                     Image(systemName: "doc").foregroundColor(colors.textSecondary)
-                    Text("No Preset Selected").foregroundColor(colors.textSecondary)
+                    Text("No Preset Selected")
+                        .foregroundColor(colors.textSecondary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
                 }
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 10))
@@ -1467,6 +1474,7 @@ struct RightPanel: View {
     @Binding var showingDeleteConfirmation: Bool
     @Binding var deletePastSessions: Bool
     let updatePreview: () -> Void
+    let onModeToast: (String) -> Void
     
     @State private var showingAvailabilityHelp = false
     @State private var showingProjectionHelp = false
@@ -1768,10 +1776,18 @@ struct RightPanel: View {
             Text("Daily quotas satisfied")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(Color(hex: "10B981"))
-            if schedulingEngine.schedulePlanning { countRow(.planning, 1) }
-            if schedulingEngine.workSessions > 0 { countRow(.work, counts.work) }
-            if schedulingEngine.sideSessions > 0 { countRow(.side, counts.side) }
-            if schedulingEngine.deepSessionConfig.enabled { countRow(.deep, counts.deep) }
+            if schedulingEngine.schedulePlanning {
+                countRow(.planning, 1, minutes: schedulingEngine.planningDuration)
+            }
+            if schedulingEngine.workSessions > 0 {
+                countRow(.work, counts.work, minutes: counts.work * schedulingEngine.workSessionDuration)
+            }
+            if schedulingEngine.sideSessions > 0 {
+                countRow(.side, counts.side, minutes: counts.side * schedulingEngine.sideSessionDuration)
+            }
+            if schedulingEngine.deepSessionConfig.enabled {
+                countRow(.deep, counts.deep, minutes: counts.deep * schedulingEngine.deepSessionConfig.duration)
+            }
         }
         .font(.system(size: 13)).foregroundColor(colors.textSecondary)
     }
@@ -1832,15 +1848,44 @@ struct RightPanel: View {
         }
         return "\(mins)m"
     }
+
+    private var scheduleDisabledReason: String {
+        if schedulingEngine.hasNoSessionTargets {
+            return "No sessions are configured for this preset."
+        }
+        if schedulingEngine.quotasSatisfied {
+            return "Daily quotas are already satisfied by existing sessions."
+        }
+
+        let message = schedulingEngine.schedulingMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !message.isEmpty {
+            return message
+        }
+
+        return "No projected sessions are available to schedule."
+    }
+
+    private func scheduleAllOrShowReason() {
+        if schedulingEngine.projectedSessions.isEmpty {
+            onModeToast(scheduleDisabledReason)
+        } else {
+            scheduleAll()
+        }
+    }
     
     private var actionButtons: some View {
         let accent = Color(hex: "6366F1")
         let disabled = schedulingEngine.projectedSessions.isEmpty
+        let disabledBackground = colors.isDark ? Color.white.opacity(0.08) : Color(hex: "E2E8F0")
+        let disabledForeground = colors.isDark ? Color.white.opacity(0.56) : Color(hex: "334155")
+        let disabledBorder = colors.isDark ? Color.white.opacity(0.14) : Color(hex: "CBD5E1")
+        let buttonForeground = disabled ? disabledForeground : Color.white
+        let dividerColor = disabled ? disabledBorder : Color.white.opacity(0.24)
 
         return VStack(spacing: 12) {
             // Split button: Schedule Sessions (main) + dropdown arrow (planning)
             HStack(spacing: 0) {
-                Button(action: { scheduleAll() }) {
+                Button(action: scheduleAllOrShowReason) {
                     HStack(spacing: 8) {
                         Spacer()
                         Image(systemName: "calendar.badge.plus")
@@ -1853,11 +1898,11 @@ struct RightPanel: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .disabled(disabled)
-                .help("Add all projected sessions to your Calendar")
+                .help(disabled ? scheduleDisabledReason : "Add all projected sessions to your Calendar")
+                .accessibilityHint(disabled ? scheduleDisabledReason : "Add all projected sessions to your Calendar")
 
                 Rectangle()
-                    .fill(colors.borderStrong)
+                    .fill(dividerColor)
                     .frame(width: 1)
                     .padding(.vertical, 6)
 
@@ -1870,7 +1915,7 @@ struct RightPanel: View {
                 } label: {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(buttonForeground)
                         .frame(maxWidth: 36, maxHeight: .infinity)
                 }
                 .menuStyle(.borderlessButton)
@@ -1879,10 +1924,14 @@ struct RightPanel: View {
                 .help("More scheduling options")
             }
             .frame(height: 44)
-            .background(disabled ? Color.gray.opacity(0.3) : accent)
-            .foregroundColor(.white)
-            .environment(\.colorScheme, .dark)
+            .background(disabled ? disabledBackground : accent)
+            .foregroundColor(buttonForeground)
+            .environment(\.colorScheme, disabled ? colorScheme : .dark)
             .cornerRadius(10)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(disabled ? disabledBorder : Color.clear, lineWidth: 1)
+            )
             .hoverEffect(brightness: disabled ? 0 : 0.12)
 
             Button(action: { deletePastSessions = false; showingDeleteConfirmation = true }) {

@@ -136,17 +136,21 @@ class SessionAwarenessService: ObservableObject {
                     audioService.micAwareEnabled = config.micAwareEnabled
                 }
             }
-            // Dynamic: update ambient sound if settings change mid-session
-            if isActive, let audioService = audioService {
-                let soundConfig: SessionSoundConfig
-                if let type = currentSessionType {
-                    soundConfig = config.soundConfig(for: type)
-                } else if isBusySlotMode {
-                    soundConfig = config.otherEventsSound
-                } else {
-                    return
+            // Dynamic: update ambient sound if settings change mid-session or mid-rest
+            if let audioService = audioService {
+                if isActive {
+                    let soundConfig: SessionSoundConfig
+                    if let type = currentSessionType {
+                        soundConfig = config.soundConfig(for: type)
+                    } else if isBusySlotMode {
+                        soundConfig = config.otherEventsSound
+                    } else {
+                        return
+                    }
+                    audioService.updateAmbientIfPlaying(config: soundConfig)
+                } else if isResting {
+                    audioService.updateAmbientIfPlaying(config: config.restSound)
                 }
-                audioService.updateAmbientIfPlaying(config: soundConfig)
             }
         }
     }
@@ -236,6 +240,7 @@ class SessionAwarenessService: ObservableObject {
 
         // Apply saved master volume and mute settings
         audioService.setMasterVolume(config.masterVolume)
+        audioService.setOutputDevice(uid: config.outputDeviceUID)
         audioService.muteEnabled = config.muteEnabled
         audioService.micAwareEnabled = config.micAwareEnabled
 
@@ -790,8 +795,9 @@ class SessionAwarenessService: ObservableObject {
 
         // Play start transition sound (skip if joining mid-event)
         let playTransition = !skipTransition && config.startSound.isPlayable
+        var transitionDuration: TimeInterval = 0
         if playTransition {
-            audioService.playTransition(config: config.startSound)
+            transitionDuration = audioService.playTransition(config: config.startSound)
         }
 
         // Determine ambient sound config
@@ -811,8 +817,7 @@ class SessionAwarenessService: ObservableObject {
         }
 
         if soundConfig.isPlayable {
-            let delay: TimeInterval = playTransition ? 3.0 : 0
-            let currentProgress = self.progress
+            let delay: TimeInterval = transitionDuration > 0 ? min(transitionDuration, 3.0) : 0
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak audioService] in
                 guard let self,
                       let audioService,
@@ -824,7 +829,7 @@ class SessionAwarenessService: ObservableObject {
 
                 audioService.playAmbient(config: soundConfig)
                 // Apply speed/accelerando immediately so the first sound is already modified
-                audioService.updatePlaybackRate(progress: currentProgress, accelerando: accelConfig)
+                audioService.updatePlaybackRate(progress: self.progress, accelerando: accelConfig)
             }
         }
     }
@@ -853,27 +858,30 @@ class SessionAwarenessService: ObservableObject {
     // MARK: - Audio state refresh (e.g. after settings demo playback)
 
     func refreshAudioState() {
-        guard let audioService = audioService, isActive else { return }
+        guard let audioService = audioService, isActive || isResting else { return }
 
         let soundConfig: SessionSoundConfig
-        if let type = currentSessionType {
+        let accelConfig: AccelerandoConfig
+        let currentProgress: Double
+        if isResting {
+            soundConfig = config.restSound
+            accelConfig = config.restSoundAccelerando
+            currentProgress = restProgress
+        } else if let type = currentSessionType {
             soundConfig = config.soundConfig(for: type)
+            accelConfig = config.accelerandoConfig(for: type)
+            currentProgress = progress
         } else if isBusySlotMode {
             soundConfig = config.otherEventsSound
+            accelConfig = config.otherEventsSoundAccelerando
+            currentProgress = progress
         } else {
             return
         }
 
         if soundConfig.isPlayable && !audioService.isMuted && !isSessionMuted {
             audioService.playAmbient(config: soundConfig)
-            // Re-apply current accelerando/speed
-            let accelConfig: AccelerandoConfig
-            if let type = currentSessionType {
-                accelConfig = config.accelerandoConfig(for: type)
-            } else {
-                accelConfig = config.otherEventsSoundAccelerando
-            }
-            audioService.updatePlaybackRate(progress: progress, accelerando: accelConfig)
+            audioService.updatePlaybackRate(progress: currentProgress, accelerando: accelConfig)
         }
     }
 

@@ -33,6 +33,7 @@ class SessionAudioService: ObservableObject {
 
     private var currentAmbientBuffer: AVAudioPCMBuffer?
     private var currentAmbientConfig: SessionSoundConfig?
+    private var ambientBufferCache: [String: AVAudioPCMBuffer] = [:]
     private var shouldBePlayingAmbient = false
     private var ambientPlaybackGeneration = 0
     private var audioRouteIsRecovering = false
@@ -40,6 +41,9 @@ class SessionAudioService: ObservableObject {
     private var selectedOutputDeviceUID: String?
     private(set) var masterVolume: Float = 1.0
     private let ambientRestartDelays: [TimeInterval] = [0.5, 1.0, 2.0, 4.0]
+    private var audioActivity: NSObjectProtocol?
+    private var transitionPlaybackGeneration = 0
+    private var transitionIsPlaying = false
 
     // Preview pause/resume state
     private var previewActive = false
@@ -107,7 +111,12 @@ class SessionAudioService: ObservableObject {
         let shouldMute = muteEnabled || micAwareActive
         guard shouldMute != isMuted else { return }
         isMuted = shouldMute
-        if isMuted { muteAmbient() } else if shouldBePlayingAmbient { resumeAmbient() }
+        if isMuted {
+            muteAmbient()
+            stopTransition()
+        } else if shouldBePlayingAmbient {
+            resumeAmbient()
+        }
     }
 
     /// Toggle manual mute from panel buttons.
@@ -116,6 +125,9 @@ class SessionAudioService: ObservableObject {
     }
 
     deinit {
+        if let audioActivity {
+            ProcessInfo.processInfo.endActivity(audioActivity)
+        }
         removeDeviceListener()
         NotificationCenter.default.removeObserver(self)
         NSWorkspace.shared.notificationCenter.removeObserver(self)
@@ -124,6 +136,7 @@ class SessionAudioService: ObservableObject {
     // MARK: - Ambient Engine Setup
 
     private func setupAmbientEngine() {
+        ambientEngine.isAutoShutdownEnabled = false
         ambientEngine.attach(ambientPlayerNode)
         ambientEngine.attach(varispeedNode)
         ambientEngine.connect(ambientPlayerNode, to: varispeedNode, format: nil)
@@ -137,6 +150,8 @@ class SessionAudioService: ObservableObject {
         ambientPlaybackGeneration += 1
 
         // Stop all playback
+        transitionPlaybackGeneration += 1
+        transitionIsPlaying = false
         ambientPlayerNode.stop()
         transitionPlayer?.stop()
         transitionPlayer = nil
@@ -149,11 +164,13 @@ class SessionAudioService: ObservableObject {
         // Clear all state
         currentAmbientBuffer = nil
         currentAmbientConfig = nil
+        ambientBufferCache.removeAll()
         shouldBePlayingAmbient = false
         audioRouteIsRecovering = false
         previewPausedConfig = nil
         previewPausedShouldPlay = false
-        varispeedNode.rate = 1.0
+        applyPlaybackRate(1.0)
+        updateAudioActivity()
 
         rebuildAmbientEngine()
 
@@ -188,6 +205,7 @@ class SessionAudioService: ObservableObject {
         guard (!isMuted || ignoreMute), config.isPlayable else {
             shouldBePlayingAmbient = config.isPlayable
             currentAmbientConfig = config
+            updateAudioActivity()
             return
         }
 
@@ -196,6 +214,7 @@ class SessionAudioService: ObservableObject {
 
         guard !userSessionIsInactive else {
             stopAmbientInternal()
+            updateAudioActivity()
             return
         }
 
@@ -212,7 +231,16 @@ class SessionAudioService: ObservableObject {
 
         stopAmbientInternal()
 
-        guard let buffer = loadAmbientBuffer(for: config) else { return }
+        guard let buffer = loadAmbientBuffer(for: config) else {
+            handleAmbientStartFailure(
+                config: config,
+                ignoreMute: ignoreMute,
+                attempt: attempt,
+                generation: generation,
+                reason: "unable to load ambient buffer"
+            )
+            return
+        }
         guard buffer.frameLength > 0,
               buffer.format.sampleRate > 0,
               buffer.format.channelCount > 0 else {
@@ -232,7 +260,7 @@ class SessionAudioService: ObservableObject {
         ambientEngine.connect(varispeedNode, to: ambientEngine.mainMixerNode, format: buffer.format)
         ambientPlayerNode.volume = config.volume
         ambientEngine.mainMixerNode.outputVolume = masterVolume
-        varispeedNode.rate = 1.0
+        applyPlaybackRate(1.0)
 
         do {
             ambientEngine.prepare()
@@ -260,6 +288,7 @@ class SessionAudioService: ObservableObject {
                 return
             }
 
+            updateAudioActivity()
             DispatchQueue.main.async { self.isPlaying = true }
         } catch {
             handleAmbientStartFailure(
@@ -292,7 +321,13 @@ class SessionAudioService: ObservableObject {
 
     /// Set a fixed playback rate (used when accelerando is off but multiplier != 1.0)
     func setFixedPlaybackRate(_ rate: Float) {
-        varispeedNode.rate = rate
+        applyPlaybackRate(rate)
+    }
+
+    private func applyPlaybackRate(_ rate: Float) {
+        let clampedRate = min(max(rate, 0.25), 4.0)
+        guard abs(varispeedNode.rate - clampedRate) >= 0.001 else { return }
+        varispeedNode.rate = clampedRate
     }
 
     /// Update playback rate for accelerando effect
@@ -300,9 +335,7 @@ class SessionAudioService: ObservableObject {
         guard accelerando.enabled else {
             // When not accelerating, use the fixed multiplier as constant speed
             let fixedRate = Float(accelerando.maxMultiplier)
-            if varispeedNode.rate != fixedRate {
-                varispeedNode.rate = fixedRate
-            }
+            applyPlaybackRate(fixedRate)
             return
         }
         // Accelerando ramps toward 1.0:
@@ -311,7 +344,7 @@ class SessionAudioService: ObservableObject {
         let startRate = min(accelerando.maxMultiplier, 1.0)
         let endRate = max(accelerando.maxMultiplier, 1.0)
         let rate = Float(startRate + (endRate - startRate) * progress)
-        varispeedNode.rate = rate
+        applyPlaybackRate(rate)
     }
 
     func stopAmbient() {
@@ -319,17 +352,19 @@ class SessionAudioService: ObservableObject {
         stopAmbientInternal()
         shouldBePlayingAmbient = false
         currentAmbientConfig = nil
+        updateAudioActivity()
     }
 
     /// Stops playback but preserves shouldBePlayingAmbient + currentAmbientConfig so unmute can resume
     private func muteAmbient() {
         stopAmbientInternal()
+        updateAudioActivity()
     }
 
     /// Stops engine/player without clearing state (used internally before restarting)
     private func stopAmbientInternal() {
         ambientPlayerNode.stop()
-        varispeedNode.rate = 1.0
+        applyPlaybackRate(1.0)
         if ambientEngine.isRunning {
             ambientEngine.stop()
         }
@@ -354,6 +389,7 @@ class SessionAudioService: ObservableObject {
         print("SessionAudioService: Failed to start ambient playback: \(reason)")
         stopAmbientInternal()
         rebuildAmbientEngine()
+        updateAudioActivity()
         scheduleAmbientRestart(
             config: config,
             ignoreMute: ignoreMute,
@@ -376,6 +412,9 @@ class SessionAudioService: ObservableObject {
 
         guard nextAttempt <= ambientRestartDelays.count else {
             print("SessionAudioService: Ambient playback deferred after repeated failures: \(reason)")
+            shouldBePlayingAmbient = false
+            currentAmbientConfig = nil
+            updateAudioActivity()
             DispatchQueue.main.async { self.isPlaying = false }
             return
         }
@@ -405,20 +444,79 @@ class SessionAudioService: ObservableObject {
         guard let url = transitionSoundURL(for: config) else { return 0 }
 
         do {
+            transitionPlaybackGeneration += 1
+            let generation = transitionPlaybackGeneration
             transitionPlayer?.stop()
             transitionPlayer = try AVAudioPlayer(contentsOf: url)
             transitionPlayer?.volume = config.volume * masterVolume
-            transitionPlayer?.play()
-            return transitionPlayer?.duration ?? 0
+            transitionPlayer?.prepareToPlay()
+
+            guard transitionPlayer?.play() == true else {
+                transitionIsPlaying = false
+                updateAudioActivity()
+                return 0
+            }
+
+            transitionIsPlaying = true
+            updateAudioActivity()
+            let duration = transitionPlayer?.duration ?? 0
+            scheduleTransitionActivityRelease(duration: duration, generation: generation)
+            return duration
         } catch {
             print("SessionAudioService: Failed to play transition sound: \(error)")
+            transitionIsPlaying = false
+            updateAudioActivity()
             return 0
         }
     }
 
     func stopTransition() {
+        transitionPlaybackGeneration += 1
+        transitionIsPlaying = false
         transitionPlayer?.stop()
         transitionPlayer = nil
+        updateAudioActivity()
+    }
+
+    private func scheduleTransitionActivityRelease(duration: TimeInterval, generation: Int) {
+        guard duration > 0 else {
+            transitionIsPlaying = false
+            updateAudioActivity()
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.25) { [weak self] in
+            guard let self = self,
+                  generation == self.transitionPlaybackGeneration else { return }
+
+            self.transitionIsPlaying = self.transitionPlayer?.isPlaying == true
+            if !self.transitionIsPlaying {
+                self.transitionPlayer = nil
+            }
+            self.updateAudioActivity()
+        }
+    }
+
+    // MARK: - Audio performance assertion
+
+    private func updateAudioActivity() {
+        let shouldHoldActivity = ambientPlayerNode.isPlaying || transitionIsPlaying
+
+        if shouldHoldActivity {
+            guard audioActivity == nil else { return }
+            audioActivity = ProcessInfo.processInfo.beginActivity(
+                options: [
+                    .userInitiatedAllowingIdleSystemSleep,
+                    .latencyCritical,
+                    .suddenTerminationDisabled,
+                    .automaticTerminationDisabled
+                ],
+                reason: "SessionFlow audio playback"
+            )
+        } else if let activity = audioActivity {
+            ProcessInfo.processInfo.endActivity(activity)
+            audioActivity = nil
+        }
     }
 
     // MARK: - Preview Pause/Resume
@@ -445,7 +543,7 @@ class SessionAudioService: ObservableObject {
 
         stopAmbientInternal()
         stopTransition()
-        varispeedNode.rate = 1.0
+        applyPlaybackRate(1.0)
 
         let config = previewPausedConfig
         let wasPlaying = previewPausedShouldPlay
@@ -464,7 +562,7 @@ class SessionAudioService: ObservableObject {
         shouldBePlayingAmbient = true
         if !isMuted {
             playAmbient(config: config)
-            varispeedNode.rate = savedRate
+            setFixedPlaybackRate(savedRate)
         }
     }
 
@@ -472,6 +570,11 @@ class SessionAudioService: ObservableObject {
 
     private func loadAmbientBuffer(for config: SessionSoundConfig) -> AVAudioPCMBuffer? {
         guard let url = ambientSoundURL(for: config) else { return nil }
+        let cacheKey = ambientBufferCacheKey(for: url, soundName: config.sound)
+
+        if let cached = ambientBufferCache[cacheKey] {
+            return cached
+        }
 
         do {
             let file = try AVAudioFile(forReading: url)
@@ -479,10 +582,211 @@ class SessionAudioService: ObservableObject {
             let frameCount = AVAudioFrameCount(file.length)
             guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
             try file.read(into: buffer)
-            return buffer
+            let preparedBuffer = prepareAmbientBuffer(buffer, soundName: config.sound)
+            ambientBufferCache[cacheKey] = preparedBuffer
+            return preparedBuffer
         } catch {
             print("SessionAudioService: Failed to load ambient sound: \(error)")
             return nil
+        }
+    }
+
+    private func ambientBufferCacheKey(for url: URL, soundName: String) -> String {
+        let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey])
+        let modified = values?.contentModificationDate?.timeIntervalSince1970 ?? 0
+        let fileSize = values?.fileSize ?? 0
+        return "\(soundName)|\(url.path)|\(fileSize)|\(modified)"
+    }
+
+    private func prepareAmbientBuffer(_ buffer: AVAudioPCMBuffer, soundName: String) -> AVAudioPCMBuffer {
+        if soundName == "Clock Ticking" || soundName == "Clock Ticking Slow" {
+            return makeSeamlessClockBuffer(from: buffer, soundName: soundName) ?? buffer
+        }
+
+        return makeSeamlessAmbientLoopBuffer(from: buffer, soundName: soundName) ?? buffer
+    }
+
+    private func makeSeamlessClockBuffer(from source: AVAudioPCMBuffer, soundName: String) -> AVAudioPCMBuffer? {
+        guard source.format.commonFormat == .pcmFormatFloat32,
+              !source.format.isInterleaved,
+              let sourceChannels = source.floatChannelData else {
+            return nil
+        }
+
+        let frameLength = Int(source.frameLength)
+        let channelCount = Int(source.format.channelCount)
+        let sampleRate = source.format.sampleRate
+        guard frameLength > 0, channelCount > 0, sampleRate > 0 else { return nil }
+
+        let onsets = detectClockOnsets(in: source, soundName: soundName)
+        guard onsets.count >= 2 else { return nil }
+
+        var periodFrames = Int((Double(frameLength) / Double(onsets.count)).rounded())
+        if soundName == "Clock Ticking Slow" {
+            let oneSecondFrames = Int(sampleRate.rounded())
+            if abs(periodFrames - oneSecondFrames) <= Int(sampleRate * 0.02) {
+                periodFrames = oneSecondFrames
+            }
+        }
+
+        let targetFrameCount = periodFrames * onsets.count
+        guard targetFrameCount > 0,
+              let target = AVAudioPCMBuffer(
+                pcmFormat: source.format,
+                frameCapacity: AVAudioFrameCount(targetFrameCount)
+              ),
+              let targetChannels = target.floatChannelData else {
+            return nil
+        }
+
+        target.frameLength = AVAudioFrameCount(targetFrameCount)
+
+        for channel in 0..<channelCount {
+            for frame in 0..<targetFrameCount {
+                targetChannels[channel][frame] = 0
+            }
+        }
+
+        let preRollFrames = min(onsets[0], Int(sampleRate * 0.012), 512)
+        let clipFrames = max(1, min(Int(Double(periodFrames) * 0.45), Int(sampleRate * 0.18)))
+
+        for (index, onset) in onsets.enumerated() {
+            let sourceStart = max(0, onset - preRollFrames)
+            let targetStart = index * periodFrames
+            let framesToCopy = min(preRollFrames + clipFrames, frameLength - sourceStart, targetFrameCount - targetStart)
+            guard framesToCopy > 0 else { continue }
+
+            let fadeFrames = min(256, framesToCopy / 4)
+            let fadeStart = max(0, framesToCopy - fadeFrames)
+
+            for channel in 0..<channelCount {
+                let sourcePointer = sourceChannels[channel]
+                let targetPointer = targetChannels[channel]
+
+                for frame in 0..<framesToCopy {
+                    var sample = sourcePointer[sourceStart + frame]
+                    if fadeFrames > 0 && frame >= fadeStart {
+                        sample *= Float(framesToCopy - frame) / Float(fadeFrames + 1)
+                    }
+                    targetPointer[targetStart + frame] = sample
+                }
+            }
+        }
+
+        return target
+    }
+
+    private func detectClockOnsets(in buffer: AVAudioPCMBuffer, soundName: String) -> [Int] {
+        guard let channelData = buffer.floatChannelData else { return [] }
+
+        let frameLength = Int(buffer.frameLength)
+        let channelCount = Int(buffer.format.channelCount)
+        guard frameLength > 0, channelCount > 0 else { return [] }
+
+        var peak: Float = 0
+        for frame in 0..<frameLength {
+            var amplitude: Float = 0
+            for channel in 0..<channelCount {
+                amplitude = max(amplitude, abs(channelData[channel][frame]))
+            }
+            peak = max(peak, amplitude)
+        }
+
+        guard peak > 0 else { return [] }
+
+        let sampleRate = buffer.format.sampleRate
+        let minimumGapSeconds = soundName == "Clock Ticking Slow" ? 0.45 : 0.12
+        let minimumGapFrames = Int(sampleRate * minimumGapSeconds)
+        let threshold = max(peak * 0.08, 0.005)
+
+        var onsets: [Int] = []
+        var lastOnset = -minimumGapFrames
+        var wasAboveThreshold = false
+
+        for frame in 0..<frameLength {
+            var amplitude: Float = 0
+            for channel in 0..<channelCount {
+                amplitude = max(amplitude, abs(channelData[channel][frame]))
+            }
+
+            let isAboveThreshold = amplitude >= threshold
+            if isAboveThreshold && !wasAboveThreshold && frame - lastOnset >= minimumGapFrames {
+                onsets.append(frame)
+                lastOnset = frame
+            }
+            wasAboveThreshold = isAboveThreshold
+        }
+
+        return onsets
+    }
+
+    private func makeSeamlessAmbientLoopBuffer(from source: AVAudioPCMBuffer, soundName: String) -> AVAudioPCMBuffer? {
+        guard source.format.commonFormat == .pcmFormatFloat32,
+              !source.format.isInterleaved,
+              let sourceChannels = source.floatChannelData else {
+            return nil
+        }
+
+        let frameLength = Int(source.frameLength)
+        let channelCount = Int(source.format.channelCount)
+        let sampleRate = source.format.sampleRate
+        guard frameLength > 0, channelCount > 0, sampleRate > 0 else { return nil }
+
+        let duration = Double(frameLength) / sampleRate
+        guard duration >= 2.0 else { return nil }
+
+        let desiredCrossfadeSeconds = ambientLoopCrossfadeDuration(soundName: soundName, duration: duration)
+        let desiredCrossfadeFrames = Int((desiredCrossfadeSeconds * sampleRate).rounded())
+        let crossfadeFrames = min(max(desiredCrossfadeFrames, 256), frameLength / 4)
+        guard crossfadeFrames >= 256, frameLength > crossfadeFrames * 2 else { return nil }
+
+        let outputFrameCount = frameLength - crossfadeFrames
+        let linearFrameCount = outputFrameCount - crossfadeFrames
+        guard outputFrameCount > 0,
+              linearFrameCount > 0,
+              let output = AVAudioPCMBuffer(
+                pcmFormat: source.format,
+                frameCapacity: AVAudioFrameCount(outputFrameCount)
+              ),
+              let outputChannels = output.floatChannelData else {
+            return nil
+        }
+
+        output.frameLength = AVAudioFrameCount(outputFrameCount)
+
+        for channel in 0..<channelCount {
+            let sourcePointer = sourceChannels[channel]
+            let outputPointer = outputChannels[channel]
+
+            for frame in 0..<linearFrameCount {
+                outputPointer[frame] = sourcePointer[crossfadeFrames + frame]
+            }
+
+            for frame in 0..<crossfadeFrames {
+                let t = Double(frame) / Double(max(1, crossfadeFrames - 1))
+                let fadeOut = Float(cos(t * .pi / 2))
+                let fadeIn = Float(sin(t * .pi / 2))
+                let tailSample = sourcePointer[linearFrameCount + crossfadeFrames + frame]
+                let headSample = sourcePointer[frame]
+                outputPointer[linearFrameCount + frame] = tailSample * fadeOut + headSample * fadeIn
+            }
+        }
+
+        return output
+    }
+
+    private func ambientLoopCrossfadeDuration(soundName: String, duration: TimeInterval) -> TimeInterval {
+        switch soundName {
+        case "Kitchen Timer":
+            return min(1.0, max(0.4, duration * 0.10))
+        default:
+            if duration >= 45 {
+                return 6.0
+            } else if duration >= 20 {
+                return 4.0
+            } else {
+                return min(2.0, max(0.5, duration * 0.12))
+            }
         }
     }
 
@@ -751,6 +1055,7 @@ class SessionAudioService: ObservableObject {
         audioRouteIsRecovering = true
         stopAmbientInternal()
         rebuildAmbientEngine()
+        updateAudioActivity()
         resumeAmbientAfterAudioRouteSettles(delay: 0.75)
     }
 
@@ -797,6 +1102,7 @@ class SessionAudioService: ObservableObject {
     @objc private func handleWorkspaceAudioWillSuspend(_ notification: Notification) {
         audioRouteIsRecovering = true
         stopAmbientInternal()
+        updateAudioActivity()
     }
 
     @objc private func handleWorkspaceAudioDidResume(_ notification: Notification) {
@@ -810,6 +1116,7 @@ class SessionAudioService: ObservableObject {
         userSessionIsInactive = true
         audioRouteIsRecovering = true
         stopAmbientInternal()
+        updateAudioActivity()
     }
 
     @objc private func handleUserSessionDidBecomeActive(_ notification: Notification) {
@@ -829,6 +1136,7 @@ class SessionAudioService: ObservableObject {
                   !self.userSessionIsInactive else { return }
 
             self.resumeAmbient()
+            self.updateAudioActivity()
         }
     }
 

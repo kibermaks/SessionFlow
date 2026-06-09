@@ -24,7 +24,7 @@ struct MiniPlayerView: View {
     @State private var totalWidth: CGFloat = 620
     @State private var progressAreaWidth: CGFloat = 200
 
-    private let metaColumnThreshold: CGFloat = 500
+    private var metaColumnThreshold: CGFloat { uses12HourClock ? 620 : 500 }
     private let fullProgressThreshold: CGFloat = 150
 
     var body: some View {
@@ -92,7 +92,7 @@ struct MiniPlayerView: View {
 
             if showMetaColumn {
                 AwarenessSessionMeta(awarenessService: awarenessService)
-                    .frame(width: 110, alignment: .leading)
+                    .frame(width: awarenessSessionMetaColumnWidth, alignment: .leading)
 
                 AwarenessDivider()
             }

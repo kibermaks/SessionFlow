@@ -58,7 +58,7 @@ struct SessionAwarenessPanel: View {
             AwarenessDivider()
 
             AwarenessSessionMeta(awarenessService: awarenessService)
-                .frame(width: 110, alignment: .leading)
+                .frame(width: awarenessSessionMetaColumnWidth, alignment: .leading)
 
             AwarenessDivider()
 

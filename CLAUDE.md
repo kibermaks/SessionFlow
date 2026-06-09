@@ -1,6 +1,6 @@
 # SessionFlow
 
-macOS productivity app (SwiftUI, macOS 14.0+) for scheduling focus sessions around calendar events.
+SessionFlow is a macOS-only productivity app (SwiftUI, macOS 14.0+) for scheduling focus sessions around calendar events.
 
 ## Build & Run
 
@@ -15,6 +15,17 @@ macOS productivity app (SwiftUI, macOS 14.0+) for scheduling focus sessions arou
 The `SessionFlowTests` target (Swift Testing) covers the MCP layer: `xcodebuild test -scheme SessionFlow -destination 'platform=macOS'`. The rest of the app has no tests — verify by building and running.
 
 **After any code changes**: always finish by running `./build_app.sh` so the user gets a ready-to-test build immediately. Skip only for text-only changes (docs, CHANGELOG, CLAUDE.md, etc.).
+
+### Build/Test Locking
+
+Before starting any direct build or test command (`xcodebuild test`, `xcodebuild build`, `./create_dmg.sh`, or similar), use `.agent-build.lock` in the repo root as a repository-wide build mutex. Other chats/threads may be building the same macOS app and can conflict over DerivedData, build numbers, or copied app bundles.
+
+- `./build_app.sh` creates, waits on, and removes `.agent-build.lock` automatically. Run it directly instead of wrapping it in a second lock.
+- If `.agent-build.lock` exists and its PID is still running, wait/poll until the lock vanishes. Do not start a second build/test in parallel.
+- If the lock is stale because the PID is gone, remove it and take a fresh lock.
+- Create the lock atomically before building, including PID, timestamp, command, and agent/session note.
+- Always remove your lock when the command finishes; use a shell `trap` where possible.
+- Do not use this lock for quick read-only commands such as `rg`, `sed`, `git status`, or file inspection.
 
 ## Architecture
 

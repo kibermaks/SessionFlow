@@ -1,14 +1,17 @@
 # Agent Knowledge Base
 
-Supplementary domain knowledge for SessionFlow. For build commands, architecture, and workflows, see [CLAUDE.md](CLAUDE.md).
+SessionFlow is a macOS SwiftUI application. This file contains supplementary domain knowledge for agent chats working in this repository. For build commands, architecture, and workflows, see [CLAUDE.md](CLAUDE.md).
 
 ## Build/Test Locking
 
-Before starting any test or build command (`xcodebuild test`, `xcodebuild build`, `./build_app.sh`, `./create_dmg.sh`, or similar), use an improvised repository lock file so parallel agent chats do not fight over DerivedData, build numbers, or copied app bundles.
+Before starting any test or build command (`xcodebuild test`, `xcodebuild build`, `./create_dmg.sh`, or similar), use an improvised repository lock file so parallel agent chats do not fight over DerivedData, build numbers, or copied app bundles. `./build_app.sh` already manages this lock internally, so run it directly instead of wrapping it in a second lock.
+
+Treat `.agent-build.lock` as a repository-wide build mutex. If another chat/thread is building and the lock exists, do not start any direct build or test process. Wait/poll until the lock vanishes, then create your own lock atomically before starting your command. When using `./build_app.sh`, let the script perform this wait/poll itself.
 
 - Lock path: `.agent-build.lock` in the repo root.
+- `./build_app.sh` creates, waits on, and removes this lock automatically.
 - Create it atomically before the command, including PID, timestamp, command, and agent/session note.
-- If the lock already exists, inspect it and check whether the PID is still running. If it is active, wait/poll or tell the user instead of starting another build/test.
+- If the lock already exists, inspect it and check whether the PID is still running. If it is active, wait/poll until the lock is removed instead of starting another build/test.
 - If the lock is stale because the PID is gone, remove it and take a fresh lock.
 - Always remove the lock when the build/test command finishes; use a shell `trap` when possible.
 - Do not use this lock for quick read-only commands such as `rg`, `sed`, `git status`, or file inspection.

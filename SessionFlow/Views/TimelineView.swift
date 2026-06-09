@@ -75,6 +75,7 @@ struct TimelineView: View {
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
+    private let compactBlockLayoutHeight: CGFloat = 30
     @State private var clockTimer: Timer? = nil
     
     
@@ -1007,6 +1008,8 @@ extension TimelineView {
                         Text(formattedHour(hour))
                             .font(.system(size: 12, weight: .medium, design: .monospaced))
                             .foregroundColor(hour >= 24 ? (colors.isDark ? .orange.opacity(0.5) : Color(hex: "C2410C")) : colors.textSecondary)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                             .offset(y: -7)
                     }
                 }
@@ -1020,6 +1023,8 @@ extension TimelineView {
                 Text(formattedHour(effectiveEndHour))
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(effectiveEndHour >= 24 ? (colors.isDark ? .orange.opacity(0.5) : Color(hex: "C2410C")) : colors.textSecondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
                     .offset(y: -7)
             }
             .frame(width: timeColumnWidth, height: 0, alignment: .topTrailing)
@@ -1028,13 +1033,20 @@ extension TimelineView {
     }
     
     private func formattedHour(_ hour: Int) -> String {
+        let normalizedHour = ((hour % 24) + 24) % 24
+
+        if uses12HourClock {
+            let displayHour = normalizedHour % 12 == 0 ? 12 : normalizedHour % 12
+            let period = normalizedHour < 12 ? "AM" : "PM"
+            return "\(displayHour) \(period)"
+        }
+
         let calendar = Calendar.current
         var components = DateComponents()
-        components.hour = hour
+        components.hour = normalizedHour
         
         // Handle hour 24 and beyond for formatting by shifting to next day
         if hour >= 24 {
-            components.hour = hour - 24
             if let date = calendar.date(from: components),
                let nextDay = calendar.date(byAdding: .day, value: 1, to: date) {
                 let formatter = DateFormatter()
@@ -1231,7 +1243,7 @@ extension TimelineView {
             let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
 
             VStack(alignment: .leading, spacing: 1) {
-                if height <= 30 {
+                if height <= compactBlockLayoutHeight {
                     HStack(spacing: 3) {
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
@@ -1481,7 +1493,7 @@ extension TimelineView {
         let blockHeight = max(height, 20)
         let blockWidth = (containerWidth / 2) - 24  // Extra space for scrollbar
         let xOffset = containerWidth / 2 + 8
-        let isCompact = height < 25
+        let isCompact = height <= compactBlockLayoutHeight
         let isDraggingSession = dragSessionId == session.id && dragMode != .none
         let edgeZone: CGFloat = min(8, blockHeight / 3)
 
@@ -3111,7 +3123,7 @@ extension TimelineView {
         let centerX = xOffset + blockWidth / 2
         let centerY = yPos + blockHeight / 2
 
-        let isCompact = blockHeight < 25
+        let isCompact = blockHeight <= compactBlockLayoutHeight
 
         return ZStack(alignment: .topLeading) {
             RoundedRectangle(cornerRadius: 4)
