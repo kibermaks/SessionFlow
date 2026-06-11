@@ -84,6 +84,7 @@ struct SessionFlowApp: App {
     @StateObject private var eventCreationCoordinator = EventCreationCoordinator()
     @StateObject private var menuBarController = MenuBarController()
     @StateObject private var miniPlayerController = MiniPlayerWindowController()
+    @StateObject private var harshModeWindowController = HarshModeWindowController()
     @StateObject private var mcpServerController = MCPServerController()
     @State private var didInitializeServices = false
     private let dockProgressController = DockProgressController()
@@ -130,6 +131,7 @@ struct SessionFlowApp: App {
                             }
                         )
                         miniPlayerController.setup(awarenessService: sessionAwarenessService, audioService: sessionAudioService)
+                        harshModeWindowController.setup(awarenessService: sessionAwarenessService)
                         dockProgressController.setup(awarenessService: sessionAwarenessService)
 
                         if let mainWindow = SessionFlowWindowIdentity.mainWindow(preferVisible: true) {
@@ -173,6 +175,10 @@ struct SessionFlowApp: App {
 
                 Button("Session Awareness...") {
                     NotificationCenter.default.post(name: Notification.Name("ShowSessionAwarenessGuide"), object: nil)
+                }
+
+                Button("Commit Mode...") {
+                    NotificationCenter.default.post(name: Notification.Name("ShowHarshModeGuide"), object: nil)
                 }
 
                 Button("Shortcuts...") {

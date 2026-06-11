@@ -30,6 +30,8 @@ struct AppSettingsView: View {
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     @State private var focusWeightsExpanded = false
+    @AppStorage("hasSeenHarshModeGuide") var hasSeenHarshModeGuide = false
+    @State private var showingHarshModeGuide = false
     @AppStorage("hasSeenShortcutsGuide") var hasSeenShortcutsGuide = false
     @State private var showingShortcutsGuide = false
     @State private var showingShortcutsInfo = false
@@ -55,6 +57,7 @@ struct AppSettingsView: View {
     @State private var mcpCopyFeedback: String?
 
     static let switchToAwarenessTab = Notification.Name("AppSettingsView.switchToAwarenessTab")
+    static let switchToHarshTab = Notification.Name("AppSettingsView.switchToHarshTab")
     @State private var activePreviewID: String? = nil
     @State private var previewResetWorkItem: DispatchWorkItem? = nil
     private let ambientVolumeSliderWidth: CGFloat = 132
@@ -70,12 +73,13 @@ struct AppSettingsView: View {
     }
 
     private enum SettingsTab: String, CaseIterable {
-        case general, calendars, awareness, shortcuts
+        case general, calendars, awareness, harsh, shortcuts
         var icon: String {
             switch self {
             case .general: return "gearshape"
             case .calendars: return "calendar"
             case .awareness: return "eye.circle"
+            case .harsh: return "lock.shield"
             case .shortcuts: return "command.square.fill"
             }
         }
@@ -84,15 +88,20 @@ struct AppSettingsView: View {
             case .general: return "General"
             case .calendars: return "Calendars"
             case .awareness: return "Awareness"
+            case .harsh: return "Commit"
             case .shortcuts: return "Shortcuts"
             }
         }
     }
 
+    private var availableSettingsTabs: [SettingsTab] {
+        [.general, .calendars, .awareness, .harsh, .shortcuts]
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 4) {
-                ForEach(SettingsTab.allCases, id: \.rawValue) { tab in
+                ForEach(availableSettingsTabs, id: \.rawValue) { tab in
                     settingsTabButton(tab)
                 }
             }
@@ -108,6 +117,7 @@ struct AppSettingsView: View {
                 case .general: generalTab
                 case .calendars: calendarsTab
                 case .awareness: sessionAwarenessTab
+                case .harsh: harshModeTab
                 case .shortcuts: shortcutsTab
                 }
             }
@@ -148,13 +158,23 @@ struct AppSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: Self.switchToAwarenessTab)) { _ in
             selectedSettingsTab = .awareness
         }
+        .onReceive(NotificationCenter.default.publisher(for: Self.switchToHarshTab)) { _ in
+            selectedSettingsTab = .harsh
+        }
         .sheet(isPresented: $showingShortcutsGuide) {
             ShortcutsGuide()
+        }
+        .sheet(isPresented: $showingHarshModeGuide) {
+            HarshModeGuide()
         }
         .onChange(of: selectedSettingsTab) { _, newTab in
             if newTab == .shortcuts && !hasSeenShortcutsGuide {
                 hasSeenShortcutsGuide = true
                 showingShortcutsGuide = true
+            }
+            if newTab == .harsh && !hasSeenHarshModeGuide {
+                hasSeenHarshModeGuide = true
+                showingHarshModeGuide = true
             }
         }
         .focusEffectDisabled()
@@ -381,6 +401,7 @@ struct AppSettingsView: View {
                         hasSeenTasksGuide = false
                         timelineIntroBarDismissed = false
                         UserDefaults.standard.set(false, forKey: "hasSeenSessionAwarenessGuide")
+                        hasSeenHarshModeGuide = false
                         hasSeenShortcutsGuide = false
                     }) {
                         Label("Reset All Dirty Triggers", systemImage: "arrow.counterclockwise")
@@ -426,6 +447,35 @@ struct AppSettingsView: View {
                     }
 
                     Text("Triggers awareness sounds and flash effects for testing.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+
+                    Menu {
+                        Button {
+                            sessionAwarenessService.debugPresentHarshModeStartPrompt()
+                        } label: {
+                            Label("Start Gate", systemImage: "play.rectangle.fill")
+                        }
+
+                        Button {
+                            sessionAwarenessService.debugPresentHarshModeEndPrompt()
+                        } label: {
+                            Label("Stop Gate", systemImage: "stop.rectangle.fill")
+                        }
+
+                        Divider()
+
+                        Button(role: .destructive) {
+                            sessionAwarenessService.debugDismissHarshModePrompt()
+                        } label: {
+                            Label("Dismiss Active Gate", systemImage: "xmark.rectangle.fill")
+                        }
+                        .disabled(sessionAwarenessService.harshModePrompt == nil)
+                    } label: {
+                        Label("Invoke Commit Mode", systemImage: "lock.shield")
+                    }
+
+                    Text("Manually opens the Commit blocker for testing. Uses the active session when one exists, otherwise shows a developer test session.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
@@ -866,7 +916,7 @@ struct AppSettingsView: View {
                         showingResetAwarenessConfirmation = true
                     }
 
-                    Text("Resets all awareness settings to defaults: sounds, transitions, presence reminder, menu bar, and audio output.")
+                    Text("Resets awareness sounds, transitions, presence reminder, menu bar, and audio output to defaults.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -887,6 +937,164 @@ struct AppSettingsView: View {
             Button("Cancel", role: .cancel) { pendingImportURL = nil }
         } message: {
             Text("Enter a display name for this custom sound.")
+        }
+    }
+
+    // MARK: - Tab 4: Commit Mode
+
+    private var harshModeTab: some View {
+        Form {
+            Section {
+                HStack(spacing: 8) {
+                    Image(systemName: "lock.shield")
+                        .font(.system(size: 20))
+                        .foregroundColor(.accentColor)
+
+                    Text("Commit Mode")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+
+            Section {
+                Toggle("Enable Commit Mode", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeEnabled },
+                    set: { newValue in
+                        sessionAwarenessService.config.harshModeEnabled = newValue
+                        if newValue && !hasSeenHarshModeGuide {
+                            hasSeenHarshModeGuide = true
+                            showingHarshModeGuide = true
+                        }
+                    }
+                ))
+
+                Text("Commit Mode blocks every display for selected tagged SessionFlow tasks until the configured start or stop gate is completed.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Button {
+                    showingHarshModeGuide = true
+                    hasSeenHarshModeGuide = true
+                } label: {
+                    Label("Commit Mode Guide", systemImage: "questionmark.circle")
+                }
+            }
+
+            Section("Applies To") {
+                harshTypeToggle(type: .work, keyPath: \.work)
+                harshTypeToggle(type: .side, keyPath: \.side)
+                harshTypeToggle(type: .deep, keyPath: \.deep)
+                harshTypeToggle(type: .planning, keyPath: \.planning)
+
+                Text("Other calendar events are never included, even if Awareness of other calendar events is enabled.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section("Start Gate") {
+                Toggle("Require goals before start", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeRequireStartGoals },
+                    set: { sessionAwarenessService.config.harshModeRequireStartGoals = $0 }
+                ))
+
+                if sessionAwarenessService.config.harshModeRequireStartGoals {
+                    HStack {
+                        Text("Minimum goals")
+                        Spacer()
+                        NumericInputField(value: Binding(
+                            get: { sessionAwarenessService.config.harshModeMinimumGoals },
+                            set: { sessionAwarenessService.config.harshModeMinimumGoals = min(max($0, 1), 5) }
+                        ), range: 1...5)
+                    }
+
+                    Toggle("Prefill first goal with session name", isOn: Binding(
+                        get: { sessionAwarenessService.config.harshModePrefillTitleGoal },
+                        set: { sessionAwarenessService.config.harshModePrefillTitleGoal = $0 }
+                    ))
+                }
+            }
+
+            Section("Blocker Window") {
+                Picker("Template", selection: Binding(
+                    get: { sessionAwarenessService.config.harshModeBlockerTemplate },
+                    set: { sessionAwarenessService.config.harshModeBlockerTemplate = $0 }
+                )) {
+                    ForEach(HarshModeBlockerTemplate.allCases) { template in
+                        Text(template.label).tag(template)
+                    }
+                }
+
+                Text(sessionAwarenessService.config.harshModeBlockerTemplate.caption)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Toggle("Show event notes", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeShowEventNotes },
+                    set: { sessionAwarenessService.config.harshModeShowEventNotes = $0 }
+                ))
+
+                Toggle("Show session progress", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeShowProgressOnBlocker },
+                    set: { sessionAwarenessService.config.harshModeShowProgressOnBlocker = $0 }
+                ))
+            }
+
+            Section("During Session") {
+                Toggle("Show goals during session", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeShowGoalsInAwareness },
+                    set: { sessionAwarenessService.config.harshModeShowGoalsInAwareness = $0 }
+                ))
+
+                if sessionAwarenessService.config.harshModeShowGoalsInAwareness {
+                    Picker("Reminder style", selection: Binding(
+                        get: { sessionAwarenessService.config.harshModeReminderStyle },
+                        set: { sessionAwarenessService.config.harshModeReminderStyle = $0 }
+                    )) {
+                        ForEach(HarshModeReminderStyle.allCases) { style in
+                            Text(style.label).tag(style)
+                        }
+                    }
+                }
+
+                Text("Prominent style shows goals as a visible orange target chip in the bottom panel and mini player.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+
+            Section("Stop Gate") {
+                Toggle("Require rating at end", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeRequireEndRating },
+                    set: { sessionAwarenessService.config.harshModeRequireEndRating = $0 }
+                ))
+
+                Toggle("Require written review", isOn: Binding(
+                    get: { sessionAwarenessService.config.harshModeRequireReviewNote },
+                    set: { sessionAwarenessService.config.harshModeRequireReviewNote = $0 }
+                ))
+
+                Text("Emergency Break is always available and only bypasses the current session.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func harshTypeToggle(type: SessionType, keyPath: WritableKeyPath<HarshModeTypeFilter, Bool>) -> some View {
+        Toggle(isOn: Binding(
+            get: { sessionAwarenessService.config.harshModeSessionTypes[keyPath: keyPath] },
+            set: { sessionAwarenessService.config.harshModeSessionTypes[keyPath: keyPath] = $0 }
+        )) {
+            HStack(spacing: 10) {
+                Image(systemName: type.icon)
+                    .font(.system(size: 12))
+                    .foregroundColor(type.color)
+                    .frame(width: 16)
+
+                Text(type.rawValue)
+                    .font(.system(size: 14, weight: .medium))
+            }
         }
     }
 
@@ -1942,8 +2150,32 @@ Spacer()
     private func resetAwarenessSettings() {
         sessionAudioService.stopAmbient()
         let wasEnabled = sessionAwarenessService.config.enabled
+        let harshModeEnabled = sessionAwarenessService.config.harshModeEnabled
+        let harshModeSessionTypes = sessionAwarenessService.config.harshModeSessionTypes
+        let harshModeRequireStartGoals = sessionAwarenessService.config.harshModeRequireStartGoals
+        let harshModeMinimumGoals = sessionAwarenessService.config.harshModeMinimumGoals
+        let harshModePrefillTitleGoal = sessionAwarenessService.config.harshModePrefillTitleGoal
+        let harshModeShowEventNotes = sessionAwarenessService.config.harshModeShowEventNotes
+        let harshModeBlockerTemplate = sessionAwarenessService.config.harshModeBlockerTemplate
+        let harshModeShowProgressOnBlocker = sessionAwarenessService.config.harshModeShowProgressOnBlocker
+        let harshModeShowGoalsInAwareness = sessionAwarenessService.config.harshModeShowGoalsInAwareness
+        let harshModeReminderStyle = sessionAwarenessService.config.harshModeReminderStyle
+        let harshModeRequireEndRating = sessionAwarenessService.config.harshModeRequireEndRating
+        let harshModeRequireReviewNote = sessionAwarenessService.config.harshModeRequireReviewNote
         var freshConfig = SessionAwarenessConfig()
         freshConfig.enabled = wasEnabled
+        freshConfig.harshModeEnabled = harshModeEnabled
+        freshConfig.harshModeSessionTypes = harshModeSessionTypes
+        freshConfig.harshModeRequireStartGoals = harshModeRequireStartGoals
+        freshConfig.harshModeMinimumGoals = harshModeMinimumGoals
+        freshConfig.harshModePrefillTitleGoal = harshModePrefillTitleGoal
+        freshConfig.harshModeShowEventNotes = harshModeShowEventNotes
+        freshConfig.harshModeBlockerTemplate = harshModeBlockerTemplate
+        freshConfig.harshModeShowProgressOnBlocker = harshModeShowProgressOnBlocker
+        freshConfig.harshModeShowGoalsInAwareness = harshModeShowGoalsInAwareness
+        freshConfig.harshModeReminderStyle = harshModeReminderStyle
+        freshConfig.harshModeRequireEndRating = harshModeRequireEndRating
+        freshConfig.harshModeRequireReviewNote = harshModeRequireReviewNote
         sessionAwarenessService.config = freshConfig
         sessionAudioService.setOutputDevice(uid: nil)
     }

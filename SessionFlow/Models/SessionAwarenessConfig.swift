@@ -299,6 +299,81 @@ struct FocusWeights: Codable, Equatable {
     }
 }
 
+// MARK: - Harsh Mode config
+
+enum HarshModeReminderStyle: String, Codable, CaseIterable, Identifiable {
+    case compact
+    case prominent
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .compact: return "Compact"
+        case .prominent: return "Prominent"
+        }
+    }
+}
+
+enum HarshModeBlockerTemplate: String, Codable, CaseIterable, Identifiable {
+    case lockdown
+    case calm
+    case minimal
+    case space
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .lockdown: return "Lockdown"
+        case .calm: return "Calm"
+        case .minimal: return "Minimal"
+        case .space: return "Space"
+        }
+    }
+
+    var caption: String {
+        switch self {
+        case .lockdown: return "Dark, high-contrast, and intentionally urgent."
+        case .calm: return "Softer color and calmer pressure for long sessions."
+        case .minimal: return "Plain blocker with very little visual noise."
+        case .space: return "A dark space-inspired blocker without external image loading."
+        }
+    }
+}
+
+struct HarshModeTypeFilter: Codable, Equatable {
+    var work: Bool = true
+    var side: Bool = true
+    var deep: Bool = true
+    var planning: Bool = true
+
+    init(work: Bool = true, side: Bool = true, deep: Bool = true, planning: Bool = true) {
+        self.work = work
+        self.side = side
+        self.deep = deep
+        self.planning = planning
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        work = try c.decodeIfPresent(Bool.self, forKey: .work) ?? true
+        side = try c.decodeIfPresent(Bool.self, forKey: .side) ?? true
+        deep = try c.decodeIfPresent(Bool.self, forKey: .deep) ?? true
+        planning = try c.decodeIfPresent(Bool.self, forKey: .planning) ?? true
+    }
+
+    func matches(_ sessionType: SessionType) -> Bool {
+        switch sessionType {
+        case .work: return work
+        case .side: return side
+        case .deep: return deep
+        case .planning: return planning
+        case .bigRest: return false
+        }
+    }
+}
+
 // MARK: - Main config
 
 struct SessionAwarenessConfig: Codable, Equatable {
@@ -344,6 +419,20 @@ struct SessionAwarenessConfig: Codable, Equatable {
     // Productivity feedback
     var productivityEnabled: Bool = true
     var focusWeights: FocusWeights = .init()
+
+    // Harsh Mode
+    var harshModeEnabled: Bool = false
+    var harshModeSessionTypes: HarshModeTypeFilter = .init()
+    var harshModeRequireStartGoals: Bool = true
+    var harshModeMinimumGoals: Int = 1
+    var harshModePrefillTitleGoal: Bool = true
+    var harshModeShowEventNotes: Bool = true
+    var harshModeBlockerTemplate: HarshModeBlockerTemplate = .lockdown
+    var harshModeShowProgressOnBlocker: Bool = true
+    var harshModeShowGoalsInAwareness: Bool = true
+    var harshModeReminderStyle: HarshModeReminderStyle = .prominent
+    var harshModeRequireEndRating: Bool = true
+    var harshModeRequireReviewNote: Bool = false
 
     // Phase 5: Menu bar & Dock
     var showMenuBarItem: Bool = true
@@ -394,6 +483,11 @@ struct SessionAwarenessConfig: Codable, Equatable {
         case workSoundAccelerando, sideSoundAccelerando, deepSoundAccelerando
         case planningSoundAccelerando, otherEventsSoundAccelerando
         case productivityEnabled, focusWeights
+        case harshModeEnabled, harshModeSessionTypes
+        case harshModeRequireStartGoals, harshModeMinimumGoals, harshModePrefillTitleGoal
+        case harshModeShowEventNotes, harshModeBlockerTemplate, harshModeShowProgressOnBlocker
+        case harshModeShowGoalsInAwareness, harshModeReminderStyle
+        case harshModeRequireEndRating, harshModeRequireReviewNote
         case showMenuBarItem, showDockProgress
         case miniPlayerFrame, mainWindowFrame
         case trackRests // legacy — decoded for migration, never encoded
@@ -431,6 +525,18 @@ struct SessionAwarenessConfig: Codable, Equatable {
         try c.encode(otherEventsSoundAccelerando, forKey: .otherEventsSoundAccelerando)
         try c.encode(productivityEnabled, forKey: .productivityEnabled)
         try c.encode(focusWeights, forKey: .focusWeights)
+        try c.encode(harshModeEnabled, forKey: .harshModeEnabled)
+        try c.encode(harshModeSessionTypes, forKey: .harshModeSessionTypes)
+        try c.encode(harshModeRequireStartGoals, forKey: .harshModeRequireStartGoals)
+        try c.encode(harshModeMinimumGoals, forKey: .harshModeMinimumGoals)
+        try c.encode(harshModePrefillTitleGoal, forKey: .harshModePrefillTitleGoal)
+        try c.encode(harshModeShowEventNotes, forKey: .harshModeShowEventNotes)
+        try c.encode(harshModeBlockerTemplate, forKey: .harshModeBlockerTemplate)
+        try c.encode(harshModeShowProgressOnBlocker, forKey: .harshModeShowProgressOnBlocker)
+        try c.encode(harshModeShowGoalsInAwareness, forKey: .harshModeShowGoalsInAwareness)
+        try c.encode(harshModeReminderStyle, forKey: .harshModeReminderStyle)
+        try c.encode(harshModeRequireEndRating, forKey: .harshModeRequireEndRating)
+        try c.encode(harshModeRequireReviewNote, forKey: .harshModeRequireReviewNote)
         try c.encode(showMenuBarItem, forKey: .showMenuBarItem)
         try c.encode(showDockProgress, forKey: .showDockProgress)
         try c.encodeIfPresent(miniPlayerFrame, forKey: .miniPlayerFrame)
@@ -483,6 +589,18 @@ struct SessionAwarenessConfig: Codable, Equatable {
 
         productivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .productivityEnabled) ?? true
         focusWeights = try c.decodeIfPresent(FocusWeights.self, forKey: .focusWeights) ?? .init()
+        harshModeEnabled = try c.decodeIfPresent(Bool.self, forKey: .harshModeEnabled) ?? false
+        harshModeSessionTypes = try c.decodeIfPresent(HarshModeTypeFilter.self, forKey: .harshModeSessionTypes) ?? .init()
+        harshModeRequireStartGoals = try c.decodeIfPresent(Bool.self, forKey: .harshModeRequireStartGoals) ?? true
+        harshModeMinimumGoals = min(max(try c.decodeIfPresent(Int.self, forKey: .harshModeMinimumGoals) ?? 1, 1), 5)
+        harshModePrefillTitleGoal = try c.decodeIfPresent(Bool.self, forKey: .harshModePrefillTitleGoal) ?? true
+        harshModeShowEventNotes = try c.decodeIfPresent(Bool.self, forKey: .harshModeShowEventNotes) ?? true
+        harshModeBlockerTemplate = try c.decodeIfPresent(HarshModeBlockerTemplate.self, forKey: .harshModeBlockerTemplate) ?? .lockdown
+        harshModeShowProgressOnBlocker = try c.decodeIfPresent(Bool.self, forKey: .harshModeShowProgressOnBlocker) ?? true
+        harshModeShowGoalsInAwareness = try c.decodeIfPresent(Bool.self, forKey: .harshModeShowGoalsInAwareness) ?? true
+        harshModeReminderStyle = try c.decodeIfPresent(HarshModeReminderStyle.self, forKey: .harshModeReminderStyle) ?? .prominent
+        harshModeRequireEndRating = try c.decodeIfPresent(Bool.self, forKey: .harshModeRequireEndRating) ?? true
+        harshModeRequireReviewNote = try c.decodeIfPresent(Bool.self, forKey: .harshModeRequireReviewNote) ?? false
         showMenuBarItem = try c.decodeIfPresent(Bool.self, forKey: .showMenuBarItem) ?? true
         showDockProgress = try c.decodeIfPresent(Bool.self, forKey: .showDockProgress) ?? true
         miniPlayerFrame = try c.decodeIfPresent(CodableRect.self, forKey: .miniPlayerFrame)

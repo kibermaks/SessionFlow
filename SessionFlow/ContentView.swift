@@ -79,6 +79,7 @@ struct ContentView: View {
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
     @State private var showingSessionAwarenessGuide = false
+    @State private var showingHarshModeGuide = false
     @State private var showingShortcutsGuide = false
     @State private var showingCalendarSetup = false
     @State private var updateAlert: UpdateService.UpdateAlert?
@@ -176,6 +177,9 @@ struct ContentView: View {
         .sheet(isPresented: $showingSessionAwarenessGuide) {
             SessionAwarenessGuide()
         }
+        .sheet(isPresented: $showingHarshModeGuide) {
+            HarshModeGuide()
+        }
         .sheet(isPresented: $showingShortcutsGuide) {
             ShortcutsGuide()
         }
@@ -184,6 +188,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowSessionAwarenessGuide"))) { _ in
             showingSessionAwarenessGuide = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowHarshModeGuide"))) { _ in
+            showingHarshModeGuide = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowShortcutsGuide"))) { _ in
             showingShortcutsGuide = true
@@ -981,11 +988,13 @@ struct SettingsChangeModifier: ViewModifier {
 
 // MARK: - Header View
 struct HeaderView: View {
+    @Environment(\.openSettings) private var openSettings
     @Environment(\.colorScheme) var colorScheme
     var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
 
     @EnvironmentObject var updateService: UpdateService
     @EnvironmentObject var schedulingEngine: SchedulingEngine
+    @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @Binding var dateSelection: ContentView.DateSelection
     @Binding var selectedDate: Date
     @Binding var useNowTime: Bool
@@ -995,6 +1004,7 @@ struct HeaderView: View {
     @AppStorage("devNowLineOverrideEnabled") private var devNowLineOverrideEnabled = false
     @AppStorage("devNowLineOverrideHour") private var devNowLineOverrideHour = 10
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
+    @AppStorage("hasSeenHarshModeGuide") private var hasSeenHarshModeGuide = false
 
     var body: some View {
         HStack {
@@ -1004,6 +1014,7 @@ struct HeaderView: View {
             Spacer()
             startTimeControls
             Spacer()
+            commitModeControl
             // Settings Link
             SettingsLink {
                 Image(systemName: "gearshape.fill")
@@ -1026,6 +1037,52 @@ struct HeaderView: View {
             await MainActor.run { gitBranch = branch }
         }
         #endif
+    }
+
+    private var commitModeControl: some View {
+        HStack(spacing: 1) {
+            Button {
+                let newValue = !sessionAwarenessService.config.harshModeEnabled
+                sessionAwarenessService.config.harshModeEnabled = newValue
+                if newValue && !hasSeenHarshModeGuide {
+                    hasSeenHarshModeGuide = true
+                    NotificationCenter.default.post(name: Notification.Name("ShowHarshModeGuide"), object: nil)
+                }
+            } label: {
+                Image(systemName: sessionAwarenessService.config.harshModeEnabled ? "lock.shield.fill" : "lock.shield")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(sessionAwarenessService.config.harshModeEnabled ? Color(hex: "10B981") : colors.textMuted)
+                    .frame(width: 34, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help(sessionAwarenessService.config.harshModeEnabled ? "Disable Commit Mode" : "Enable Commit Mode")
+
+            Button {
+                openSettings()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    NotificationCenter.default.post(name: AppSettingsView.switchToHarshTab, object: nil)
+                }
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(colors.textMuted)
+                    .frame(width: 34, height: 32)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help("Commit Mode settings")
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(sessionAwarenessService.config.harshModeEnabled ? Color(hex: "10B981").opacity(0.14) : colors.subtleBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(sessionAwarenessService.config.harshModeEnabled ? Color(hex: "10B981").opacity(0.35) : Color.clear, lineWidth: 1)
+        )
     }
 
     #if DEBUG
@@ -1201,15 +1258,17 @@ struct HeaderView: View {
                         Text(formatNowTime())
                             .font(.system(size: 14, weight: .medium, design: .monospaced))
                             .foregroundColor(Color(hex: "3B82F6"))
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
                             .padding(.horizontal, 8)
-                            .frame(width: 80, alignment: .leading)
+                            .frame(minWidth: 96, alignment: .leading)
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(brightness: 0.2)
                     .help("Click to set a custom start time")
                 }
             }
-            .frame(width: useNowTime ? 100 : TimeInputField.preferredControlWidth, alignment: .leading)
+            .frame(width: useNowTime ? 112 : TimeInputField.preferredControlWidth, alignment: .leading)
         }
     }
     

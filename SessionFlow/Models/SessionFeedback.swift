@@ -98,3 +98,149 @@ struct SessionFeedback: Identifiable {
         endTime.timeIntervalSince(startTime)
     }
 }
+
+// MARK: - Harsh Mode prompt state
+
+enum HarshModePromptPhase: String, Equatable {
+    case start
+    case end
+}
+
+struct HarshModePrompt: Identifiable, Equatable {
+    let phase: HarshModePromptPhase
+    let eventId: String
+    let sessionTitle: String
+    let sessionType: SessionType?
+    let startTime: Date
+    let endTime: Date
+    let notes: String?
+
+    var id: String {
+        "\(eventId)-\(phase.rawValue)"
+    }
+}
+
+// MARK: - Harsh Mode note storage
+
+enum HarshModeSessionNotes {
+    private static let goalsStart = "[SessionFlow Harsh Goals]"
+    private static let goalsEnd = "[/SessionFlow Harsh Goals]"
+    private static let reviewStart = "[SessionFlow Harsh Review]"
+    private static let reviewEnd = "[/SessionFlow Harsh Review]"
+
+    static func goalLines(from rawText: String) -> [String] {
+        rawText
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { line in
+                if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                    return String(line.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                return line
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    static func goals(from notes: String?) -> [String] {
+        blockLines(startMarker: goalsStart, endMarker: goalsEnd, in: notes)
+            .map { line in
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
+                    return String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                return trimmed
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    static func applyingGoals(_ goals: [String], to notes: String?) -> String {
+        let cleanedGoals = goals
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let base = removingBlock(startMarker: goalsStart, endMarker: goalsEnd, from: notes)
+        guard !cleanedGoals.isEmpty else { return base }
+        return appendingBlock(
+            to: base,
+            startMarker: goalsStart,
+            lines: cleanedGoals.map { "- \($0)" },
+            endMarker: goalsEnd
+        )
+    }
+
+    static func applyingReview(rating: SessionRating?, reflection: String, to notes: String?) -> String {
+        let withoutOldReview = removingBlock(startMarker: reviewStart, endMarker: reviewEnd, from: notes)
+        let withRating = rating?.applyTo(notes: withoutOldReview) ?? withoutOldReview
+        let cleanedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
+        var lines: [String] = []
+        if let rating {
+            lines.append("Rating: \(rating.label)")
+        }
+        if !cleanedReflection.isEmpty {
+            lines.append("Reflection:")
+            lines.append(contentsOf: cleanedReflection.components(separatedBy: .newlines))
+        }
+        guard !lines.isEmpty else {
+            return withRating
+        }
+        return appendingBlock(to: withRating, startMarker: reviewStart, lines: lines, endMarker: reviewEnd)
+    }
+
+    static func removingManagedBlocks(from notes: String?) -> String {
+        let withoutGoals = removingBlock(startMarker: goalsStart, endMarker: goalsEnd, from: notes)
+        return removingBlock(startMarker: reviewStart, endMarker: reviewEnd, from: withoutGoals)
+    }
+
+    private static func blockLines(startMarker: String, endMarker: String, in notes: String?) -> [String] {
+        guard let notes, !notes.isEmpty else { return [] }
+        var isInsideBlock = false
+        var result: [String] = []
+
+        for line in notes.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed == startMarker {
+                isInsideBlock = true
+                continue
+            }
+            if trimmed == endMarker {
+                break
+            }
+            if isInsideBlock {
+                result.append(line)
+            }
+        }
+
+        return result
+    }
+
+    private static func removingBlock(startMarker: String, endMarker: String, from notes: String?) -> String {
+        guard let notes, !notes.isEmpty else { return "" }
+        var isInsideBlock = false
+        var result: [String] = []
+
+        for line in notes.components(separatedBy: .newlines) {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed == startMarker {
+                isInsideBlock = true
+                continue
+            }
+            if trimmed == endMarker {
+                isInsideBlock = false
+                continue
+            }
+            if !isInsideBlock {
+                result.append(line)
+            }
+        }
+
+        return result.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func appendingBlock(to notes: String, startMarker: String, lines: [String], endMarker: String) -> String {
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let block = ([startMarker] + lines + [endMarker]).joined(separator: "\n")
+        if trimmedNotes.isEmpty {
+            return block
+        }
+        return "\(trimmedNotes)\n\n\(block)"
+    }
+}

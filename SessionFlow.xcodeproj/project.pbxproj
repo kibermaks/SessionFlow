@@ -47,6 +47,7 @@
 		F1A2B3C4D5E6F7081929A0B1 /* MicrophoneMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7081929A0B2 /* MicrophoneMonitor.swift */; };
 		876B4DD1E37960D23C5EB40F /* SessionAwarenessPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */; };
 		8B24F98B098D2F129A31E399 /* SessionAwarenessGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */; };
+		8C9D0E1F2A3B4C5D6E7F8091 /* HarshModeOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C9D0E1F2A3B4C5D6E7F8090 /* HarshModeOverlay.swift */; };
 		CC11D2E3F4A5B6C7D8E9F0A1 /* ShortcutsGuide.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC11D2E3F4A5B6C7D8E9F0A2 /* ShortcutsGuide.swift */; };
 		AA01B2C3D4E5F6A7B8C9D0E1 /* Clock Ticking.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */; };
 		AA02B2C3D4E5F6A7B8C9D0E2 /* Clock Ticking Slow.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */; };
@@ -134,6 +135,7 @@
 		F1A2B3C4D5E6F7081929A0B2 /* MicrophoneMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneMonitor.swift; sourceTree = "<group>"; };
 		1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessPanel.swift; sourceTree = "<group>"; };
 		2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessGuide.swift; sourceTree = "<group>"; };
+		8C9D0E1F2A3B4C5D6E7F8090 /* HarshModeOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HarshModeOverlay.swift; sourceTree = "<group>"; };
 		CC11D2E3F4A5B6C7D8E9F0A2 /* ShortcutsGuide.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShortcutsGuide.swift; sourceTree = "<group>"; };
 		BB01C2D3E4F5A6B7C8D9E0F1 /* Clock Ticking.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Clock Ticking.mp3"; sourceTree = "<group>"; };
 		BB02C2D3E4F5A6B7C8D9E0F2 /* Clock Ticking Slow.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = "Clock Ticking Slow.mp3"; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 				1FD9FFA40C7AE29A7155AD5B /* SessionAwarenessPanel.swift */,
 				A1B2C3D4E5F60718293A4B5C /* ProductivityCard.swift */,
 				2F803D7CAF9FE9B8D8EB743A /* SessionAwarenessGuide.swift */,
+				8C9D0E1F2A3B4C5D6E7F8090 /* HarshModeOverlay.swift */,
 				CC11D2E3F4A5B6C7D8E9F0A2 /* ShortcutsGuide.swift */,
 				E3F4A5B6C7D8E9F0A1B2C3D4 /* MiniPlayerWindowController.swift */,
 				E4F5A6B7C8D9E0F1A2B3C4D5 /* MiniPlayerView.swift */,
@@ -554,6 +557,7 @@
 				876B4DD1E37960D23C5EB40F /* SessionAwarenessPanel.swift in Sources */,
 				A1B2C3D4E5F60718293A4B5D /* ProductivityCard.swift in Sources */,
 				8B24F98B098D2F129A31E399 /* SessionAwarenessGuide.swift in Sources */,
+				8C9D0E1F2A3B4C5D6E7F8091 /* HarshModeOverlay.swift in Sources */,
 				CC11D2E3F4A5B6C7D8E9F0A1 /* ShortcutsGuide.swift in Sources */,
 				D1A1B2C3D4E5F6A7B8C9D0E1 /* DockProgressController.swift in Sources */,
 				D2B2C3D4E5F6A7B8C9D0E1F2 /* MenuBarController.swift in Sources */,
@@ -720,7 +724,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 973;
+				CURRENT_PROJECT_VERSION = 983;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -739,7 +743,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.6.9;
+				MARKETING_VERSION = 2026.6.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
@@ -758,7 +762,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 973;
+				CURRENT_PROJECT_VERSION = 983;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -777,7 +781,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.6.9;
+				MARKETING_VERSION = 2026.6.11;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";

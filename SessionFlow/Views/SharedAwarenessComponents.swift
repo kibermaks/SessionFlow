@@ -228,6 +228,28 @@ struct AwarenessSessionInfo: View {
                     .lineLimit(2)
                     .truncationMode(.tail)
 
+                if awarenessService.config.harshModeEnabled && awarenessService.config.harshModeShowGoalsInAwareness {
+                    let goals = HarshModeSessionNotes.goals(from: awarenessService.currentEventNotes)
+                    if !goals.isEmpty {
+                        HStack(alignment: .top, spacing: 5) {
+                            Image(systemName: "scope")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundColor(colors.isDark ? .orange.opacity(0.95) : Color(hex: "C2410C"))
+                                .padding(.top, 1)
+                            Text(goalReminderText(goals))
+                                .font(.system(size: awarenessService.config.harshModeReminderStyle == .prominent ? 12 : 11, weight: .semibold))
+                                .foregroundColor(colors.isDark ? .orange.opacity(0.95) : Color(hex: "C2410C"))
+                                .lineLimit(awarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1)
+                                .truncationMode(.tail)
+                        }
+                        .padding(.horizontal, awarenessService.config.harshModeReminderStyle == .prominent ? 7 : 0)
+                        .padding(.vertical, awarenessService.config.harshModeReminderStyle == .prominent ? 3 : 0)
+                        .background(goalReminderBackground)
+                        .overlay(goalReminderBorder)
+                        .cornerRadius(5)
+                    }
+                }
+
                 if let notes = SessionAwarenessService.strippedNotes(awarenessService.currentEventNotes) {
                     HStack(alignment: .top, spacing: 4) {
                         Text(notes)
@@ -251,6 +273,32 @@ struct AwarenessSessionInfo: View {
                     }
                 }
             }
+        }
+    }
+
+    private func goalReminderText(_ goals: [String]) -> String {
+        switch awarenessService.config.harshModeReminderStyle {
+        case .compact:
+            return goals.first ?? ""
+        case .prominent:
+            return goals.prefix(2).joined(separator: " / ")
+        }
+    }
+
+    @ViewBuilder
+    private var goalReminderBackground: some View {
+        if awarenessService.config.harshModeReminderStyle == .prominent {
+            colors.isDark ? Color.orange.opacity(0.12) : Color(hex: "FFEDD5")
+        } else {
+            Color.clear
+        }
+    }
+
+    @ViewBuilder
+    private var goalReminderBorder: some View {
+        if awarenessService.config.harshModeReminderStyle == .prominent {
+            RoundedRectangle(cornerRadius: 5)
+                .stroke(colors.isDark ? Color.orange.opacity(0.22) : Color(hex: "FDBA74"), lineWidth: 1)
         }
     }
 }

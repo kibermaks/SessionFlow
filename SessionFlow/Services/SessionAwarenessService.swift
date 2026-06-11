@@ -21,15 +21,15 @@ class SessionAwarenessService: ObservableObject {
 
     @Published var isEnabled: Bool {
         didSet { UserDefaults.standard.set(isEnabled, forKey: "SessionFlow.SessionAwarenessEnabled")
-            if isEnabled || hasActiveShortcuts {
+            if requiresTrackingTimer {
                 startTimer()
             } else {
                 stopTimer()
             }
             if !isEnabled {
                 audioService?.stopAmbient()
-                // Only tear down detection state when shortcuts aren't keeping it alive
-                if !hasActiveShortcuts {
+                // Only tear down detection state when no feature still needs session tracking.
+                if !requiresTrackingTimer {
                     clearActiveState()
                     endRestState()
                 }
@@ -44,6 +44,10 @@ class SessionAwarenessService: ObservableObject {
         guard config.shortcuts.globalEnabled else { return false }
         return config.shortcuts.approaching.isEnabled || config.shortcuts.started.isEnabled || config.shortcuts.endingSoon.isEnabled || config.shortcuts.ended.isEnabled ||
         config.shortcuts.restStarted.isEnabled || config.shortcuts.restEnded.isEnabled || config.shortcuts.restEndingSoon.isEnabled
+    }
+
+    private var requiresTrackingTimer: Bool {
+        isEnabled || hasActiveShortcuts || config.harshModeEnabled
     }
 
     // Active session state
@@ -85,6 +89,10 @@ class SessionAwarenessService: ObservableObject {
     // Feedback
     @Published var sessionFeedbackPending: SessionFeedback? = nil
 
+    // Harsh Mode
+    @Published var harshModePrompt: HarshModePrompt? = nil
+    private static let debugHarshModeEventPrefix = "sessionflow-debug-commit-mode-"
+
     // Current time (updated every second) — proxied through timeState
     var currentTime: Date {
         get { timeState.currentTime }
@@ -112,10 +120,10 @@ class SessionAwarenessService: ObservableObject {
         didSet {
             config.save()
             isEnabled = config.enabled
-            // Keep timer running if shortcuts need it; stop if neither needs it
-            if hasActiveShortcuts && timer == nil {
+            // Keep timer running if any tracking-backed feature needs it.
+            if requiresTrackingTimer && timer == nil {
                 startTimer()
-            } else if !isEnabled && !hasActiveShortcuts && timer != nil {
+            } else if !requiresTrackingTimer && timer != nil {
                 stopTimer()
                 clearActiveState()
                 endRestState()
@@ -123,6 +131,9 @@ class SessionAwarenessService: ObservableObject {
             // If shortcuts global toggle just flipped off, drop any pending approaching timer
             if oldValue.shortcuts.globalEnabled && !config.shortcuts.globalEnabled {
                 shortcutService.cancelApproaching()
+            }
+            if !config.harshModeEnabled && harshModePrompt != nil {
+                harshModePrompt = nil
             }
             // Sync mute settings to audio service — only when the config
             // values actually changed in this mutation. Otherwise an unrelated
@@ -204,6 +215,10 @@ class SessionAwarenessService: ObservableObject {
     private var savedEndingSoonPlayed: Bool = false
     private var savedEndingSoonShortcutFired: Bool = false
     private var savedSessionMuted: Bool = false
+    private var harshStartBypassedEventIds: Set<String> = []
+    private var harshEndBypassedEventIds: Set<String> = []
+    private var harshGoalCapturedEventIds: Set<String> = []
+    private var harshReviewCapturedEventIds: Set<String> = []
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
@@ -249,7 +264,7 @@ class SessionAwarenessService: ObservableObject {
             .dropFirst()
             .sink { [weak self] _ in self?.lastSlotsFetch = .distantPast }
 
-        if isEnabled || hasActiveShortcuts {
+        if requiresTrackingTimer {
             startTimer()
         }
     }
@@ -272,7 +287,7 @@ class SessionAwarenessService: ObservableObject {
 
     static func strippedNotes(_ notes: String?) -> String? {
         guard let notes = notes, !notes.isEmpty else { return nil }
-        var result = notes
+        var result = HarshModeSessionNotes.removingManagedBlocks(from: notes)
         for tag in ["#work", "#side", "#deep", "#plan", "#break"] + SessionRating.allTags {
             result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
@@ -346,6 +361,7 @@ class SessionAwarenessService: ObservableObject {
                     sessionType: currentSessionType,
                     startTime: start,
                     endTime: end,
+                    notes: currentEventNotes,
                     isNaturalEnd: isNaturalEnd
                 )
             }
@@ -705,10 +721,15 @@ class SessionAwarenessService: ObservableObject {
                 )
             }
         }
+
+        presentHarshModeStartPromptIfNeeded(slot: slot, sessionType: sessionType, isBusySlot: isBusySlot)
     }
 
     private func clearActiveState() {
         cancelPendingSessionAudioStart()
+        if let prompt = harshModePrompt, prompt.phase == .start, prompt.eventId == currentEventId {
+            harshModePrompt = nil
+        }
         if isActive { isActive = false }
         if !currentSessionTitle.isEmpty { currentSessionTitle = "" }
         if currentSessionType != nil { currentSessionType = nil }
@@ -728,6 +749,104 @@ class SessionAwarenessService: ObservableObject {
         hasFiredEndingSoonShortcut = false
     }
 
+    // MARK: - Harsh Mode
+
+    private func isHarshModeEligible(sessionType: SessionType?, isBusySlot: Bool) -> Bool {
+        guard config.harshModeEnabled, !isBusySlot, let sessionType else {
+            return false
+        }
+        return config.harshModeSessionTypes.matches(sessionType)
+    }
+
+    private func presentHarshModeStartPromptIfNeeded(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool) {
+        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: isBusySlot) else { return }
+        guard config.harshModeRequireStartGoals else { return }
+        guard HarshModeSessionNotes.goals(from: slot.notes).isEmpty else { return }
+        guard !harshGoalCapturedEventIds.contains(slot.id),
+              !harshStartBypassedEventIds.contains(slot.id) else { return }
+        if harshModePrompt?.phase == .start && harshModePrompt?.eventId == slot.id {
+            return
+        }
+
+        harshModePrompt = HarshModePrompt(
+            phase: .start,
+            eventId: slot.id,
+            sessionTitle: slot.title,
+            sessionType: sessionType,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
+            notes: slot.notes
+        )
+    }
+
+    private func presentHarshModeEndPromptIfNeeded(
+        eventId: String,
+        sessionTitle: String,
+        sessionType: SessionType?,
+        startTime: Date,
+        endTime: Date,
+        notes: String?
+    ) {
+        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return }
+        guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return }
+        guard !harshReviewCapturedEventIds.contains(eventId),
+              !harshEndBypassedEventIds.contains(eventId) else { return }
+        if harshModePrompt?.phase == .end && harshModePrompt?.eventId == eventId {
+            return
+        }
+
+        harshModePrompt = HarshModePrompt(
+            phase: .end,
+            eventId: eventId,
+            sessionTitle: sessionTitle,
+            sessionType: sessionType,
+            startTime: startTime,
+            endTime: endTime,
+            notes: notes
+        )
+    }
+
+    func debugPresentHarshModeStartPrompt() {
+        harshModePrompt = debugHarshModePrompt(phase: .start)
+    }
+
+    func debugPresentHarshModeEndPrompt() {
+        harshModePrompt = debugHarshModePrompt(phase: .end)
+    }
+
+    func debugDismissHarshModePrompt() {
+        harshModePrompt = nil
+    }
+
+    private func debugHarshModePrompt(phase: HarshModePromptPhase) -> HarshModePrompt {
+        let now = currentTime
+        let fallbackStart = phase == .start
+            ? now
+            : Calendar.current.date(byAdding: .minute, value: -40, to: now) ?? now
+        let start = sessionStartTime ?? fallbackStart
+        let fallbackEnd = phase == .start
+            ? Calendar.current.date(byAdding: .minute, value: 40, to: start) ?? now
+            : now
+        var end = sessionEndTime ?? fallbackEnd
+        if end <= start {
+            end = Calendar.current.date(byAdding: .minute, value: 40, to: start) ?? start
+        }
+
+        return HarshModePrompt(
+            phase: phase,
+            eventId: currentEventId ?? "\(Self.debugHarshModeEventPrefix)\(UUID().uuidString)",
+            sessionTitle: currentSessionTitle.isEmpty ? "Commit Mode Test Session" : currentSessionTitle,
+            sessionType: currentSessionType ?? .work,
+            startTime: start,
+            endTime: end,
+            notes: currentEventNotes ?? "Manual developer test prompt."
+        )
+    }
+
+    private static func isDebugHarshModeEvent(_ eventId: String) -> Bool {
+        eventId.hasPrefix(debugHarshModeEventPrefix)
+    }
+
     // MARK: - Session transitions
 
     private func cancelPendingSessionAudioStart() {
@@ -740,6 +859,7 @@ class SessionAwarenessService: ObservableObject {
         sessionType: SessionType?,
         startTime: Date,
         endTime: Date,
+        notes: String?,
         isNaturalEnd: Bool
     ) {
         // Shortcuts fire on ALL session end transitions (natural end or drag-away)
@@ -754,6 +874,17 @@ class SessionAwarenessService: ObservableObject {
 
         // If we were in rest when session ended (shouldn't normally happen, but safety)
         if isResting { endRestState() }
+
+        if isNaturalEnd {
+            presentHarshModeEndPromptIfNeeded(
+                eventId: eventId,
+                sessionTitle: sessionTitle,
+                sessionType: sessionType,
+                startTime: startTime,
+                endTime: endTime,
+                notes: notes
+            )
+        }
 
         // Audio and feedback require awareness enabled
         guard isEnabled else { return }
@@ -886,6 +1017,73 @@ class SessionAwarenessService: ObservableObject {
     }
 
     // MARK: - Feedback actions
+
+    func submitHarshGoals(_ goals: [String]) -> Bool {
+        guard let prompt = harshModePrompt, prompt.phase == .start else { return false }
+        let cleanedGoals = goals
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard cleanedGoals.count >= max(1, config.harshModeMinimumGoals) else { return false }
+        if Self.isDebugHarshModeEvent(prompt.eventId) {
+            harshGoalCapturedEventIds.insert(prompt.eventId)
+            harshModePrompt = nil
+            return true
+        }
+
+        let sourceNotes = currentEventId == prompt.eventId ? currentEventNotes : prompt.notes
+        let updatedNotes = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: sourceNotes)
+        guard calendarService?.updateEvent(eventId: prompt.eventId, title: nil, notes: updatedNotes, url: nil) == true else {
+            return false
+        }
+
+        if currentEventId == prompt.eventId {
+            currentEventNotes = updatedNotes
+        }
+        harshGoalCapturedEventIds.insert(prompt.eventId)
+        harshModePrompt = nil
+        calendarService?.refreshCurrentEvents()
+        return true
+    }
+
+    func submitHarshReview(rating: SessionRating?, reflection: String) -> Bool {
+        guard let prompt = harshModePrompt, prompt.phase == .end else { return false }
+        let cleanedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !config.harshModeRequireEndRating || rating != nil else { return false }
+        guard !config.harshModeRequireReviewNote || !cleanedReflection.isEmpty else { return false }
+        if Self.isDebugHarshModeEvent(prompt.eventId) {
+            harshReviewCapturedEventIds.insert(prompt.eventId)
+            sessionFeedbackPending = nil
+            feedbackDismissTimer?.invalidate()
+            harshModePrompt = nil
+            return true
+        }
+
+        let updatedNotes = HarshModeSessionNotes.applyingReview(rating: rating, reflection: cleanedReflection, to: prompt.notes)
+        guard calendarService?.updateEvent(eventId: prompt.eventId, title: nil, notes: updatedNotes, url: nil) == true else {
+            return false
+        }
+
+        if currentEventId == prompt.eventId {
+            currentEventNotes = updatedNotes
+        }
+        harshReviewCapturedEventIds.insert(prompt.eventId)
+        sessionFeedbackPending = nil
+        feedbackDismissTimer?.invalidate()
+        harshModePrompt = nil
+        calendarService?.refreshCurrentEvents()
+        return true
+    }
+
+    func emergencyBreakHarshMode() {
+        guard let prompt = harshModePrompt else { return }
+        switch prompt.phase {
+        case .start:
+            harshStartBypassedEventIds.insert(prompt.eventId)
+        case .end:
+            harshEndBypassedEventIds.insert(prompt.eventId)
+        }
+        harshModePrompt = nil
+    }
 
     func submitFeedback(rating: SessionRating) {
         guard let feedback = sessionFeedbackPending else { return }
