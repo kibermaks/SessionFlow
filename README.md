@@ -32,6 +32,7 @@ SessionFlow is a native macOS app that helps you plan, execute, and reflect on p
 
 - **📊 Interactive Timeline**: Drag-and-drop events, resize sessions, lock layout, and freeze projections for manual fine-tuning
 - **👁 Session Awareness**: Tracks active calendar events—both tagged sessions and your regular calendar events—with ambient sounds, a progress bar, and gentle reminders as sessions approach their end. A progress donut on the dock icon and an optional menu-bar timer let you glance at remaining time without switching windows
+- **🔒 Commit Mode**: A strict focus mode for selected SessionFlow tasks. When a session starts, it can block every display until you name what you intend to do; when the session ends, it can block again until you rate and review how it went. Useful when you benefit from extra structure, friction, and explicit intent before starting work
 - **🪟 Mini-Player**: Compact floating window that shows session status at a glance—collapse the main window and keep awareness in a small footprint. Displays idle, next-up, active, and feedback states with the same progress and time info as the full panel
 - **🤖 AI Control (MCP)**: Optional local MCP server so trusted agents can inspect the schedule, edit task/config inputs, rebuild previews, and commit tagged sessions with your token
 - **⌘ Shortcuts Integration**: Trigger macOS Shortcuts when sessions start, end, or approach. Each shortcut receives structured JSON with session details—use it to toggle Focus modes, send notifications, control smart home devices, or anything Shortcuts can do. [Template shortcuts](public/shortcuts/) are available for every trigger
@@ -95,6 +96,12 @@ The bottom panel tracks your current session in real time—whether it’s a tag
   <img src="docs/assets/SessionAwareness.gif" alt="Session Awareness: idle, active session, progress, feedback" width="900" />
 </p>
 
+### Commit Mode
+
+Commit Mode is the intentionally strict version of starting a session. Enable it from the main window, choose which SessionFlow task types it applies to, and the app can cover every display when a scheduled task begins. Before you continue, you must write the goal or goals for that session, so the first action is deciding what the block is actually for.
+
+At the end of the session, Commit Mode can block again until you rate the session and optionally write review notes. Those goals and reflections are saved back into the calendar event, and the active goals can stay visible in the bottom panel or Mini-Player while you work. It is designed for people who need stronger external structure, including users with ADHD-style focus challenges, without making every Session Awareness feature mandatory.
+
 ### Productivity Tracking
 
 The right side of the window can show a **Productivity** card once you start leaving feedback on sessions. It aggregates how many rocket/completed/partial/skipped blocks you had today, how many are still unrated, and computes a weighted **Focus Time** score based on both duration and rating. From there, a calendar button opens a monthly productivity view with a compact calendar: each day shows colored dots for rated sessions and a tiny focus-time label, making it easy to spot your strongest days and streaks at a glance.
@@ -139,6 +146,7 @@ See [Building from Source](#-building-from-source) section below.
 - **Awareness Mode**: Toggle “Aware of existing tasks” when you want counts to respect what’s already booked.
 - **Track Other Events**: Enable “Awareness of your other calendar events” to also track regular (untagged) calendar events with timer, progress, and ambient sound.
 - **Shortcuts**: Set up macOS Shortcuts to automate actions at session boundaries. Go to Settings → Shortcuts, enable a trigger, and name your shortcut. Download [ready-made templates](public/shortcuts/) to get started instantly.
+- **Commit Mode**: Use the shield control next to Settings to turn strict session gates on or off. The adjacent settings button opens task filters, goal requirements, end-review requirements, blocker templates, and how prominently goals appear during the session.
 - **AI Control (MCP)**: Go to Settings → General → AI Control (MCP), enable the server, then copy the endpoint, token, or Claude Code setup command from the app.
 - **Dock & Menu Bar**: Enable the dock progress donut and menu-bar timer in Session Awareness settings so you can monitor remaining time from anywhere.
 - **Mini-Player**: Click the collapse button on the bottom panel to detach a floating mini-player; expand back anytime.
@@ -191,6 +199,12 @@ You don't need the main window open to stay on track:
 - **Mini-player** floats on your desktop — collapse the bottom awareness panel to switch to it.
 - **Mute button** is always accessible from the mini-player and the bottom panel.
 - **Mic-aware auto-mute** silences ambient sounds automatically when your microphone is active — no need to manually mute before a call or recording.
+
+### Commit Mode
+
+Commit Mode is for sessions where you do not want to drift into work on autopilot. It is independent from Session Awareness: the app only needs to be running, and Commit Mode will watch your selected tagged SessionFlow tasks. When a matching task starts, a blocker appears on all displays and asks for one or more goals. Only one display shows the active form, so you can move focus between monitors without creating duplicate answers.
+
+The end gate is just as deliberate: require a rating, require a written review, or keep one of them optional. The point is to force a clean boundary around the session: decide the target, do the work, then leave a trace of how it actually went.
 
 ### Sounds & Accelerando
 
