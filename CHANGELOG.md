@@ -7,6 +7,13 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.6.11] - 2026-06-11
+
+### Added
+
+- Commit Mode for selected SessionFlow tasks, with a main-window toggle, dedicated settings, all-display blocking, start goals, end reviews, customizable blocker templates, and visible goal reminders during the session.
+- Developer Settings can manually invoke Commit Mode start and stop gates for testing.
+
 ## [2026.6.9] - 2026-06-09
 
 ### Added
