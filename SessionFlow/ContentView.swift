@@ -74,6 +74,7 @@ struct ContentView: View {
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
     @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
+    @AppStorage("hasSeenHarshModeGuide") private var hasSeenHarshModeGuide = false
     @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
     @State private var showingWelcome = false
     @State private var showingPatternsGuide = false
@@ -190,6 +191,7 @@ struct ContentView: View {
             showingSessionAwarenessGuide = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowHarshModeGuide"))) { _ in
+            hasSeenHarshModeGuide = true
             showingHarshModeGuide = true
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("ShowShortcutsGuide"))) { _ in
