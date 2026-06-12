@@ -195,4 +195,247 @@ extension MCPFeatureTests {
         }
         await server.stop()
     }
+
+    @Test func harshModeNotesUseReadableSections() {
+        let withGoals = HarshModeSessionNotes.applyingGoals(
+            ["Ship fresh mode", "Write next step"],
+            to: "#work"
+        )
+
+        #expect(withGoals == "#work\n\n#flowgoal:\nShip fresh mode\nWrite next step")
+        #expect(!withGoals.contains("[SessionFlow Harsh Goals]"))
+        #expect(HarshModeSessionNotes.goals(from: withGoals) == ["Ship fresh mode", "Write next step"])
+
+        let withReview = HarshModeSessionNotes.applyingReview(
+            rating: .completed,
+            reflection: "Stayed focused",
+            to: withGoals
+        )
+
+        #expect(withReview.contains("#work \(SessionRating.completed.tag)"))
+        #expect(withReview.contains("#flowreview:\nStayed focused"))
+        #expect(!withReview.contains("[SessionFlow Harsh Review]"))
+        #expect(!withReview.contains("Session Flow Review:"))
+        #expect(!withReview.contains("Rating:"))
+        #expect(HarshModeSessionNotes.goals(from: withReview) == ["Ship fresh mode", "Write next step"])
+    }
+
+    @Test func harshModeReviewSectionRequiresReflection() {
+        let notes = HarshModeSessionNotes.applyingGoals(["Ship fresh mode"], to: "#work")
+        let rated = HarshModeSessionNotes.applyingReview(
+            rating: .completed,
+            reflection: " \n ",
+            to: notes
+        )
+
+        #expect(rated.contains(SessionRating.completed.tag))
+        #expect(!rated.contains("#flowreview:"))
+        #expect(HarshModeSessionNotes.goals(from: rated) == ["Ship fresh mode"])
+    }
+
+    @Test func sessionAlignmentTagsRoundTripAndStrip() {
+        let aligned = SessionAlignment.direct.applyTo(notes: "Client delivery #flowalign1")
+
+        #expect(SessionAlignment.fromNotes(aligned) == .direct)
+        #expect(aligned.contains(SessionAlignment.direct.tag))
+        #expect(!aligned.contains(SessionAlignment.maintenance.tag))
+        #expect(SessionAlignment.stripAlignmentTags(aligned) == "Client delivery")
+        #expect(SessionAwarenessService.strippedNotes("#work \(aligned)") == "Client delivery")
+    }
+
+    @Test func externalCalendarEventsDoNotRequireAlignment() {
+        let fixedExternalNotes = "Pickup kid"
+        let sessionFlowNotes = "#work Client delivery"
+
+        #expect(FlowFlexibilityNotes.alignmentIsOptional(fixedExternalNotes))
+        #expect(!FlowFlexibilityNotes.countsTowardAlignmentScore(fixedExternalNotes, alignment: nil))
+        #expect(FlowFlexibilityNotes.countsTowardAlignmentScore(fixedExternalNotes, alignment: .direct))
+
+        #expect(!FlowFlexibilityNotes.alignmentIsOptional(sessionFlowNotes))
+        #expect(FlowFlexibilityNotes.countsTowardAlignmentScore(sessionFlowNotes, alignment: nil))
+    }
+
+    @Test func harshModeReviewPreservesAlignmentTag() {
+        let alignedGoals = HarshModeSessionNotes.applyingGoals(
+            ["Ship paid work"],
+            to: SessionAlignment.direct.applyTo(notes: "#work")
+        )
+        let reviewed = HarshModeSessionNotes.applyingReview(
+            rating: .completed,
+            reflection: "Stayed on target",
+            to: alignedGoals
+        )
+
+        #expect(reviewed.contains(SessionAlignment.direct.tag))
+        #expect(reviewed.contains(SessionRating.completed.tag))
+        #expect(SessionAlignment.fromNotes(reviewed) == .direct)
+        #expect(HarshModeSessionNotes.goals(from: reviewed) == ["Ship paid work"])
+    }
+
+    @Test func harshModeReviewWritesAlignmentTag() {
+        let goals = HarshModeSessionNotes.applyingGoals(
+            ["Ship paid work"],
+            to: SessionAlignment.maintenance.applyTo(notes: "#work")
+        )
+        let reviewed = HarshModeSessionNotes.applyingReview(
+            rating: .completed,
+            alignment: .direct,
+            reflection: "Stayed on target",
+            to: goals
+        )
+
+        #expect(reviewed.contains(SessionRating.completed.tag))
+        #expect(reviewed.contains(SessionAlignment.direct.tag))
+        #expect(!reviewed.contains(SessionAlignment.maintenance.tag))
+        #expect(SessionAlignment.fromNotes(reviewed) == .direct)
+        #expect(HarshModeSessionNotes.goals(from: reviewed) == ["Ship paid work"])
+    }
+
+    @Test func harshModeGoalsCanBeEditedAfterReview() {
+        let notes = HarshModeSessionNotes.applyingGoals(["Original goal"], to: "#work")
+        let reviewed = HarshModeSessionNotes.applyingReview(
+            rating: .completed,
+            reflection: "Shipped a different thing",
+            to: notes
+        )
+
+        let edited = HarshModeSessionNotes.applyingGoals(["Corrected goal"], to: reviewed)
+
+        #expect(HarshModeSessionNotes.goals(from: edited) == ["Corrected goal"])
+        #expect(edited.contains("#flowreview:\nShipped a different thing"))
+        #expect(edited.contains(SessionRating.completed.tag))
+    }
+
+    @Test func harshModeNotesReadAndRemoveLegacyBlocks() {
+        let legacy = """
+        #work
+
+        [SessionFlow Harsh Goals]
+        - Ship old format
+        [/SessionFlow Harsh Goals]
+
+        [SessionFlow Harsh Review]
+        Rating: Done
+        Reflection:
+        Old review
+        [/SessionFlow Harsh Review]
+        """
+
+        #expect(HarshModeSessionNotes.goals(from: legacy) == ["Ship old format"])
+        #expect(HarshModeSessionNotes.removingManagedBlocks(from: legacy) == "#work")
+
+        let updatedGoals = HarshModeSessionNotes.applyingGoals(["Ship new format"], to: legacy)
+        #expect(updatedGoals.contains("#flowgoal:\nShip new format"))
+        #expect(!updatedGoals.contains("[SessionFlow Harsh Goals]"))
+
+        let updatedReview = HarshModeSessionNotes.applyingReview(
+            rating: nil,
+            reflection: "New review",
+            to: legacy
+        )
+        #expect(updatedReview.contains("#flowreview:\nNew review"))
+        #expect(!updatedReview.contains("[SessionFlow Harsh Review]"))
+    }
+
+    @Test func harshModeNotesMigrateReadableSectionHeaders() {
+        let readable = """
+        #work
+
+        Session Flow Goals:
+        Ship temporary format
+
+        Session Flow Review:
+        Temporary review
+        """
+
+        #expect(HarshModeSessionNotes.goals(from: readable) == ["Ship temporary format"])
+        #expect(HarshModeSessionNotes.removingManagedBlocks(from: readable) == "#work")
+
+        let updatedGoals = HarshModeSessionNotes.applyingGoals(["Ship hashtag format"], to: readable)
+        #expect(updatedGoals.contains("#flowgoal:\nShip hashtag format"))
+        #expect(!updatedGoals.contains("Session Flow Goals:"))
+
+        let updatedReview = HarshModeSessionNotes.applyingReview(
+            rating: nil,
+            reflection: "Hashtag review",
+            to: readable
+        )
+        #expect(updatedReview.contains("#flowreview:\nHashtag review"))
+        #expect(!updatedReview.contains("Session Flow Review:"))
+    }
+
+    @Test func harshModeStartDelayMovesExistingEventByDelayOnly() {
+        #expect(SessionAwarenessService.harshDelayMinuteOptions == [1, 2, 3, 4, 5, 10, 15, 20])
+
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let now = start.addingTimeInterval(20 * 60)
+        let nextTaskStart = end.addingTimeInterval(3 * 60)
+        let fittingOptions = SessionAwarenessService.harshDelayMinuteOptions.filter { minutes in
+            SessionAwarenessService.harshDelayTiming(
+                phase: .start,
+                startTime: start,
+                endTime: end,
+                now: now,
+                minutes: minutes,
+                nextTaskStart: nextTaskStart
+            ) != nil
+        }
+
+        let oneMinute = SessionAwarenessService.harshDelayTiming(
+            phase: .start,
+            startTime: start,
+            endTime: end,
+            now: now,
+            minutes: 1,
+            nextTaskStart: nextTaskStart
+        )
+
+        #expect(oneMinute?.start == start.addingTimeInterval(60))
+        #expect(oneMinute?.end == end.addingTimeInterval(60))
+        #expect(oneMinute?.snoozeUntil == now.addingTimeInterval(60))
+        #expect(fittingOptions == [1, 2, 3])
+
+        let fiveMinutes = SessionAwarenessService.harshDelayTiming(
+            phase: .start,
+            startTime: start,
+            endTime: end,
+            now: now,
+            minutes: 5,
+            nextTaskStart: nextTaskStart
+        )
+
+        #expect(fiveMinutes == nil)
+    }
+
+    @Test func harshModeEndDelayExtendsFromNowAndStopsAtNextTask() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let now = end.addingTimeInterval(10)
+        let nextTaskStart = end.addingTimeInterval(3 * 60)
+
+        let twoMinutes = SessionAwarenessService.harshDelayTiming(
+            phase: .end,
+            startTime: start,
+            endTime: end,
+            now: now,
+            minutes: 2,
+            nextTaskStart: nextTaskStart
+        )
+
+        #expect(twoMinutes?.start == start)
+        #expect(twoMinutes?.end == now.addingTimeInterval(2 * 60))
+        #expect(twoMinutes?.snoozeUntil == now.addingTimeInterval(2 * 60))
+
+        let fiveMinutes = SessionAwarenessService.harshDelayTiming(
+            phase: .end,
+            startTime: start,
+            endTime: end,
+            now: now,
+            minutes: 5,
+            nextTaskStart: nextTaskStart
+        )
+
+        #expect(fiveMinutes == nil)
+    }
 }

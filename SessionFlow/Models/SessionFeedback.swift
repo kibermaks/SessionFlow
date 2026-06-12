@@ -84,6 +84,112 @@ enum SessionRating: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Goal alignment (stored as compact hashtags in calendar event notes)
+
+enum SessionAlignment: String, Codable, CaseIterable {
+    case offTrack = "offTrack"
+    case maintenance = "maintenance"
+    case support = "support"
+    case strategic = "strategic"
+    case direct = "direct"
+
+    var tag: String {
+        switch self {
+        case .offTrack: return "#flowalign0"
+        case .maintenance: return "#flowalign1"
+        case .support: return "#flowalign2"
+        case .strategic: return "#flowalign3"
+        case .direct: return "#flowalign4"
+        }
+    }
+
+    static var allTags: [String] {
+        allCases.map(\.tag)
+    }
+
+    var icon: String {
+        switch self {
+        case .offTrack: return "xmark.octagon.fill"
+        case .maintenance: return "wrench.and.screwdriver.fill"
+        case .support: return "arrow.triangle.branch"
+        case .strategic: return "scope"
+        case .direct: return "target"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .offTrack: return "Off-track"
+        case .maintenance: return "Maintenance"
+        case .support: return "Support"
+        case .strategic: return "Strategic"
+        case .direct: return "Direct"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .offTrack: return "Off"
+        case .maintenance: return "Maint"
+        case .support: return "Support"
+        case .strategic: return "Strat"
+        case .direct: return "Direct"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .offTrack: return "Pulled away from your current goal."
+        case .maintenance: return "Necessary upkeep, but weak goal movement."
+        case .support: return "Indirect support, setup, tooling, or preparation."
+        case .strategic: return "Important progress, not direct payoff yet."
+        case .direct: return "Directly moved the current goal."
+        }
+    }
+
+    var multiplier: Double {
+        switch self {
+        case .offTrack: return 0.0
+        case .maintenance: return 0.25
+        case .support: return 0.5
+        case .strategic: return 0.75
+        case .direct: return 1.0
+        }
+    }
+
+    var percent: Int {
+        Int(multiplier * 100)
+    }
+
+    static func fromNotes(_ notes: String?) -> SessionAlignment? {
+        guard let notes = notes else { return nil }
+        for alignment in allCases {
+            if notes.localizedCaseInsensitiveContains(alignment.tag) { return alignment }
+        }
+        return nil
+    }
+
+    static func stripAlignmentTags(_ notes: String?) -> String? {
+        guard let notes = notes, !notes.isEmpty else { return nil }
+        var result = notes
+        for tag in allTags {
+            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? nil : result
+    }
+
+    func applyTo(notes: String?) -> String {
+        var result = notes ?? ""
+        for existingTag in Self.allTags {
+            result = result.replacingOccurrences(of: existingTag, with: "", options: .caseInsensitive)
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        result += (result.isEmpty ? "" : " ") + tag
+        return result
+    }
+}
+
 // MARK: - Pending feedback (in-memory, drives the panel prompt)
 
 struct SessionFeedback: Identifiable {
@@ -114,6 +220,8 @@ struct HarshModePrompt: Identifiable, Equatable {
     let startTime: Date
     let endTime: Date
     let notes: String?
+    let nextTaskTitle: String?
+    let nextTaskStartTime: Date?
 
     var id: String {
         "\(eventId)-\(phase.rawValue)"
@@ -123,10 +231,19 @@ struct HarshModePrompt: Identifiable, Equatable {
 // MARK: - Harsh Mode note storage
 
 enum HarshModeSessionNotes {
-    private static let goalsStart = "[SessionFlow Harsh Goals]"
-    private static let goalsEnd = "[/SessionFlow Harsh Goals]"
-    private static let reviewStart = "[SessionFlow Harsh Review]"
-    private static let reviewEnd = "[/SessionFlow Harsh Review]"
+    private static let goalsHeader = "#flowgoal:"
+    private static let reviewHeader = "#flowreview:"
+    private static let legacyReadableGoalsHeader = "Session Flow Goals:"
+    private static let legacyReadableReviewHeader = "Session Flow Review:"
+    private static let legacyGoalsStart = "[SessionFlow Harsh Goals]"
+    private static let legacyGoalsEnd = "[/SessionFlow Harsh Goals]"
+    private static let legacyReviewStart = "[SessionFlow Harsh Review]"
+    private static let legacyReviewEnd = "[/SessionFlow Harsh Review]"
+
+    private static let goalsHeaders = [goalsHeader, legacyReadableGoalsHeader]
+    private static let reviewHeaders = [reviewHeader, legacyReadableReviewHeader]
+    private static let managedHeaders = goalsHeaders + reviewHeaders
+    private static let legacyStartMarkers = [legacyGoalsStart, legacyReviewStart]
 
     static func goalLines(from rawText: String) -> [String] {
         rawText
@@ -142,7 +259,12 @@ enum HarshModeSessionNotes {
     }
 
     static func goals(from notes: String?) -> [String] {
-        blockLines(startMarker: goalsStart, endMarker: goalsEnd, in: notes)
+        sectionLines(
+            headers: goalsHeaders,
+            legacyStartMarker: legacyGoalsStart,
+            legacyEndMarker: legacyGoalsEnd,
+            in: notes
+        )
             .map { line in
                 let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
@@ -157,90 +279,214 @@ enum HarshModeSessionNotes {
         let cleanedGoals = goals
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        let base = removingBlock(startMarker: goalsStart, endMarker: goalsEnd, from: notes)
+        let base = removingSection(
+            headers: goalsHeaders,
+            legacyStartMarker: legacyGoalsStart,
+            legacyEndMarker: legacyGoalsEnd,
+            from: notes
+        )
         guard !cleanedGoals.isEmpty else { return base }
-        return appendingBlock(
+        return appendingSection(
             to: base,
-            startMarker: goalsStart,
-            lines: cleanedGoals.map { "- \($0)" },
-            endMarker: goalsEnd
+            header: goalsHeader,
+            lines: cleanedGoals
         )
     }
 
     static func applyingReview(rating: SessionRating?, reflection: String, to notes: String?) -> String {
-        let withoutOldReview = removingBlock(startMarker: reviewStart, endMarker: reviewEnd, from: notes)
-        let withRating = rating?.applyTo(notes: withoutOldReview) ?? withoutOldReview
+        applyingReview(rating: rating, alignment: nil, reflection: reflection, to: notes)
+    }
+
+    static func applyingReview(rating: SessionRating?, alignment: SessionAlignment?, reflection: String, to notes: String?) -> String {
+        let withoutOldReview = removingSection(
+            headers: reviewHeaders,
+            legacyStartMarker: legacyReviewStart,
+            legacyEndMarker: legacyReviewEnd,
+            from: notes
+        )
+        let withRating = applyingRating(rating, to: withoutOldReview)
+        let withAlignment = applyingAlignment(alignment, to: withRating)
         let cleanedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
-        var lines: [String] = []
-        if let rating {
-            lines.append("Rating: \(rating.label)")
+        guard !cleanedReflection.isEmpty else {
+            return withAlignment
         }
-        if !cleanedReflection.isEmpty {
-            lines.append("Reflection:")
-            lines.append(contentsOf: cleanedReflection.components(separatedBy: .newlines))
-        }
-        guard !lines.isEmpty else {
-            return withRating
-        }
-        return appendingBlock(to: withRating, startMarker: reviewStart, lines: lines, endMarker: reviewEnd)
+        return appendingSection(
+            to: withAlignment,
+            header: reviewHeader,
+            lines: cleanedReflection.components(separatedBy: .newlines)
+        )
     }
 
     static func removingManagedBlocks(from notes: String?) -> String {
-        let withoutGoals = removingBlock(startMarker: goalsStart, endMarker: goalsEnd, from: notes)
-        return removingBlock(startMarker: reviewStart, endMarker: reviewEnd, from: withoutGoals)
+        let withoutGoals = removingSection(
+            headers: goalsHeaders,
+            legacyStartMarker: legacyGoalsStart,
+            legacyEndMarker: legacyGoalsEnd,
+            from: notes
+        )
+        return removingSection(
+            headers: reviewHeaders,
+            legacyStartMarker: legacyReviewStart,
+            legacyEndMarker: legacyReviewEnd,
+            from: withoutGoals
+        )
     }
 
-    private static func blockLines(startMarker: String, endMarker: String, in notes: String?) -> [String] {
+    private static func sectionLines(
+        headers: [String],
+        legacyStartMarker: String,
+        legacyEndMarker: String,
+        in notes: String?
+    ) -> [String] {
         guard let notes, !notes.isEmpty else { return [] }
-        var isInsideBlock = false
-        var result: [String] = []
+        let lines = notes.components(separatedBy: .newlines)
+        var index = 0
 
-        for line in notes.components(separatedBy: .newlines) {
+        while index < lines.count {
+            let line = lines[index]
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed == startMarker {
-                isInsideBlock = true
-                continue
+            if trimmed == legacyStartMarker {
+                var result: [String] = []
+                index += 1
+                while index < lines.count {
+                    let legacyTrimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if legacyTrimmed == legacyEndMarker {
+                        return result
+                    }
+                    result.append(lines[index])
+                    index += 1
+                }
+                return result
             }
-            if trimmed == endMarker {
-                break
+            if headers.contains(trimmed) {
+                var result: [String] = []
+                index += 1
+                while index < lines.count {
+                    let nextTrimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if isManagedHeaderStart(nextTrimmed) {
+                        break
+                    }
+                    result.append(lines[index])
+                    index += 1
+                }
+                return result
             }
-            if isInsideBlock {
-                result.append(line)
-            }
+            index += 1
         }
 
-        return result
+        return []
     }
 
-    private static func removingBlock(startMarker: String, endMarker: String, from notes: String?) -> String {
+    private static func removingSection(
+        headers: [String],
+        legacyStartMarker: String,
+        legacyEndMarker: String,
+        from notes: String?
+    ) -> String {
         guard let notes, !notes.isEmpty else { return "" }
-        var isInsideBlock = false
+        let lines = notes.components(separatedBy: .newlines)
         var result: [String] = []
+        var index = 0
 
-        for line in notes.components(separatedBy: .newlines) {
+        while index < lines.count {
+            let line = lines[index]
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmed == startMarker {
-                isInsideBlock = true
+            if trimmed == legacyStartMarker {
+                index += 1
+                while index < lines.count {
+                    let legacyTrimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                    index += 1
+                    if legacyTrimmed == legacyEndMarker {
+                        break
+                    }
+                }
                 continue
             }
-            if trimmed == endMarker {
-                isInsideBlock = false
+            if headers.contains(trimmed) {
+                index += 1
+                while index < lines.count {
+                    let nextTrimmed = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
+                    if isManagedHeaderStart(nextTrimmed) {
+                        break
+                    }
+                    index += 1
+                }
                 continue
             }
-            if !isInsideBlock {
-                result.append(line)
-            }
+            result.append(line)
+            index += 1
         }
 
         return result.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func appendingBlock(to notes: String, startMarker: String, lines: [String], endMarker: String) -> String {
+    private static func appendingSection(to notes: String, header: String, lines: [String]) -> String {
         let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
-        let block = ([startMarker] + lines + [endMarker]).joined(separator: "\n")
+        let section = ([header] + lines).joined(separator: "\n")
         if trimmedNotes.isEmpty {
-            return block
+            return section
         }
-        return "\(trimmedNotes)\n\n\(block)"
+        return "\(trimmedNotes)\n\n\(section)"
+    }
+
+    private static func isManagedHeaderStart(_ trimmedLine: String) -> Bool {
+        managedHeaders.contains(trimmedLine) || legacyStartMarkers.contains(trimmedLine)
+    }
+
+    private static func applyingRating(_ rating: SessionRating?, to notes: String) -> String {
+        guard let rating else { return notes }
+        let cleanedNotes = removingFeedbackTags(from: notes)
+        let parts = splittingBeforeFirstManagedSection(cleanedNotes)
+        let ratedPrefix = rating.applyTo(notes: parts.prefix)
+        guard !parts.suffix.isEmpty else { return ratedPrefix }
+        if ratedPrefix.isEmpty {
+            return "\(rating.tag)\n\n\(parts.suffix)"
+        }
+        return "\(ratedPrefix)\n\n\(parts.suffix)"
+    }
+
+    private static func applyingAlignment(_ alignment: SessionAlignment?, to notes: String) -> String {
+        guard let alignment else { return notes }
+        let cleanedNotes = removingAlignmentTags(from: notes)
+        let parts = splittingBeforeFirstManagedSection(cleanedNotes)
+        let alignedPrefix = alignment.applyTo(notes: parts.prefix)
+        guard !parts.suffix.isEmpty else { return alignedPrefix }
+        if alignedPrefix.isEmpty {
+            return "\(alignment.tag)\n\n\(parts.suffix)"
+        }
+        return "\(alignedPrefix)\n\n\(parts.suffix)"
+    }
+
+    private static func removingFeedbackTags(from notes: String) -> String {
+        var result = notes
+        for tag in SessionRating.allTags {
+            result = result.replacingOccurrences(of: tag, with: "")
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func removingAlignmentTags(from notes: String) -> String {
+        var result = notes
+        for tag in SessionAlignment.allTags {
+            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func splittingBeforeFirstManagedSection(_ notes: String) -> (prefix: String, suffix: String) {
+        let lines = notes.components(separatedBy: .newlines)
+        guard let firstManagedIndex = lines.firstIndex(where: { line in
+            isManagedHeaderStart(line.trimmingCharacters(in: .whitespacesAndNewlines))
+        }) else {
+            return (notes.trimmingCharacters(in: .whitespacesAndNewlines), "")
+        }
+
+        let prefix = lines[..<firstManagedIndex]
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let suffix = lines[firstManagedIndex...]
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return (prefix, suffix)
     }
 }

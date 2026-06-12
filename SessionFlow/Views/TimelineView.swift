@@ -38,7 +38,8 @@ final class EventCreationCoordinator: ObservableObject {
     @Published var durationMinutes: Int = 30
     @Published var draftTitle: String = ""
     @Published var calendarColor: Color = .blue
-    var onCommit: ((String, Date, Date, CalendarDescriptor) -> Void)?
+    @Published var draftIsFlexible: Bool = false
+    var onCommit: ((String, Date, Date, CalendarDescriptor, Bool) -> Void)?
 
     var isActive: Bool { startTime != nil }
 
@@ -47,6 +48,7 @@ final class EventCreationCoordinator: ObservableObject {
         durationMinutes = 30
         draftTitle = ""
         calendarColor = .blue
+        draftIsFlexible = false
         onCommit = nil
     }
 }
@@ -126,6 +128,8 @@ struct TimelineView: View {
     @State private var dragMode: DragMode = .none
     @State private var isShiftHeld: Bool = false
     @State private var isCommandHeld: Bool = false
+    @State private var isOptionHeld: Bool = false
+    @State private var isControlHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
     // Group drag: original times of every selected slot at drag start, and live preview targets.
     @State private var groupDragOriginalTimes: [String: (start: Date, end: Date)] = [:]
@@ -135,6 +139,13 @@ struct TimelineView: View {
     @StateObject private var eventUndoManager = EventUndoManager()
     @StateObject private var actionContext = TimelineActionContext()
     @State private var eventsLocked: Bool = false
+    @State private var elasticOriginalBusySlots: [BusyTimeSlot]? = nil
+    @State private var elasticStagedBusySlots: [BusyTimeSlot] = []
+    @State private var elasticPreDragBusySlots: [BusyTimeSlot]? = nil
+    @State private var elasticUndoStack: [ElasticEditSnapshot] = []
+    @State private var elasticRedoStack: [ElasticEditSnapshot] = []
+    @State private var elasticDisplacementMode: ElasticDisplacementMode = .bubble
+    @State private var elasticEmptySpaceAfterBySlotId: [String: TimeInterval] = [:]
     @State private var showingUnfreezeConfirmation: Bool = false
     @State private var showingCopyDatePicker: Bool = false
     @State private var copyTargetDate: Date = Date()
@@ -165,6 +176,30 @@ struct TimelineView: View {
         case resizeTop
         case resizeBottom
     }
+
+    private enum ElasticDisplacementMode: String, CaseIterable, Identifiable {
+        case bubble = "Bubble"
+        case pushDown = "Push down"
+
+        var id: String { rawValue }
+
+        var shortLabel: String {
+            switch self {
+            case .bubble: return "Bubble"
+            case .pushDown: return "Push"
+            }
+        }
+    }
+
+    private struct ElasticObstacle {
+        let start: Date
+        let paddedEnd: Date
+    }
+
+    private struct ElasticEditSnapshot {
+        let slots: [BusyTimeSlot]
+        let emptySpaceAfterBySlotId: [String: TimeInterval]
+    }
     
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
@@ -174,6 +209,14 @@ struct TimelineView: View {
     private var isExtraNarrow: Bool {
         // Use a reasonable threshold for narrow width
         containerWidth < 400
+    }
+
+    private var isElasticEditing: Bool {
+        elasticOriginalBusySlots != nil
+    }
+
+    private var elasticChangeCount: Int {
+        elasticTimeChanges().count
     }
     
     private var showingDetailSheet: Bool {
@@ -214,6 +257,8 @@ struct TimelineView: View {
                 flagsMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { event in
                     isShiftHeld = event.modifierFlags.contains(.shift)
                     isCommandHeld = event.modifierFlags.contains(.command)
+                    isOptionHeld = event.modifierFlags.contains(.option)
+                    isControlHeld = event.modifierFlags.contains(.control)
                     return event
                 }
                 // Use keyDown monitor for Esc (cancel drag) and undo/redo.
@@ -222,6 +267,10 @@ struct TimelineView: View {
                     if event.keyCode == 53 {
                         if dragMode != .none {
                             cancelDrag()
+                            return nil
+                        }
+                        if isElasticEditing {
+                            cancelElasticEditing()
                             return nil
                         }
                         if eventCreationCoordinator.isActive {
@@ -250,8 +299,7 @@ struct TimelineView: View {
                             return event
                         }
                         if !selectedBusySlotIds.isEmpty {
-                            let slotsToDelete = calendarService
-                                .busySlotsForFetchedDate(actionContext.selectedDate)
+                            let slotsToDelete = timelineBusySlots(for: actionContext.selectedDate)
                                 .filter { selectedBusySlotIds.contains($0.id) }
                             deleteSelectedSlots(slotsToDelete)
                             return nil
@@ -265,6 +313,16 @@ struct TimelineView: View {
                     if let responder = NSApp.keyWindow?.firstResponder,
                        responder is NSTextView {
                         return event
+                    }
+                    if isElasticEditing {
+                        if event.modifierFlags.contains(.shift) {
+                            guard !elasticRedoStack.isEmpty else { return event }
+                            redoElasticChange()
+                        } else {
+                            guard !elasticUndoStack.isEmpty else { return event }
+                            undoElasticChange()
+                        }
+                        return nil
                     }
                     if event.modifierFlags.contains(.shift) {
                         guard eventUndoManager.canRedo else { return event }
@@ -308,6 +366,7 @@ struct TimelineView: View {
                 containerWidth = newWidth
             }
             .onChange(of: selectedDate) { _, _ in
+                cancelElasticEditing(showToast: false)
                 actionContext.selectedDate = selectedDate
                 eventUndoManager.clear()
                 selectedBusySlotIds.removeAll()
@@ -322,7 +381,7 @@ struct TimelineView: View {
             }
             .onChange(of: calendarService.busySlots.map { $0.id }) { _, _ in
                 // Prune selection of slots that no longer exist.
-                let live = Set(calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { $0.id })
+                let live = Set(timelineBusySlots(for: actionContext.selectedDate).map { $0.id })
                 let pruned = selectedBusySlotIds.intersection(live)
                 if pruned.count != selectedBusySlotIds.count {
                     selectedBusySlotIds = pruned
@@ -421,7 +480,7 @@ struct TimelineView: View {
             legendView
         }
     }
-    
+
     private var timelineLegendBar: some View {
         let iconSize: CGFloat = isNarrow ? 11 : 14
         let textSize: CGFloat = isNarrow ? 11 : 14
@@ -897,6 +956,35 @@ struct TimelineView: View {
             .hoverEffect(brightness: 0.2)
             .help(eventsLocked ? "Unlock dragging & resizing events and sessions" : "Lock all event and session positions")
 
+            // Elastic edit mode for existing calendar events
+            Button {
+                toggleElasticEditing()
+            } label: {
+                TimelineSpringIcon()
+                    .frame(width: 16, height: 16)
+                    .padding(8)
+                    .background(isElasticEditing ? Color(hex: "3B82F6").opacity(0.16) : colors.divider)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(isElasticEditing ? Color(hex: "3B82F6").opacity(0.55) : Color.clear, lineWidth: 1)
+                    )
+                    .cornerRadius(6)
+                    .foregroundColor(isElasticEditing ? Color(hex: "3B82F6") : colors.textPrimary)
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help("""
+Elastic edit: stage calendar moves before saving.
+⌥ Option-drag: Bubble
+⌃ Control-drag: Push down
+⌘Z / ⇧⌘Z: Undo / redo staged moves
+""")
+
+            if isElasticEditing {
+                springEditingControls
+                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+            }
+
             // Toggle night button
             Button(action: {
                 withAnimation {
@@ -913,6 +1001,85 @@ struct TimelineView: View {
             .hoverEffect(brightness: 0.2)
             .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
         }
+    }
+
+    private var springEditingControls: some View {
+        HStack(spacing: 8) {
+            HStack(spacing: 6) {
+                TimelineSpringIcon()
+                    .frame(width: 17, height: 17)
+                Text("Spring")
+                    .font(.system(size: 12, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(Color(hex: "3B82F6"))
+
+            Divider()
+                .frame(height: 22)
+
+            Picker("", selection: $elasticDisplacementMode) {
+                ForEach(ElasticDisplacementMode.allCases) { mode in
+                    Text(mode.shortLabel).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .controlSize(.small)
+            .frame(width: isExtraNarrow ? 92 : 112)
+            .help("""
+Elastic displacement mode.
+Bubble: only colliding flexible events move.
+Push: downstream flexible events move together after a collision.
+""")
+
+            Text("\(elasticChangeCount) staged")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(Color(hex: "3B82F6"))
+                .cornerRadius(6)
+                .help("\(elasticChangeCount) staged elastic changes")
+
+            Button {
+                cancelElasticEditing()
+            } label: {
+                Image(systemName: "xmark")
+                    .frame(width: 14, height: 14)
+                    .padding(7)
+            }
+            .buttonStyle(.plain)
+            .background(colors.panelBackground.opacity(0.9))
+            .cornerRadius(6)
+            .hoverEffect(brightness: 0.2)
+            .help("Cancel staged elastic changes")
+
+            Button {
+                saveElasticEditing()
+            } label: {
+                Image(systemName: "checkmark")
+                    .frame(width: 14, height: 14)
+                    .padding(7)
+            }
+            .buttonStyle(.plain)
+            .background(elasticChangeCount == 0 ? colors.panelBackground.opacity(0.9) : Color(hex: "10B981"))
+            .foregroundColor(elasticChangeCount == 0 ? colors.textMuted : .white)
+            .cornerRadius(6)
+            .disabled(elasticChangeCount == 0)
+            .hoverEffect(brightness: elasticChangeCount == 0 ? 0 : 0.15)
+            .help("Save staged elastic changes")
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(hex: "3B82F6").opacity(colors.isDark ? 0.18 : 0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(hex: "3B82F6").opacity(0.55), lineWidth: 1)
+        )
+        .help("Spring mode is active: moves are staged until saved or canceled")
     }
     
     private var legendPopoverContent: some View {
@@ -958,6 +1125,45 @@ private struct WidthPreferenceKey: PreferenceKey {
     }
 }
 
+private struct TimelineSpringIcon: View {
+    var body: some View {
+        SpringShape()
+            .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+    }
+}
+
+private struct SpringShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let midY = rect.midY
+        let amplitude = rect.height * 0.28
+        let left = rect.minX + rect.width * 0.08
+        let right = rect.maxX - rect.width * 0.08
+        let lead = rect.width * 0.12
+        let coilStart = left + lead
+        let coilEnd = right - lead
+        let segments = 8
+        let step = (coilEnd - coilStart) / CGFloat(segments)
+
+        path.move(to: CGPoint(x: left, y: midY))
+        path.addLine(to: CGPoint(x: coilStart, y: midY))
+
+        for index in 0...segments {
+            let x = coilStart + CGFloat(index) * step
+            let y: CGFloat
+            if index == 0 || index == segments {
+                y = midY
+            } else {
+                y = midY + (index.isMultiple(of: 2) ? -amplitude : amplitude)
+            }
+            path.addLine(to: CGPoint(x: x, y: y))
+        }
+
+        path.addLine(to: CGPoint(x: right, y: midY))
+        return path
+    }
+}
+
 extension TimelineView {
     
     private struct PositionedBusySlot: Identifiable {
@@ -969,7 +1175,7 @@ extension TimelineView {
     
     private var filteredBusySlots: [BusyTimeSlot] {
         let excluded = calendarService.excludedCalendarIDs
-        let slots = calendarService.busySlotsForFetchedDate(selectedDate)
+        let slots = timelineBusySlots(for: selectedDate)
         guard !excluded.isEmpty else { return slots }
         return slots.filter { slot in
             guard let identifier = slot.calendarIdentifier else { return true }
@@ -993,6 +1199,489 @@ extension TimelineView {
     
     private var busySlotsWithLayout: [PositionedBusySlot] {
         layoutBusySlots(filteredBusySlots)
+    }
+
+    private func timelineBusySlots(for date: Date) -> [BusyTimeSlot] {
+        if isElasticEditing, Calendar.current.isDate(date, inSameDayAs: selectedDate) {
+            return elasticStagedBusySlots
+        }
+        return calendarService.busySlotsForFetchedDate(date)
+    }
+
+    private var timelineDisplacementFloor: Date {
+        if shouldShowCurrentTimeIndicator {
+            return effectiveNowTimeForIndicator
+        }
+        return Calendar.current.startOfDay(for: selectedDate)
+    }
+
+    private func clampedToDisplacementFloor(_ date: Date) -> Date {
+        max(date, timelineDisplacementFloor)
+    }
+
+    private func clampedForElasticDrag(_ date: Date) -> Date {
+        isElasticEditing ? clampedToDisplacementFloor(date) : date
+    }
+
+    private var elasticAwareEarliestTime: Date {
+        isElasticEditing ? max(actionContext.startTime, timelineDisplacementFloor) : actionContext.startTime
+    }
+
+    private func toggleElasticEditing() {
+        if isElasticEditing {
+            if elasticChangeCount == 0 {
+                cancelElasticEditing()
+            } else {
+                onModeToast?("Save or cancel elastic edits")
+            }
+        } else {
+            beginElasticEditing()
+        }
+    }
+
+    private func beginElasticEditing(mode: ElasticDisplacementMode = .bubble, showToast: Bool = true, preserveSelection: Bool = false) {
+        guard !eventsLocked else {
+            onModeToast?("Unlock events to use elastic editing")
+            return
+        }
+        guard !isElasticEditing else { return }
+
+        let preservedSelection = selectedBusySlotIds
+        dismissTransientInteractionState()
+        if preserveSelection {
+            selectedBusySlotIds = preservedSelection
+        }
+        let snapshot = calendarService.busySlotsForFetchedDate(actionContext.selectedDate)
+        elasticOriginalBusySlots = snapshot
+        elasticStagedBusySlots = snapshot
+        elasticPreDragBusySlots = nil
+        elasticEmptySpaceAfterBySlotId = calculateElasticEmptySpaceAfterBySlotId(for: snapshot)
+        elasticUndoStack.removeAll()
+        elasticRedoStack.removeAll()
+        elasticDisplacementMode = mode
+
+        if showToast {
+            onModeToast?("Elastic editing enabled")
+        }
+    }
+
+    private func requestedElasticModeForDrag() -> ElasticDisplacementMode? {
+        let flags = NSEvent.modifierFlags
+        if flags.contains(.control) || isControlHeld {
+            return .pushDown
+        }
+        if flags.contains(.option) || isOptionHeld {
+            return .bubble
+        }
+        return nil
+    }
+
+    private func activateElasticModeForDragIfNeeded() {
+        guard let requestedMode = requestedElasticModeForDrag() else { return }
+        if isElasticEditing {
+            elasticDisplacementMode = requestedMode
+        } else {
+            beginElasticEditing(mode: requestedMode, preserveSelection: true)
+        }
+    }
+
+    private func cancelElasticEditing(showToast: Bool = true) {
+        guard isElasticEditing else { return }
+        elasticOriginalBusySlots = nil
+        elasticStagedBusySlots = []
+        elasticPreDragBusySlots = nil
+        elasticEmptySpaceAfterBySlotId = [:]
+        elasticUndoStack.removeAll()
+        elasticRedoStack.removeAll()
+        selectedBusySlotIds.removeAll()
+        resetDragState()
+        recalculateWithOriginalSlots()
+
+        if showToast {
+            onModeToast?("Elastic edits discarded")
+        }
+    }
+
+    private func saveElasticEditing() {
+        let changes = elasticTimeChanges()
+        guard !changes.isEmpty else {
+            cancelElasticEditing()
+            return
+        }
+
+        let updates = changes.map {
+            (eventId: $0.eventId, newStart: $0.newStartTime, newEnd: $0.newEndTime)
+        }
+
+        guard calendarService.updateEventTimes(updates) else {
+            onModeToast?("Failed to save elastic edits")
+            return
+        }
+
+        eventUndoManager.recordBatch(changes)
+        for change in changes {
+            optimisticallyUpdateSlot(id: change.eventId, newStart: change.newStartTime, newEnd: change.newEndTime)
+        }
+
+        let savedCount = changes.count
+        elasticOriginalBusySlots = nil
+        elasticStagedBusySlots = []
+        elasticPreDragBusySlots = nil
+        elasticEmptySpaceAfterBySlotId = [:]
+        elasticUndoStack.removeAll()
+        elasticRedoStack.removeAll()
+        selectedBusySlotIds.removeAll()
+        resetDragState()
+
+        onModeToast?(savedCount == 1 ? "Saved 1 event move" : "Saved \(savedCount) event moves")
+        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+    }
+
+    private func recordElasticUndoSnapshot(_ snapshot: [BusyTimeSlot]) {
+        elasticUndoStack.append(
+            ElasticEditSnapshot(
+                slots: snapshot,
+                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
+            )
+        )
+        if elasticUndoStack.count > 50 {
+            elasticUndoStack.removeFirst()
+        }
+        elasticRedoStack.removeAll()
+    }
+
+    private func undoElasticChange() {
+        guard let previous = elasticUndoStack.popLast() else { return }
+        elasticRedoStack.append(
+            ElasticEditSnapshot(
+                slots: elasticStagedBusySlots,
+                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
+            )
+        )
+        elasticStagedBusySlots = previous.slots
+        elasticEmptySpaceAfterBySlotId = previous.emptySpaceAfterBySlotId
+        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        onModeToast?("Undid elastic move")
+    }
+
+    private func redoElasticChange() {
+        guard let next = elasticRedoStack.popLast() else { return }
+        elasticUndoStack.append(
+            ElasticEditSnapshot(
+                slots: elasticStagedBusySlots,
+                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
+            )
+        )
+        elasticStagedBusySlots = next.slots
+        elasticEmptySpaceAfterBySlotId = next.emptySpaceAfterBySlotId
+        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        onModeToast?("Redid elastic move")
+    }
+
+    private func elasticTimeChanges() -> [EventUndoManager.EventTimeChange] {
+        guard let original = elasticOriginalBusySlots else { return [] }
+        let originalsById = Dictionary(uniqueKeysWithValues: original.map { ($0.id, $0) })
+
+        return elasticStagedBusySlots
+            .compactMap { staged -> EventUndoManager.EventTimeChange? in
+                guard let old = originalsById[staged.id],
+                      old.startTime != staged.startTime || old.endTime != staged.endTime else {
+                    return nil
+                }
+                return EventUndoManager.EventTimeChange(
+                    eventId: staged.id,
+                    oldStartTime: old.startTime,
+                    oldEndTime: old.endTime,
+                    newStartTime: staged.startTime,
+                    newEndTime: staged.endTime,
+                    description: "Elastic move \(staged.title)"
+                )
+            }
+            .sorted { $0.oldStartTime < $1.oldStartTime }
+    }
+
+    private func busySlot(_ slot: BusyTimeSlot, replacingStart start: Date, end: Date) -> BusyTimeSlot {
+        BusyTimeSlot(
+            id: slot.id,
+            title: slot.title,
+            startTime: start,
+            endTime: end,
+            notes: slot.notes,
+            url: slot.url,
+            calendarName: slot.calendarName,
+            calendarColor: slot.calendarColor,
+            calendarIdentifier: slot.calendarIdentifier
+        )
+    }
+
+    private func applyingTimeUpdates(
+        to slots: [BusyTimeSlot],
+        updates: [String: (start: Date, end: Date)]
+    ) -> [BusyTimeSlot] {
+        slots.map { slot in
+            guard let update = updates[slot.id] else { return slot }
+            return busySlot(slot, replacingStart: update.start, end: update.end)
+        }
+    }
+
+    private func calculateElasticEmptySpaceAfterBySlotId(for slots: [BusyTimeSlot]) -> [String: TimeInterval] {
+        let sortedSlots = slots.sorted {
+            if $0.startTime == $1.startTime {
+                return $0.endTime < $1.endTime
+            }
+            return $0.startTime < $1.startTime
+        }
+        guard sortedSlots.count > 1 else { return [:] }
+
+        var gaps: [String: TimeInterval] = [:]
+        for index in sortedSlots.indices.dropLast() {
+            let current = sortedSlots[index]
+            let next = sortedSlots[sortedSlots.index(after: index)]
+            let gap = next.startTime.timeIntervalSince(current.endTime)
+            if gap > 0 {
+                gaps[current.id] = gap
+            }
+        }
+        return gaps
+    }
+
+    private func elasticGapMap(
+        adjustingForDraggedUpdates draggedUpdates: [String: (start: Date, end: Date)],
+        in baseSlots: [BusyTimeSlot]
+    ) -> [String: TimeInterval] {
+        guard !draggedUpdates.isEmpty else { return elasticEmptySpaceAfterBySlotId }
+
+        var adjusted = elasticEmptySpaceAfterBySlotId
+        let directlyMovedSlots = applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
+        let directEmptySpaceAfterBySlotId = calculateElasticEmptySpaceAfterBySlotId(for: directlyMovedSlots)
+
+        for (id, preservedGap) in Array(adjusted) {
+            let directGap = directEmptySpaceAfterBySlotId[id] ?? 0
+            if directGap < preservedGap {
+                adjusted[id] = max(0, directGap)
+            }
+        }
+
+        return adjusted
+    }
+
+    private func elasticObstacle(start: Date, end: Date, gapAfter: TimeInterval) -> ElasticObstacle {
+        ElasticObstacle(start: start, paddedEnd: end.addingTimeInterval(gapAfter))
+    }
+
+    private func elasticObstacle(for slot: BusyTimeSlot, gapAfterBySlotId: [String: TimeInterval]) -> ElasticObstacle {
+        elasticObstacle(
+            start: slot.startTime,
+            end: slot.endTime,
+            gapAfter: gapAfterBySlotId[slot.id] ?? 0
+        )
+    }
+
+    private func elasticBlockingEnd(
+        candidateStart: Date,
+        candidateEnd: Date,
+        candidateGapAfter: TimeInterval,
+        obstacles: [ElasticObstacle]
+    ) -> Date? {
+        let candidatePaddedEnd = candidateEnd.addingTimeInterval(candidateGapAfter)
+        return obstacles
+            .filter { candidateStart < $0.paddedEnd && candidatePaddedEnd > $0.start }
+            .map { $0.paddedEnd }
+            .max()
+    }
+
+    private func displaceBusySlots(
+        baseSlots: [BusyTimeSlot],
+        draggedUpdates: [String: (start: Date, end: Date)],
+        commitDraggedSlots: Bool,
+        gapAfterBySlotId: [String: TimeInterval]? = nil
+    ) -> [BusyTimeSlot] {
+        let gapAfterBySlotId = gapAfterBySlotId ?? elasticGapMap(
+            adjustingForDraggedUpdates: draggedUpdates,
+            in: baseSlots
+        )
+
+        if elasticDisplacementMode == .pushDown,
+           let pushed = pushDownBusySlots(
+            baseSlots: baseSlots,
+            draggedUpdates: draggedUpdates,
+            commitDraggedSlots: commitDraggedSlots,
+            gapAfterBySlotId: gapAfterBySlotId
+           ) {
+            return pushed
+        }
+
+        let draggedIds = Set(draggedUpdates.keys)
+        var result = commitDraggedSlots
+            ? applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
+            : baseSlots
+
+        var causedObstacles = draggedUpdates.map { entry in
+            elasticObstacle(
+                start: entry.value.start,
+                end: entry.value.end,
+                gapAfter: gapAfterBySlotId[entry.key] ?? 0
+            )
+        }
+        var allObstacles = causedObstacles
+        let floor = timelineDisplacementFloor
+
+        for slot in baseSlots where !draggedIds.contains(slot.id) {
+            if !slot.isFlowFlexible || slot.startTime < floor {
+                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
+            }
+        }
+
+        let candidates = baseSlots
+            .filter { !draggedIds.contains($0.id) && $0.isFlowFlexible && $0.startTime >= floor }
+            .sorted { $0.startTime < $1.startTime }
+
+        for slot in candidates {
+            let duration = slot.endTime.timeIntervalSince(slot.startTime)
+            let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
+            var candidateStart = max(slot.startTime, floor)
+            var candidateEnd = slot.endTime
+            var moved = false
+
+            while true {
+                let causedEnd = elasticBlockingEnd(
+                    candidateStart: candidateStart,
+                    candidateEnd: candidateEnd,
+                    candidateGapAfter: candidateGapAfter,
+                    obstacles: causedObstacles
+                )
+
+                if let causedEnd {
+                    candidateStart = max(causedEnd, floor)
+                    candidateEnd = candidateStart.addingTimeInterval(duration)
+                    moved = true
+                    continue
+                }
+
+                let obstacleEnd = elasticBlockingEnd(
+                    candidateStart: candidateStart,
+                    candidateEnd: candidateEnd,
+                    candidateGapAfter: candidateGapAfter,
+                    obstacles: allObstacles
+                )
+
+                if moved, let obstacleEnd {
+                    candidateStart = max(obstacleEnd, floor)
+                    candidateEnd = candidateStart.addingTimeInterval(duration)
+                    continue
+                }
+
+                break
+            }
+
+            if moved {
+                if let index = result.firstIndex(where: { $0.id == slot.id }) {
+                    result[index] = busySlot(slot, replacingStart: candidateStart, end: candidateEnd)
+                }
+                let obstacle = elasticObstacle(
+                    start: candidateStart,
+                    end: candidateEnd,
+                    gapAfter: candidateGapAfter
+                )
+                causedObstacles.append(obstacle)
+                allObstacles.append(obstacle)
+            } else {
+                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
+            }
+        }
+
+        return result
+    }
+
+    private func pushDownBusySlots(
+        baseSlots: [BusyTimeSlot],
+        draggedUpdates: [String: (start: Date, end: Date)],
+        commitDraggedSlots: Bool,
+        gapAfterBySlotId: [String: TimeInterval]
+    ) -> [BusyTimeSlot]? {
+        let draggedIds = Set(draggedUpdates.keys)
+        let originalsById = Dictionary(uniqueKeysWithValues: baseSlots.map { ($0.id, $0) })
+        let positiveTranslation = draggedUpdates.compactMap { entry -> TimeInterval? in
+            guard let original = originalsById[entry.key] else { return nil }
+            return entry.value.start.timeIntervalSince(original.startTime)
+        }
+        .filter { $0 > 0 }
+        .max()
+
+        guard let translation = positiveTranslation else { return nil }
+
+        let floor = timelineDisplacementFloor
+        let draggedObstacles = draggedUpdates.map { entry in
+            elasticObstacle(
+                start: entry.value.start,
+                end: entry.value.end,
+                gapAfter: gapAfterBySlotId[entry.key] ?? 0
+            )
+        }
+        let pushAnchor = draggedUpdates.keys
+            .compactMap { originalsById[$0]?.startTime }
+            .min() ?? floor
+
+        let hasDownstreamCollision = baseSlots
+            .filter { !draggedIds.contains($0.id) && $0.endTime > floor }
+            .contains { slot in
+                let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
+                return elasticBlockingEnd(
+                    candidateStart: slot.startTime,
+                    candidateEnd: slot.endTime,
+                    candidateGapAfter: candidateGapAfter,
+                    obstacles: draggedObstacles
+                ) != nil
+            }
+
+        guard hasDownstreamCollision else { return nil }
+
+        var result = commitDraggedSlots
+            ? applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
+            : baseSlots
+
+        var allObstacles = draggedObstacles
+
+        for slot in baseSlots where !draggedIds.contains(slot.id) {
+            let isPushCandidate = slot.isFlowFlexible && slot.startTime >= floor && slot.startTime >= pushAnchor
+            if !isPushCandidate {
+                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
+            }
+        }
+
+        let candidates = baseSlots
+            .filter { !draggedIds.contains($0.id) && $0.isFlowFlexible && $0.startTime >= floor && $0.startTime >= pushAnchor }
+            .sorted { $0.startTime < $1.startTime }
+
+        for slot in candidates {
+            let duration = slot.endTime.timeIntervalSince(slot.startTime)
+            let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
+            var candidateStart = max(slot.startTime.addingTimeInterval(translation), floor)
+            var candidateEnd = candidateStart.addingTimeInterval(duration)
+
+            while let blockerEnd = elasticBlockingEnd(
+                candidateStart: candidateStart,
+                candidateEnd: candidateEnd,
+                candidateGapAfter: candidateGapAfter,
+                obstacles: allObstacles
+            ) {
+                candidateStart = max(blockerEnd, floor)
+                candidateEnd = candidateStart.addingTimeInterval(duration)
+            }
+
+            if let index = result.firstIndex(where: { $0.id == slot.id }) {
+                result[index] = busySlot(slot, replacingStart: candidateStart, end: candidateEnd)
+            }
+            allObstacles.append(
+                elasticObstacle(
+                    start: candidateStart,
+                    end: candidateEnd,
+                    gapAfter: candidateGapAfter
+                )
+            )
+        }
+
+        return result
     }
     
     private var timeColumnView: some View {
@@ -1241,14 +1930,28 @@ extension TimelineView {
                 )
 
             let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
+            let goals = HarshModeSessionNotes.goals(from: slot.notes)
+            let showsGoalReminder = !goals.isEmpty
+            let urlMinimumHeight: CGFloat = showsGoalReminder ? 76 : 35
+            let notesMinimumHeight: CGFloat = showsGoalReminder ? 92 : 45
 
             VStack(alignment: .leading, spacing: 1) {
                 if height <= compactBlockLayoutHeight {
                     HStack(spacing: 3) {
+                        if slot.isFlowFlexible && !slot.isSessionFlowOwned {
+                            TimelineSpringIcon()
+                                .frame(width: 10, height: 10)
+                                .foregroundColor(colors.textSecondary)
+                        }
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(colors.textPrimary)
                             .lineLimit(1)
+
+                        if showsGoalReminder {
+                            busySlotGoalReminder(goals, inline: true, compact: true)
+                        }
+
                         Spacer(minLength: 2)
                         Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                             .font(.system(size: 10))
@@ -1258,18 +1961,29 @@ extension TimelineView {
                             .padding(.trailing, showsFeedbackBadge ? 16 : 0)
                     }
                 } else {
-                    Text(slot.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(colors.textPrimary)
-                        .lineLimit(nil)
-                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        if slot.isFlowFlexible && !slot.isSessionFlowOwned {
+                            TimelineSpringIcon()
+                                .frame(width: 11, height: 11)
+                                .foregroundColor(colors.textSecondary)
+                        }
+                        Text(slot.title)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(colors.textPrimary)
+                            .lineLimit(showsGoalReminder ? 1 : nil)
+                            .fixedSize(horizontal: false, vertical: !showsGoalReminder)
+
+                        if showsGoalReminder {
+                            busySlotGoalReminder(goals, inline: true)
+                        }
+                    }
 
                     Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
                         .foregroundColor(colors.textSecondary)
                 }
 
-                if let url = slot.url, height > 35 {
+                if let url = slot.url, height > urlMinimumHeight {
                     Text(url.absoluteString)
                         .font(.system(size: 9))
                         .foregroundColor(Color(hex: "3B82F6"))
@@ -1277,7 +1991,7 @@ extension TimelineView {
                         .truncationMode(.middle)
                 }
 
-                if let notes = SessionAwarenessService.strippedNotes(slot.notes), height > 45 {
+                if let notes = editableNotes(from: SessionAwarenessService.strippedNotes(slot.notes)), height > notesMinimumHeight {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(colors.textSecondary)
@@ -1325,8 +2039,12 @@ extension TimelineView {
                         } else if startY > blockHeight - edgeZone {
                             dragMode = .resizeBottom
                         } else {
+                            activateElasticModeForDragIfNeeded()
                             dragMode = .move
                             NSCursor.closedHand.push()
+                            if isElasticEditing {
+                                elasticPreDragBusySlots = elasticStagedBusySlots
+                            }
                             // If dragged slot isn't part of the selection, reset selection to it.
                             // Resize stays single-event (no selection change).
                             if !selectedBusySlotIds.contains(slot.id) {
@@ -1334,7 +2052,7 @@ extension TimelineView {
                             }
                             // Snapshot original times for every selected slot (for group drag).
                             if selectedBusySlotIds.count > 1 {
-                                let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { ($0.id, $0) })
+                                let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
                                 var snapshot: [String: (start: Date, end: Date)] = [:]
                                 for id in selectedBusySlotIds {
                                     if let s = slotsById[id] {
@@ -1345,6 +2063,9 @@ extension TimelineView {
                                 groupDragPreviewTimes = snapshot
                             }
                         }
+                        if isElasticEditing, dragMode != .move {
+                            elasticPreDragBusySlots = elasticStagedBusySlots
+                        }
                         dragSlotId = slot.id
                     }
 
@@ -1354,7 +2075,7 @@ extension TimelineView {
                         let originalY = calculateYPosition(for: slot.startTime)
                         let newY = originalY + value.translation.height
                         let rawDate = dateFromYOffset(newY)
-                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
                         dragPreviewStartTime = newStart
                         dragPreviewEndTime = newStart.addingTimeInterval(duration)
 
@@ -1375,7 +2096,7 @@ extension TimelineView {
                         let originalY = calculateYPosition(for: slot.startTime)
                         let newY = originalY + value.translation.height
                         let rawDate = dateFromYOffset(newY)
-                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
                         let maxStart = slot.endTime.addingTimeInterval(-5 * 60)
                         dragPreviewStartTime = min(newStart, maxStart)
                         dragPreviewEndTime = slot.endTime
@@ -1399,7 +2120,19 @@ extension TimelineView {
                         let now = Date()
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
-                            if !groupDragOriginalTimes.isEmpty {
+                            if isElasticEditing {
+                                let updates: [String: (start: Date, end: Date)] = !groupDragPreviewTimes.isEmpty
+                                    ? groupDragPreviewTimes
+                                    : [slot.id: (start: previewStart, end: previewEnd)]
+                                let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+                                let displaced = displaceBusySlots(
+                                    baseSlots: baseSlots,
+                                    draggedUpdates: updates,
+                                    commitDraggedSlots: false
+                                )
+                                elasticStagedBusySlots = displaced
+                                recalculateProjectedSchedule(using: applyingTimeUpdates(to: displaced, updates: updates))
+                            } else if !groupDragOriginalTimes.isEmpty {
                                 recalculateWithDraggedSlots(groupDragPreviewTimes)
                             } else {
                                 recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
@@ -1436,6 +2169,13 @@ extension TimelineView {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     selectedSession = nil
                     selectedBusySlot = slot
+                }
+            }
+            if !slot.isSessionFlowOwned {
+                Button(slot.isFlowFlexible ? "Mark Fixed" : "Mark Flexible") {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        setBusySlotFlexible(slot, isFlexible: !slot.isFlowFlexible)
+                    }
                 }
             }
             Divider()
@@ -1479,6 +2219,57 @@ extension TimelineView {
                     }
                 }
             }
+        }
+    }
+
+    private func busySlotGoalReminder(_ goals: [String], inline: Bool = false, compact: Bool = false) -> some View {
+        HStack(alignment: .top, spacing: 4) {
+            Image(systemName: "scope")
+                .font(.system(size: compact ? 8 : 9, weight: .semibold))
+                .foregroundColor(busySlotGoalColor)
+                .padding(.top, compact ? 0 : 1)
+
+            Text(busySlotGoalReminderText(goals))
+                .font(.system(size: compact ? 8 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 10 : 9), weight: .semibold))
+                .foregroundColor(busySlotGoalColor)
+                .lineLimit(inline ? 1 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1))
+                .truncationMode(.tail)
+        }
+        .padding(.horizontal, sessionAwarenessService.config.harshModeReminderStyle == .prominent ? (compact ? 3 : 5) : 0)
+        .padding(.vertical, sessionAwarenessService.config.harshModeReminderStyle == .prominent && !compact ? 2 : 0)
+        .background(busySlotGoalBackground)
+        .overlay(busySlotGoalBorder)
+        .cornerRadius(4)
+        .layoutPriority(inline ? 1 : 0)
+    }
+
+    private func busySlotGoalReminderText(_ goals: [String]) -> String {
+        switch sessionAwarenessService.config.harshModeReminderStyle {
+        case .compact:
+            return goals.first ?? ""
+        case .prominent:
+            return goals.prefix(2).joined(separator: " / ")
+        }
+    }
+
+    private var busySlotGoalColor: Color {
+        colors.isDark ? .orange.opacity(0.95) : Color(hex: "C2410C")
+    }
+
+    @ViewBuilder
+    private var busySlotGoalBackground: some View {
+        if sessionAwarenessService.config.harshModeReminderStyle == .prominent {
+            colors.isDark ? Color.orange.opacity(0.12) : Color(hex: "FFEDD5")
+        } else {
+            Color.clear
+        }
+    }
+
+    @ViewBuilder
+    private var busySlotGoalBorder: some View {
+        if sessionAwarenessService.config.harshModeReminderStyle == .prominent {
+            RoundedRectangle(cornerRadius: 4)
+                .stroke(colors.isDark ? Color.orange.opacity(0.22) : Color(hex: "FDBA74"), lineWidth: 1)
         }
     }
     
@@ -1615,7 +2406,7 @@ extension TimelineView {
                         let originalY = calculateYPosition(for: session.startTime)
                         let newY = originalY + value.translation.height
                         let rawDate = dateFromYOffset(newY)
-                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
                         dragPreviewStartTime = newStart
                         dragPreviewEndTime = newStart.addingTimeInterval(duration)
 
@@ -1623,7 +2414,7 @@ extension TimelineView {
                         let originalY = calculateYPosition(for: session.startTime)
                         let newY = originalY + value.translation.height
                         let rawDate = dateFromYOffset(newY)
-                        let newStart = isShiftHeld ? rawDate : snapToInterval(rawDate)
+                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
                         let maxStart = session.endTime.addingTimeInterval(-5 * 60)
                         dragPreviewStartTime = min(newStart, maxStart)
                         dragPreviewEndTime = session.endTime
@@ -1655,8 +2446,8 @@ extension TimelineView {
                                 draggedSessionId: session.id,
                                 draggedStart: previewStart,
                                 draggedEnd: previewEnd,
-                                busySlots: calendarService.busySlotsForFetchedDate(actionContext.selectedDate),
-                                earliestTime: actionContext.startTime
+                                busySlots: timelineBusySlots(for: actionContext.selectedDate),
+                                earliestTime: elasticAwareEarliestTime
                             )
                         }
                     }
@@ -1854,11 +2645,18 @@ extension TimelineView {
     
     private func busySlotDetailContent(_ slot: BusyTimeSlot) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 18))
-                    .foregroundColor(slot.calendarColor)
-                    .frame(width: 18)
+                HStack(alignment: .top) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 18))
+                        .foregroundColor(slot.calendarColor)
+                        .frame(width: 18)
+
+                    if slot.isFlowFlexible && !slot.isSessionFlowOwned {
+                        TimelineSpringIcon()
+                            .frame(width: 14, height: 14)
+                            .foregroundColor(colors.textSecondary)
+                            .padding(.top, 2)
+                    }
                 
                 // Inline editable title
                 if isEditingTitle {
@@ -1916,6 +2714,20 @@ extension TimelineView {
                     Text(slot.calendarName)
                 }
                 .help("To change calendar, use Calendar app")
+
+                HStack(spacing: 8) {
+                    Image(systemName: "arrow.left.and.right")
+                        .frame(width: 16)
+                    Toggle("Flexible", isOn: Binding(
+                        get: { slot.isFlowFlexible },
+                        set: { setBusySlotFlexible(slot, isFlexible: $0) }
+                    ))
+                    .toggleStyle(.checkbox)
+                    .disabled(slot.isSessionFlowOwned)
+                    .help(slot.isSessionFlowOwned
+                        ? "SessionFlow-tagged events are flexible automatically."
+                        : "Allows elastic editing to move this external calendar event.")
+                }
                 
                 // Notes section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
@@ -1951,7 +2763,7 @@ extension TimelineView {
                                     return .ignored
                                 }
                         }
-                    } else if let displayNotes = SessionRating.stripFeedbackTags(slot.notes), !displayNotes.isEmpty {
+                    } else if let displayNotes = editableNotes(from: slot.notes), !displayNotes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
@@ -1962,7 +2774,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let stripped = SessionRating.stripFeedbackTags(slot.notes) ?? ""
+                            let stripped = editableNotes(from: slot.notes) ?? ""
                             originalNotes = stripped
                             editingNotes = stripped
                             isEditingNotes = true
@@ -1992,6 +2804,9 @@ extension TimelineView {
                     VStack(alignment: .leading, spacing: 4) {
                         Divider().background(colors.divider)
                         feedbackPicker(for: slot)
+                        if shouldShowAlignmentPicker(for: slot) {
+                            alignmentPicker(for: slot)
+                        }
                     }
                 }
 
@@ -2084,7 +2899,7 @@ extension TimelineView {
                     isEditingTitle = true
                     focusedField = .title
                 case .notes:
-                    let stripped = SessionRating.stripFeedbackTags(slot.notes) ?? ""
+                    let stripped = editableNotes(from: slot.notes) ?? ""
                     originalNotes = stripped
                     editingNotes = stripped
                     isEditingNotes = true
@@ -2099,6 +2914,38 @@ extension TimelineView {
                 autoFocusField = nil
             }
         }
+    }
+
+    private func editableNotes(from notes: String?) -> String? {
+        FlowFlexibilityNotes.strippingTags(from: SessionAlignment.stripAlignmentTags(SessionRating.stripFeedbackTags(notes)))
+    }
+
+    private func reviewTags(from notes: String?) -> String {
+        var tags: [String] = []
+        if let rating = SessionRating.fromNotes(notes) {
+            tags.append(rating.tag)
+        }
+        if let alignment = SessionAlignment.fromNotes(notes) {
+            tags.append(alignment.tag)
+        }
+        return tags.isEmpty ? "" : " " + tags.joined(separator: " ")
+    }
+
+    private func setBusySlotFlexible(_ slot: BusyTimeSlot, isFlexible: Bool) {
+        guard !slot.isSessionFlowOwned else { return }
+        guard calendarService.setEventFlexible(eventId: slot.id, isFlexible: isFlexible) else {
+            onModeToast?("Failed to update flexibility")
+            return
+        }
+
+        let updatedNotes = FlowFlexibilityNotes.applyingFlexible(isFlexible, to: slot.notes)
+        optimisticallyUpdateSlotNotes(id: slot.id, notes: updatedNotes)
+        if selectedBusySlot?.id == slot.id,
+           let updated = timelineBusySlots(for: actionContext.selectedDate).first(where: { $0.id == slot.id }) {
+            selectedBusySlot = updated
+        }
+        onModeToast?(isFlexible ? "Marked flexible" : "Marked fixed")
+        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
     }
     
     // MARK: - Copy Target Days
@@ -2132,6 +2979,10 @@ extension TimelineView {
     }
 
     private func deleteBusySlot(_ slot: BusyTimeSlot) {
+        guard !isElasticEditing else {
+            onModeToast?("Save or cancel elastic edits first")
+            return
+        }
         let snapshot = EventDeleteSnapshot(
             eventId: slot.id,
             title: slot.title,
@@ -2151,6 +3002,10 @@ extension TimelineView {
 
     /// Atomically deletes multiple slots — one undo step for the whole batch.
     private func deleteSelectedSlots(_ slots: [BusyTimeSlot]) {
+        guard !isElasticEditing else {
+            onModeToast?("Save or cancel elastic edits first")
+            return
+        }
         guard !slots.isEmpty else { return }
         var snapshots: [EventDeleteSnapshot] = []
         for slot in slots {
@@ -2209,29 +3064,36 @@ extension TimelineView {
             onModeToast?("Events locked")
             return
         }
+        guard !isElasticEditing else {
+            onModeToast?("Save or cancel elastic edits first")
+            return
+        }
         // Close any open detail sheet
         selectedSession = nil
         selectedBusySlot = nil
         resetEditingState()
 
-        eventCreationCoordinator.onCommit = { title, start, end, calendar in
-            createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar)
+        eventCreationCoordinator.onCommit = { title, start, end, calendar, isFlexible in
+            createEventFromTimeline(title: title, startDate: start, endDate: end, calendar: calendar, isFlexible: isFlexible)
         }
         eventCreationCoordinator.durationMinutes = 30
         eventCreationCoordinator.draftTitle = ""
         eventCreationCoordinator.calendarColor = .blue
+        eventCreationCoordinator.draftIsFlexible = false
 
         withAnimation(.easeOut(duration: 0.15)) {
             eventCreationCoordinator.startTime = time
         }
     }
 
-    private func createEventFromTimeline(title: String, startDate: Date, endDate: Date, calendar: CalendarDescriptor) {
+    private func createEventFromTimeline(title: String, startDate: Date, endDate: Date, calendar: CalendarDescriptor, isFlexible: Bool) {
+        let notes = FlowFlexibilityNotes.applyingFlexible(isFlexible, to: nil)
         guard let eventId = calendarService.createEventReturningId(
             title: title,
             startDate: startDate,
             endDate: endDate,
-            calendar: calendar
+            calendar: calendar,
+            notes: notes
         ) else {
             onModeToast?("Failed to create event")
             return
@@ -2241,7 +3103,7 @@ extension TimelineView {
         let snapshot = EventDeleteSnapshot(
             eventId: eventId,
             title: title,
-            notes: nil,
+            notes: notes,
             url: nil,
             startDate: startDate,
             endDate: endDate,
@@ -2257,7 +3119,8 @@ extension TimelineView {
             durationMinutes: durationMinutes,
             calendarName: calendar.name,
             calendarIdentifier: calendar.identifier,
-            eventId: eventId
+            eventId: eventId,
+            isFlexible: isFlexible
         )
 
         // Close popover and refresh
@@ -2319,6 +3182,7 @@ extension TimelineView {
     @ViewBuilder
     private func feedbackBadge(for slot: BusyTimeSlot) -> some View {
         let rating = SessionRating.fromNotes(slot.notes)
+        let alignment = SessionAlignment.fromNotes(slot.notes)
         let isShowingPopover = Binding(
             get: { feedbackPopoverEventId == slot.id },
             set: { if !$0 { feedbackPopoverEventId = nil } }
@@ -2327,65 +3191,95 @@ extension TimelineView {
         Button {
             feedbackPopoverEventId = (feedbackPopoverEventId == slot.id) ? nil : slot.id
         } label: {
-            if let rating = rating {
-                feedbackBadgeIcon(for: rating)
-            } else {
-                // No feedback yet — white badge for visibility on any calendar color
-                Circle()
-                    .fill(Color.white.opacity(0.75))
-                    .frame(width: 14, height: 14)
-                    .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
+            ZStack(alignment: .bottomLeading) {
+                if let rating = rating {
+                    feedbackBadgeIcon(for: rating)
+                } else {
+                    // Empty feedback target needs a real edge in dark mode, otherwise it blends into session borders.
+                    Circle()
+                        .fill(colors.isDark ? Color(hex: "0F172A").opacity(0.95) : Color.white.opacity(0.82))
+                        .frame(width: colors.isDark ? 16 : 14, height: colors.isDark ? 16 : 14)
+                        .overlay(
+                            Circle()
+                                .stroke(colors.isDark ? Color.white.opacity(0.9) : Color.white.opacity(0.65),
+                                        lineWidth: colors.isDark ? 1.3 : 1)
+                        )
+                        .shadow(color: colors.isDark ? Color.black.opacity(0.5) : .clear,
+                                radius: 1.5, x: 0, y: 0)
+                }
+
+                if let alignment = alignment {
+                    alignmentBadgeDot(for: alignment)
+                        .offset(x: -5, y: 5)
+                }
             }
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
         .popover(isPresented: isShowingPopover, arrowEdge: .trailing) {
-            feedbackPopoverContent(for: slot, existingRating: rating)
+            feedbackPopoverContent(for: slot, existingRating: rating, existingAlignment: alignment)
         }
     }
 
     private func feedbackBadgeIcon(for rating: SessionRating) -> some View {
-        let (color, icon): (Color, String) = {
+        let (color, icon, darkIconColor): (Color, String, Color) = {
             switch rating {
-            case .rocket: return (.orange, "flame.fill")
-            case .completed: return (.green, "checkmark")
-            case .partial: return (colors.isDark ? .yellow : Color(hex: "92400E"), "circle.lefthalf.filled")
-            case .skipped: return (.red, "xmark")
+            case .rocket: return (Color(hex: "F97316"), "flame.fill", .white)
+            case .completed: return (Color(hex: "22C55E"), "checkmark", .white)
+            case .partial:
+                return (colors.isDark ? Color(hex: "FACC15") : Color(hex: "92400E"),
+                        "circle.lefthalf.filled",
+                        Color(hex: "422006"))
+            case .skipped: return (Color(hex: "EF4444"), "xmark", .white)
             }
         }()
+        let badgeSize: CGFloat = colors.isDark ? 16 : 14
+        let iconSize: CGFloat = colors.isDark ? 8 : 7
 
-        // White background ensures visibility on any calendar event color in both themes
         return Circle()
-            .fill(Color.white.opacity(0.88))
-            .frame(width: 14, height: 14)
+            .fill(colors.isDark ? color : Color.white.opacity(0.92))
+            .frame(width: badgeSize, height: badgeSize)
+            .overlay(
+                Circle()
+                    .stroke(colors.isDark ? Color.white.opacity(0.95) : Color.white.opacity(0.7),
+                            lineWidth: colors.isDark ? 1.2 : 0.8)
+            )
             .overlay(
                 Image(systemName: icon)
-                    .font(.system(size: 7, weight: .bold))
-                    .foregroundColor(color)
+                    .font(.system(size: iconSize, weight: .bold))
+                    .foregroundColor(colors.isDark ? darkIconColor : color)
             )
+            .shadow(color: colors.isDark ? Color.black.opacity(0.55) : .clear,
+                    radius: 1.5, x: 0, y: 0)
             .help(rating.label)
     }
 
-    private func feedbackPopoverContent(for slot: BusyTimeSlot, existingRating: SessionRating?) -> some View {
+    private func alignmentBadgeDot(for alignment: SessionAlignment) -> some View {
+        Circle()
+            .fill(alignmentColor(alignment))
+            .frame(width: 9, height: 9)
+            .overlay(
+                Circle()
+                    .stroke(colors.isDark ? Color.white.opacity(0.9) : Color.white.opacity(0.85), lineWidth: 0.8)
+            )
+            .shadow(color: colors.isDark ? Color.black.opacity(0.5) : .clear, radius: 1, x: 0, y: 0)
+            .help(alignment.label)
+    }
+
+    private func feedbackPopoverContent(for slot: BusyTimeSlot, existingRating: SessionRating?, existingAlignment: SessionAlignment?) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(existingRating != nil ? "Update feedback" : "How was this session?")
+            Text(existingRating != nil ? "Update Focus" : "How focused was this session?")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(.primary)
+
+            Text("Focus")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
 
             HStack(spacing: 8) {
                 ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                     Button {
-                        if existingRating == rating {
-                            calendarService.clearFeedbackTag(eventId: slot.id)
-                            eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-                                eventId: slot.id, oldRating: existingRating, newRating: nil))
-                        } else {
-                            calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
-                            eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-                                eventId: slot.id, oldRating: existingRating, newRating: rating))
-                        }
-                        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                        feedbackPopoverEventId = nil
+                        updatePopoverFeedback(for: slot, rating: rating)
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: rating.icon)
@@ -2411,9 +3305,111 @@ extension TimelineView {
                     .foregroundColor(ratingColor(rating))
                 }
             }
+
+            Divider()
+
+            Text("Alignment")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 6) {
+                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                    Button {
+                        updatePopoverFeedback(for: slot, alignment: alignment)
+                    } label: {
+                        VStack(spacing: 2) {
+                            Image(systemName: alignment.icon)
+                                .font(.system(size: 11, weight: .medium))
+                            Text(alignment.shortLabel)
+                                .font(.system(size: 9, weight: .semibold))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 5)
+                        .background(existingAlignment == alignment ? alignmentColor(alignment).opacity(0.28) : Color.clear)
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(alignmentColor(alignment).opacity(existingAlignment == alignment ? 0.75 : 0.25), lineWidth: existingAlignment == alignment ? 1.5 : 1)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.15)
+                    .foregroundColor(alignmentColor(alignment))
+                    .help("\(alignment.label): \(alignment.description)")
+                }
+            }
         }
         .padding(14)
-        .frame(minWidth: 360)
+        .frame(minWidth: 380)
+    }
+
+    private func updatePopoverFeedback(for slot: BusyTimeSlot, rating: SessionRating) {
+        let currentNotes = currentReviewNotes(for: slot)
+        let oldRating = SessionRating.fromNotes(currentNotes)
+        let newRating: SessionRating? = oldRating == rating ? nil : rating
+        let updatedNotes: String?
+
+        if let newRating {
+            guard calendarService.setFeedbackTag(eventId: slot.id, rating: newRating) else { return }
+            updatedNotes = newRating.applyTo(notes: currentNotes)
+        } else {
+            guard calendarService.clearFeedbackTag(eventId: slot.id) else { return }
+            updatedNotes = SessionRating.stripFeedbackTags(currentNotes)
+        }
+
+        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+            eventId: slot.id,
+            oldRating: oldRating,
+            newRating: newRating
+        ))
+        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+    }
+
+    private func updatePopoverFeedback(for slot: BusyTimeSlot, alignment: SessionAlignment) {
+        let currentNotes = currentReviewNotes(for: slot)
+        let oldAlignment = SessionAlignment.fromNotes(currentNotes)
+        let newAlignment: SessionAlignment? = oldAlignment == alignment ? nil : alignment
+        let updatedNotes: String?
+
+        if let newAlignment {
+            guard calendarService.setAlignmentTag(eventId: slot.id, alignment: newAlignment) else { return }
+            updatedNotes = newAlignment.applyTo(notes: currentNotes)
+        } else {
+            guard calendarService.clearAlignmentTag(eventId: slot.id) else { return }
+            updatedNotes = SessionAlignment.stripAlignmentTags(currentNotes)
+        }
+
+        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
+            eventId: slot.id,
+            oldAlignment: oldAlignment,
+            newAlignment: newAlignment
+        ))
+        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+    }
+
+    private func currentReviewNotes(for slot: BusyTimeSlot) -> String? {
+        timelineBusySlots(for: actionContext.selectedDate).first(where: { $0.id == slot.id })?.notes
+            ?? calendarService.busySlots.first(where: { $0.id == slot.id })?.notes
+            ?? slot.notes
+    }
+
+    private func finishPopoverFeedbackUpdate(for slot: BusyTimeSlot, notes: String?) {
+        optimisticallyUpdateSlotNotes(id: slot.id, notes: notes)
+
+        let rating = SessionRating.fromNotes(notes)
+        let alignment = SessionAlignment.fromNotes(notes)
+        feedbackPopoverEventId = rating != nil && alignment != nil ? nil : slot.id
+
+        Task {
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
+            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }),
+               selectedBusySlot?.id == slot.id {
+                selectedBusySlot = updated
+            }
+        }
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {
@@ -2425,17 +3421,23 @@ extension TimelineView {
         }
     }
 
+    private func alignmentColor(_ alignment: SessionAlignment) -> Color {
+        awarenessAlignmentColor(alignment, isDark: colors.isDark)
+    }
+
     // MARK: - Feedback Picker (in event details)
 
     private func feedbackPicker(for slot: BusyTimeSlot) -> some View {
         let currentRating = SessionRating.fromNotes(slot.notes)
 
-        return HStack(spacing: 6) {
-            Text("Feedback:")
+        return HStack(spacing: 5) {
+            Text("Focus:")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(colors.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
-            Spacer()
+            Spacer(minLength: 2)
 
             // "Not set" button
             Button {
@@ -2494,6 +3496,89 @@ extension TimelineView {
         calendarService.clearFeedbackTag(eventId: slot.id)
         eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
             eventId: slot.id, oldRating: oldRating, newRating: nil))
+        Task {
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
+            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                selectedBusySlot = updated
+            }
+        }
+    }
+
+    private func shouldShowAlignmentPicker(for slot: BusyTimeSlot) -> Bool {
+        FlowFlexibilityNotes.countsTowardAlignmentScore(
+            slot.notes,
+            alignment: SessionAlignment.fromNotes(slot.notes)
+        )
+    }
+
+    private func alignmentPicker(for slot: BusyTimeSlot) -> some View {
+        let currentAlignment = SessionAlignment.fromNotes(slot.notes)
+
+        return HStack(spacing: 5) {
+            Text("Alignment:")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(colors.textSecondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            Spacer(minLength: 2)
+
+            Button {
+                clearAlignmentTag(for: slot)
+            } label: {
+                Text("–")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(currentAlignment == nil ? colors.textSecondary : colors.textMuted)
+                    .frame(width: 24, height: 22)
+                    .background(currentAlignment == nil ? colors.divider : Color.clear)
+                    .cornerRadius(4)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(currentAlignment == nil ? colors.borderStrong : colors.divider, lineWidth: 1)
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(brightness: 0.2)
+            .help("Not set")
+
+            ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                Button {
+                    let oldAlignment = currentAlignment
+                    calendarService.setAlignmentTag(eventId: slot.id, alignment: alignment)
+                    eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
+                        eventId: slot.id, oldAlignment: oldAlignment, newAlignment: alignment))
+                    Task {
+                        await calendarService.fetchEvents(for: actionContext.selectedDate)
+                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
+                            selectedBusySlot = updated
+                        }
+                    }
+                } label: {
+                    Image(systemName: alignment.icon)
+                        .font(.system(size: 11))
+                        .foregroundColor(alignmentColor(alignment).opacity(currentAlignment == alignment ? 1.0 : 0.5))
+                        .frame(width: 24, height: 22)
+                        .background(currentAlignment == alignment ? alignmentColor(alignment).opacity(0.22) : Color.clear)
+                        .cornerRadius(4)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 4)
+                                .stroke(alignmentColor(alignment).opacity(currentAlignment == alignment ? 0.6 : 0.15), lineWidth: currentAlignment == alignment ? 1.5 : 1)
+                        )
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
+                .help("\(alignment.label): \(alignment.description)")
+            }
+        }
+    }
+
+    private func clearAlignmentTag(for slot: BusyTimeSlot) {
+        let oldAlignment = SessionAlignment.fromNotes(slot.notes)
+        calendarService.clearAlignmentTag(eventId: slot.id)
+        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
+            eventId: slot.id, oldAlignment: oldAlignment, newAlignment: nil))
         Task {
             await calendarService.fetchEvents(for: actionContext.selectedDate)
             if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
@@ -2565,14 +3650,10 @@ extension TimelineView {
             return
         }
 
-        // Preserve feedback tag from the original notes (session type tags are user-editable)
-        let rawNotes = slot.notes ?? ""
-        var feedbackTag = ""
-        for tag in SessionRating.allTags {
-            if rawNotes.contains(tag) { feedbackTag = " " + tag; break }
-        }
-        let finalNotes = (normalizedNew ?? "") + feedbackTag
-        let notesToSave: String? = finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes
+        // Preserve review tags from the original notes (session type tags are user-editable).
+        let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
+        let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
+        let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
 
         let success = calendarService.updateEvent(
             eventId: slot.id,
@@ -2582,9 +3663,10 @@ extension TimelineView {
         )
 
         if success {
+            let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
             eventUndoManager.recordContent(EventUndoManager.EventContentChange(
                 eventId: slot.id,
-                change: .notes(old: normalizedOriginal, new: notesToSave),
+                change: .notes(old: oldNotesForUndo, new: notesToSave),
                 description: "Edit Notes"
             ))
             Task {
@@ -2734,17 +3816,14 @@ extension TimelineView {
             let normalizedNew: String? = editingNotes.isEmpty ? nil : editingNotes
             let normalizedOriginal: String? = originalNotes.isEmpty ? nil : originalNotes
             if normalizedNew != normalizedOriginal {
-                let rawNotes = slot.notes ?? ""
-                var feedbackTag = ""
-                for tag in SessionRating.allTags {
-                    if rawNotes.contains(tag) { feedbackTag = " " + tag; break }
-                }
-                let finalNotes = (normalizedNew ?? "") + feedbackTag
-                let notesToSave: String? = finalNotes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : finalNotes
+                let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
+                let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
+                let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
                 if calendarService.updateEvent(eventId: slot.id, title: nil, notes: notesToSave, url: nil) {
+                    let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
                     eventUndoManager.recordContent(EventUndoManager.EventContentChange(
                         eventId: slot.id,
-                        change: .notes(old: normalizedOriginal, new: notesToSave),
+                        change: .notes(old: oldNotesForUndo, new: notesToSave),
                         description: "Edit Notes"
                     ))
                     didChange = true
@@ -2830,6 +3909,11 @@ extension TimelineView {
             return
         }
 
+        if isElasticEditing {
+            commitElasticDrag(for: slot, newStart: newStart, newEnd: newEnd)
+            return
+        }
+
         // Group drag commits every selected slot atomically.
         if dragMode == .move && !groupDragOriginalTimes.isEmpty {
             commitGroupDrag()
@@ -2873,9 +3957,51 @@ extension TimelineView {
         resetDragState()
     }
 
+    private func commitElasticDrag(for slot: BusyTimeSlot, newStart: Date, newEnd: Date) {
+        let updates: [String: (start: Date, end: Date)]
+        if dragMode == .move && !groupDragPreviewTimes.isEmpty {
+            updates = groupDragPreviewTimes
+        } else {
+            updates = [slot.id: (start: newStart, end: newEnd)]
+        }
+
+        let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+        let originalsById = Dictionary(uniqueKeysWithValues: baseSlots.map { ($0.id, $0) })
+        let hasChanges = updates.contains { entry in
+            guard let original = originalsById[entry.key] else { return false }
+            let target = entry.value
+            return original.startTime != target.start || original.endTime != target.end
+        }
+
+        guard hasChanges else {
+            elasticStagedBusySlots = baseSlots
+            recalculateProjectedSchedule(using: baseSlots)
+            resetDragState()
+            return
+        }
+
+        let adjustedGapAfterBySlotId = elasticGapMap(
+            adjustingForDraggedUpdates: updates,
+            in: baseSlots
+        )
+
+        recordElasticUndoSnapshot(baseSlots)
+        elasticStagedBusySlots = displaceBusySlots(
+            baseSlots: baseSlots,
+            draggedUpdates: updates,
+            commitDraggedSlots: true,
+            gapAfterBySlotId: adjustedGapAfterBySlotId
+        )
+        elasticEmptySpaceAfterBySlotId = adjustedGapAfterBySlotId
+        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        onModeToast?("\(elasticChangeCount) staged")
+
+        resetDragState()
+    }
+
     /// Commit a group drag — every selected slot moves by the same translation atomically.
     private func commitGroupDrag() {
-        let slotsById = Dictionary(uniqueKeysWithValues: calendarService.busySlotsForFetchedDate(actionContext.selectedDate).map { ($0.id, $0) })
+        let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
 
         var changes: [EventUndoManager.EventTimeChange] = []
         var committed: [(id: String, newStart: Date, newEnd: Date)] = []
@@ -2927,6 +4053,7 @@ extension TimelineView {
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
         preDisplacementSessions = nil
+        elasticPreDragBusySlots = nil
         groupDragOriginalTimes.removeAll()
         groupDragPreviewTimes.removeAll()
     }
@@ -2937,9 +4064,16 @@ extension TimelineView {
         if let snapshot = preDisplacementSessions {
             schedulingEngine.projectedSessions = snapshot
         }
+        if isElasticEditing, let snapshot = elasticPreDragBusySlots {
+            elasticStagedBusySlots = snapshot
+        }
         // Revert real-time schedule recalculation (calendar event drag)
         if dragSlotId != nil, !schedulingEngine.sessionsFrozen {
-            recalculateWithOriginalSlots()
+            if isElasticEditing {
+                recalculateProjectedSchedule(using: elasticStagedBusySlots)
+            } else {
+                recalculateWithOriginalSlots()
+            }
         }
         dragCancelled = true
         resetDragState()
@@ -2947,6 +4081,12 @@ extension TimelineView {
 
     /// Recalculates schedule using the original (unmodified) busy slots.
     private func recalculateWithOriginalSlots() {
+        recalculateProjectedSchedule(using: timelineBusySlots(for: actionContext.selectedDate))
+    }
+
+    private func recalculateProjectedSchedule(using busySlots: [BusyTimeSlot]) {
+        guard !schedulingEngine.sessionsFrozen else { return }
+
         let operationDate = actionContext.selectedDate
         let operationStartTime = actionContext.startTime
         let planningExists = calendarService.hasPlanningSession(for: operationDate)
@@ -2965,7 +4105,7 @@ extension TimelineView {
         _ = schedulingEngine.generateSchedule(
             startTime: operationStartTime,
             baseDate: operationDate,
-            busySlots: calendarService.busySlotsForFetchedDate(operationDate),
+            busySlots: busySlots,
             includePlanning: !planningExists,
             existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
             existingTitles: existing.titles
@@ -2978,8 +4118,7 @@ extension TimelineView {
         guard !schedulingEngine.sessionsFrozen else { return }
 
         let operationDate = actionContext.selectedDate
-        let operationStartTime = actionContext.startTime
-        var modifiedSlots = calendarService.busySlotsForFetchedDate(operationDate)
+        var modifiedSlots = timelineBusySlots(for: operationDate)
         for i in modifiedSlots.indices {
             if let target = updates[modifiedSlots[i].id] {
                 let old = modifiedSlots[i]
@@ -2991,28 +4130,7 @@ extension TimelineView {
             }
         }
 
-        let planningExists = calendarService.hasPlanningSession(for: operationDate)
-        let existing = calendarService.countExistingSessions(
-            for: operationDate,
-            workCalendar: CalendarDescriptor(
-                name: schedulingEngine.workCalendarName,
-                identifier: schedulingEngine.workCalendarIdentifier
-            ),
-            sideCalendar: CalendarDescriptor(
-                name: schedulingEngine.sideCalendarName,
-                identifier: schedulingEngine.sideCalendarIdentifier
-            ),
-            deepConfig: schedulingEngine.deepSessionConfig
-        )
-
-        _ = schedulingEngine.generateSchedule(
-            startTime: operationStartTime,
-            baseDate: operationDate,
-            busySlots: modifiedSlots,
-            includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
-            existingTitles: existing.titles
-        )
+        recalculateProjectedSchedule(using: modifiedSlots)
     }
 
     /// Recalculates projected schedule using modified busy slots (during calendar event drag).
@@ -3021,8 +4139,7 @@ extension TimelineView {
 
         // Build modified busy slots with the dragged event at its new position
         let operationDate = actionContext.selectedDate
-        let operationStartTime = actionContext.startTime
-        var modifiedSlots = calendarService.busySlotsForFetchedDate(operationDate)
+        var modifiedSlots = timelineBusySlots(for: operationDate)
         if let idx = modifiedSlots.firstIndex(where: { $0.id == slot.id }) {
             let old = modifiedSlots[idx]
             modifiedSlots[idx] = BusyTimeSlot(
@@ -3032,28 +4149,7 @@ extension TimelineView {
             )
         }
 
-        let planningExists = calendarService.hasPlanningSession(for: operationDate)
-        let existing = calendarService.countExistingSessions(
-            for: operationDate,
-            workCalendar: CalendarDescriptor(
-                name: schedulingEngine.workCalendarName,
-                identifier: schedulingEngine.workCalendarIdentifier
-            ),
-            sideCalendar: CalendarDescriptor(
-                name: schedulingEngine.sideCalendarName,
-                identifier: schedulingEngine.sideCalendarIdentifier
-            ),
-            deepConfig: schedulingEngine.deepSessionConfig
-        )
-
-        _ = schedulingEngine.generateSchedule(
-            startTime: operationStartTime,
-            baseDate: operationDate,
-            busySlots: modifiedSlots,
-            includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
-            existingTitles: existing.titles
-        )
+        recalculateProjectedSchedule(using: modifiedSlots)
     }
 
     private func commitSessionDrag(for session: ScheduledSession) {
@@ -3089,8 +4185,8 @@ extension TimelineView {
             draggedSessionId: session.id,
             draggedStart: newStart,
             draggedEnd: newEnd,
-            busySlots: calendarService.busySlotsForFetchedDate(actionContext.selectedDate),
-            earliestTime: actionContext.startTime
+            busySlots: timelineBusySlots(for: actionContext.selectedDate),
+            earliestTime: elasticAwareEarliestTime
         )
 
         // Record undo with pre-drag snapshot and post-displacement snapshot
@@ -3260,6 +4356,18 @@ extension TimelineView {
                     if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
                 }
             }
+        case .alignment(let ac):
+            if let alignment = ac.newAlignment {
+                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
+            } else {
+                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
+            }
+            Task {
+                await calendarService.fetchEvents(for: operationDate)
+                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
+                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
+                }
+            }
         case .content(let cc):
             applyContentChange(cc)
         }
@@ -3334,6 +4442,18 @@ extension TimelineView {
                     if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
                 }
             }
+        case .alignment(let ac):
+            if let alignment = ac.newAlignment {
+                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
+            } else {
+                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
+            }
+            Task {
+                await calendarService.fetchEvents(for: operationDate)
+                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
+                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
+                }
+            }
         case .create(let snap):
             // Redo create = restore the event
             if let newId = calendarService.restoreEvent(snap) {
@@ -3389,6 +4509,35 @@ extension TimelineView {
                 notes: old.notes, url: old.url, calendarName: old.calendarName,
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
+        }
+    }
+
+    private func optimisticallyUpdateSlotNotes(id: String, notes: String?) {
+        if let idx = calendarService.busySlots.firstIndex(where: { $0.id == id }) {
+            let old = calendarService.busySlots[idx]
+            calendarService.busySlots[idx] = BusyTimeSlot(
+                id: old.id, title: old.title, startTime: old.startTime, endTime: old.endTime,
+                notes: notes, url: old.url, calendarName: old.calendarName,
+                calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+            )
+        }
+        if let idx = elasticStagedBusySlots.firstIndex(where: { $0.id == id }) {
+            let old = elasticStagedBusySlots[idx]
+            elasticStagedBusySlots[idx] = BusyTimeSlot(
+                id: old.id, title: old.title, startTime: old.startTime, endTime: old.endTime,
+                notes: notes, url: old.url, calendarName: old.calendarName,
+                calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+            )
+        }
+        if var originals = elasticOriginalBusySlots,
+           let idx = originals.firstIndex(where: { $0.id == id }) {
+            let old = originals[idx]
+            originals[idx] = BusyTimeSlot(
+                id: old.id, title: old.title, startTime: old.startTime, endTime: old.endTime,
+                notes: notes, url: old.url, calendarName: old.calendarName,
+                calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
+            )
+            elasticOriginalBusySlots = originals
         }
     }
 }

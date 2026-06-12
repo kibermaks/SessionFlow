@@ -41,7 +41,7 @@ SessionFlow is a native macOS app that helps you plan, execute, and reflect on p
 
 ### Reflect
 
-- **📈 Productivity Tracking**: After each session ends you get a quick feedback prompt (rocket/completed/partial/skipped). A daily productivity card and monthly calendar view summarize your ratings, highlight unrated blocks, and compute weighted focus time so you can see how each day and month actually felt
+- **📈 Focus & Alignment Tracking**: After each session ends, rate both how focused the work was and how well it served your current goal. The right panel computes Focus Time, Aligned Focus, Alignment %, and a daily diagnosis phrase so you can tell the difference between “I worked hard” and “I worked on the right thing”
 
 ### Polish
 
@@ -102,12 +102,49 @@ Commit Mode is the intentionally strict version of starting a session. Enable it
 
 At the end of the session, Commit Mode can block again until you rate the session and optionally write review notes. Those goals and reflections are saved back into the calendar event, and the active goals can stay visible in the bottom panel or Mini-Player while you work. It is designed for people who need stronger external structure, including users with ADHD-style focus challenges, without making every Session Awareness feature mandatory.
 
-### Productivity Tracking
+### Focus & Alignment Tracking
 
-The right side of the window can show a **Productivity** card once you start leaving feedback on sessions. It aggregates how many rocket/completed/partial/skipped blocks you had today, how many are still unrated, and computes a weighted **Focus Time** score based on both duration and rating. From there, a calendar button opens a monthly productivity view with a compact calendar: each day shows colored dots for rated sessions and a tiny focus-time label, making it easy to spot your strongest days and streaks at a glance.
+The right side of the window can show a **Focus & Alignment** card once you start reviewing ended sessions. The first question is about **Focus**: how well you executed the block. The second question is about **Alignment**: whether that focused time moved the goal that matters right now.
+
+This separation is intentional. You can have a day that was productive in the ordinary sense, but still misaligned because the work drifted into maintenance, tooling, or side projects. SessionFlow keeps those signals separate so the review is more honest.
+
+Focus uses the quick end-of-session ratings:
+
+| Focus rating | Meaning | Default weight |
+| --- | --- | --- |
+| Fire | Excellent session | 100% |
+| Done | Completed with solid focus | 80% |
+| Partly | Some focus, some drift | 50% |
+| Skipped | Did not meaningfully happen | 0% |
+
+Alignment uses a separate five-level scale:
+
+| Alignment | Meaning | Weight |
+| --- | --- | --- |
+| Off-track | Pulled away from the current goal | 0% |
+| Maintenance | Necessary upkeep, weak goal movement | 25% |
+| Support | Indirect setup, tooling, preparation, or learning | 50% |
+| Strategic | Important progress, not direct payoff yet | 75% |
+| Direct | Directly moved the current goal | 100% |
+
+The core stats are time-weighted:
+
+```text
+Focus Time = session duration × Focus weight
+Aligned Focus = alignment-eligible Focus Time × Alignment weight
+Alignment % = Aligned Focus / alignment-eligible Focus Time
+```
+
+For example, a 2-hour session rated **Done** and **Support** gives 96 minutes of Focus Time and 48 minutes of Aligned Focus. That means the work was real, but only half of that focused effort served the current goal.
+
+External calendar events without an Alignment tag are not included in the Alignment % denominator, so personal or non-work commitments can still be reviewed without lowering the directional score.
+
+The daily card also shows a short diagnosis phrase. It is generated from the combination of Focus Time and Alignment %, so it can call out patterns such as “productive, but poorly aligned” or “high-quality effort landed where it mattered.” A setting in Awareness preferences lets you turn this phrase on or off.
+
+The calendar button opens a monthly **Focus & Alignment** view. Each day shows Focus ratings, Focus Time, and Alignment %. Monthly and yearly summaries include Focus Time, Aligned Focus, Alignment %, and counts across the Alignment scale, making it easier to spot weeks where effort was high but direction was weak.
 
 <p align="center">
-  <img src="docs/assets/ProductivityTracking.png" alt="Productivity Tracking" width="400" />
+  <img src="docs/assets/ProductivityTracking.png" alt="Focus & Alignment Tracking" width="400" />
 </p>
 
 ## 🚀 Installation
@@ -130,7 +167,7 @@ See [Building from Source](#-building-from-source) section below.
 2. Set target counts and durations for Work, Side, Deep, and Planning sessions.
 3. Pick a scheduling pattern or load a preset, then review the timeline.
 4. Press **Schedule Sessions** when the layout looks right.
-5. As sessions begin, the bottom panel (or Mini-Player) tracks your progress with ambient sounds, a dock icon donut, and an optional menu-bar timer. Rate each session when it ends to build your productivity history.
+5. As sessions begin, the bottom panel (or Mini-Player) tracks your progress with ambient sounds, a dock icon donut, and an optional menu-bar timer. When a session ends, rate Focus first, then Alignment, to build a history of both execution quality and goal fit.
 
 ## 🔒 Privacy & Local Processing
 
@@ -154,7 +191,7 @@ See [Building from Source](#-building-from-source) section below.
 - **Copy Events**: Right-click any timeline event and use “Copy to...” to duplicate it to a nearby day.
 - **Lock Dragging**: Toggle the lock icon to prevent accidental event moves while reviewing your schedule.
 - **Night Scheduling**: Extend the schedule end hour past midnight to plan late-night sessions with clear +1d markers.
-- **Rate Sessions**: After each session ends, use the quick feedback prompt to rate it—these ratings feed into the Productivity card and monthly view.
+- **Rate Sessions**: After each session ends, rate Focus first and Alignment second. Focus says whether the session happened well; Alignment says whether it served the current goal. These ratings feed the Focus & Alignment card and monthly view.
 
 ## ⚡ Power Features
 
@@ -305,7 +342,7 @@ SessionFlow/
 - **`Preset.swift`**: Handles preset configuration and persistence via `UserDefaults`
 - **`SchedulePattern.swift`**: Generates session orders based on patterns (Alternating, All Work First, etc.)
 - **`SessionAwarenessConfig.swift`**: Configuration for session tracking, sounds, dock progress, and menu-bar timer
-- **`SessionFeedback.swift`**: `SessionRating` enum and feedback storage via calendar event notes
+- **`SessionFeedback.swift`**: Focus ratings, Alignment levels, and review storage via calendar event notes
 
 #### Services
 
@@ -313,7 +350,7 @@ SessionFlow/
 - **`CalendarService.swift`**: EventKit wrapper for reading/writing calendar events with per-calendar filtering
 - **`AvailabilityCalculator.swift`**: Identifies free time slots between existing events
 - **`EventUndoManager.swift`**: Custom undo/redo stack for calendar event and projected session changes
-- **`SessionAwarenessService.swift`**: Tracks active and upcoming sessions, manages progress, and triggers feedback prompts
+- **`SessionAwarenessService.swift`**: Tracks active and upcoming sessions, manages progress, and triggers Focus & Alignment prompts
 - **`SessionAudioService.swift`**: Ambient sound playback, transition sounds, and accelerando during sessions
 - **`DockProgressController.swift`**: Renders the progress donut overlay on the dock icon
 - **`MenuBarController.swift`**: Manages the optional menu-bar status item with live timer
@@ -330,7 +367,7 @@ SessionFlow/
 - **`PresetManager.swift`**: Preset saving, loading, and management UI
 - **`SessionAwarenessPanel.swift`**: Bottom panel showing active session, next-up, and feedback states
 - **`MiniPlayerView.swift`**: Compact floating window mirroring the awareness panel
-- **`ProductivityCard.swift`**: Daily summary and monthly calendar view of session feedback
+- **`ProductivityCard.swift`**: Daily and monthly Focus & Alignment summary, including Focus Time, Aligned Focus, Alignment %, and diagnosis phrases
 - **`WhatsNewView.swift`**: Fetches and displays the changelog from GitHub after updates
 - **`AboutView.swift`**: About window with version and build info
 

@@ -31,6 +31,12 @@ class EventUndoManager: ObservableObject {
         let newRating: SessionRating?
     }
 
+    struct AlignmentChange: Equatable {
+        let eventId: String
+        let oldAlignment: SessionAlignment?
+        let newAlignment: SessionAlignment?
+    }
+
     struct EventContentChange: Equatable {
         enum FieldChange: Equatable {
             case title(old: String, new: String)
@@ -50,6 +56,7 @@ class EventUndoManager: ObservableObject {
         case schedule(ScheduleSnapshot)
         case create(EventDeleteSnapshot)  // undo = delete, redo = restore
         case feedback(FeedbackChange)
+        case alignment(AlignmentChange)
         case content(EventContentChange)
     }
 
@@ -176,6 +183,13 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
+    func recordAlignment(_ change: AlignmentChange) {
+        undoStack.append(.alignment(change))
+        if undoStack.count > maxStackSize { undoStack.removeFirst() }
+        redoStack.removeAll()
+        updateState()
+    }
+
     func recordContent(_ change: EventContentChange) {
         undoStack.append(.content(change))
         if undoStack.count > maxStackSize { undoStack.removeFirst() }
@@ -209,6 +223,8 @@ class EventUndoManager: ObservableObject {
         case .create:
             break  // Caller will push redo after delete (needs new eventId after re-create)
         case .feedback:
+            redoStack.append(change)
+        case .alignment:
             redoStack.append(change)
         case .content:
             redoStack.append(change)
@@ -258,6 +274,8 @@ class EventUndoManager: ObservableObject {
             return .create(snap)
         case .feedback(let fc):
             return .feedback(FeedbackChange(eventId: fc.eventId, oldRating: fc.newRating, newRating: fc.oldRating))
+        case .alignment(let ac):
+            return .alignment(AlignmentChange(eventId: ac.eventId, oldAlignment: ac.newAlignment, newAlignment: ac.oldAlignment))
         case .content(let cc):
             let inverted: EventContentChange.FieldChange
             switch cc.change {
@@ -324,6 +342,8 @@ class EventUndoManager: ObservableObject {
         case .create(let snap):
             return .create(snap)
         case .feedback:
+            return change
+        case .alignment:
             return change
         case .content:
             return change

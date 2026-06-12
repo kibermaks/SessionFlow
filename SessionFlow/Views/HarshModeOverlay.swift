@@ -62,7 +62,7 @@ final class HarshModeWindowController: ObservableObject {
         if let overlayState, overlayState.promptID == prompt.id {
             state = overlayState
         } else {
-            state = HarshModeOverlayState(prompt: prompt, config: awarenessService.config)
+            state = HarshModeOverlayState(prompt: prompt)
             overlayState = state
         }
         state.activePanelID = nil
@@ -107,11 +107,14 @@ final class HarshModeWindowController: ObservableObject {
                     panel?.makeKeyAndOrderFront(nil)
                     NSApp.activate(ignoringOtherApps: true)
                 },
-                onSubmitGoals: { [weak awarenessService] goals in
-                    awarenessService?.submitHarshGoals(goals) ?? false
+                onSubmitGoals: { [weak awarenessService] title, goals in
+                    awarenessService?.submitHarshGoals(title: title, goals: goals) ?? false
                 },
-                onSubmitReview: { [weak awarenessService] rating, reflection in
-                    awarenessService?.submitHarshReview(rating: rating, reflection: reflection) ?? false
+                onSubmitReview: { [weak awarenessService] rating, alignment, reflection, goals in
+                    awarenessService?.submitHarshReview(rating: rating, alignment: alignment, reflection: reflection, goals: goals) ?? false
+                },
+                onDelayPrompt: { [weak awarenessService] minutes in
+                    awarenessService?.submitHarshDelay(minutes: minutes) ?? false
                 },
                 onEmergencyBreak: { [weak awarenessService] in
                     awarenessService?.emergencyBreakHarshMode()
@@ -158,23 +161,29 @@ final class HarshModeWindowController: ObservableObject {
 private final class HarshModeOverlayState: ObservableObject {
     let promptID: String
     @Published var activePanelID: UUID?
+    @Published var titleText: String
     @Published var goalsText: String
     @Published var reflectionText: String = ""
     @Published var selectedRating: SessionRating?
+    @Published var selectedAlignment: SessionAlignment?
+    @Published var currentGoalLine: String = ""
+    @Published var currentGoalLineRange = NSRange(location: 0, length: 0)
     @Published var errorMessage: String?
 
-    init(prompt: HarshModePrompt, config: SessionAwarenessConfig) {
+    init(prompt: HarshModePrompt) {
         self.promptID = prompt.id
-        self.goalsText = Self.initialGoalsText(for: prompt, config: config)
+        self.titleText = prompt.sessionTitle
+        self.goalsText = Self.initialGoalsText(for: prompt)
         self.selectedRating = SessionRating.fromNotes(prompt.notes)
+        self.selectedAlignment = SessionAlignment.fromNotes(prompt.notes)
     }
 
-    private static func initialGoalsText(for prompt: HarshModePrompt, config: SessionAwarenessConfig) -> String {
+    private static func initialGoalsText(for prompt: HarshModePrompt) -> String {
         let existingGoals = HarshModeSessionNotes.goals(from: prompt.notes)
         if !existingGoals.isEmpty {
             return existingGoals.joined(separator: "\n")
         }
-        return config.harshModePrefillTitleGoal ? prompt.sessionTitle : ""
+        return ""
     }
 }
 
@@ -184,6 +193,8 @@ private struct HarshModeTextArea: NSViewRepresentable {
     let isFocused: Bool
     let canSubmit: Bool
     let onSubmit: () -> Void
+    var onFocusChange: (Bool) -> Void = { _ in }
+    var onCurrentLineChange: (String, NSRange) -> Void = { _, _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -237,6 +248,8 @@ private struct HarshModeTextArea: NSViewRepresentable {
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: HarshModeTextArea
+        private var lastLine: String = ""
+        private var lastLineRange = NSRange(location: NSNotFound, length: 0)
 
         init(parent: HarshModeTextArea) {
             self.parent = parent
@@ -245,6 +258,23 @@ private struct HarshModeTextArea: NSViewRepresentable {
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             parent.text = textView.string
+            updateCurrentLine(textView)
+        }
+
+        func textDidBeginEditing(_ notification: Notification) {
+            parent.onFocusChange(true)
+            if let textView = notification.object as? NSTextView {
+                updateCurrentLine(textView)
+            }
+        }
+
+        func textDidEndEditing(_ notification: Notification) {
+            parent.onFocusChange(false)
+        }
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            updateCurrentLine(textView)
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
@@ -261,6 +291,78 @@ private struct HarshModeTextArea: NSViewRepresentable {
             parent.onSubmit()
             return true
         }
+
+        func updateCurrentLine(_ textView: NSTextView) {
+            let nsText = textView.string as NSString
+            let location = min(textView.selectedRange().location, nsText.length)
+            var lineStart = 0
+            var lineEnd = 0
+            var contentsEnd = 0
+            nsText.getLineStart(&lineStart, end: &lineEnd, contentsEnd: &contentsEnd, for: NSRange(location: location, length: 0))
+            let lineRange = NSRange(location: lineStart, length: max(0, contentsEnd - lineStart))
+            let line = nsText
+                .substring(with: lineRange)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard line != lastLine ||
+                    lineRange.location != lastLineRange.location ||
+                    lineRange.length != lastLineRange.length else {
+                return
+            }
+            lastLine = line
+            lastLineRange = lineRange
+            parent.onCurrentLineChange(line, lineRange)
+        }
+    }
+}
+
+private struct HarshModeSuggestionList: View {
+    let suggestions: [String]
+    let accentColor: Color
+    let onSelect: (String) -> Void
+
+    @State private var hoveredSuggestion: String?
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(hex: "111827"))
+                .shadow(color: Color.black.opacity(0.45), radius: 16, x: 0, y: 10)
+
+            ScrollView {
+                VStack(spacing: 2) {
+                    ForEach(suggestions, id: \.self) { suggestion in
+                        Button {
+                            onSelect(suggestion)
+                        } label: {
+                            Text(suggestion)
+                                .font(.system(size: 13, weight: .medium))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .foregroundColor(hoveredSuggestion == suggestion ? .white : Color(hex: "F8FAFC"))
+                                .background(
+                                    RoundedRectangle(cornerRadius: 7)
+                                        .fill(hoveredSuggestion == suggestion ? accentColor.opacity(0.95) : Color.clear)
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .onHover { hovering in
+                            hoveredSuggestion = hovering ? suggestion : nil
+                        }
+                    }
+                }
+                .padding(5)
+            }
+        }
+        .frame(maxHeight: 142)
+        .clipShape(RoundedRectangle(cornerRadius: 9))
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
     }
 }
 
@@ -269,21 +371,30 @@ private struct HarshModeOverlayView: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @ObservedObject var state: HarshModeOverlayState
     @ObservedObject private var timeState: SessionTimeState
+    @ObservedObject private var nameHistory = SessionNameHistory.shared
+    @ObservedObject private var taskLineHistory = TaskLineHistory.shared
     let panelID: UUID
     let onActivate: () -> Void
-    let onSubmitGoals: ([String]) -> Bool
-    let onSubmitReview: (SessionRating?, String) -> Bool
+    let onSubmitGoals: (String, [String]) -> Bool
+    let onSubmitReview: (SessionRating?, SessionAlignment?, String, [String]) -> Bool
+    let onDelayPrompt: (Int) -> Bool
     let onEmergencyBreak: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
+    @FocusState private var isTitleFocused: Bool
+    @State private var titleSuggestionsVisible = false
+    @State private var goalSuggestionsVisible = false
+    @State private var goalsAreFocused = false
+
     init(
         prompt: HarshModePrompt,
         awarenessService: SessionAwarenessService,
         state: HarshModeOverlayState,
         panelID: UUID,
         onActivate: @escaping () -> Void,
-        onSubmitGoals: @escaping ([String]) -> Bool,
-        onSubmitReview: @escaping (SessionRating?, String) -> Bool,
+        onSubmitGoals: @escaping (String, [String]) -> Bool,
+        onSubmitReview: @escaping (SessionRating?, SessionAlignment?, String, [String]) -> Bool,
+        onDelayPrompt: @escaping (Int) -> Bool,
         onEmergencyBreak: @escaping () -> Void
     ) {
         self.prompt = prompt
@@ -294,6 +405,7 @@ private struct HarshModeOverlayView: View {
         self.onActivate = onActivate
         self.onSubmitGoals = onSubmitGoals
         self.onSubmitReview = onSubmitReview
+        self.onDelayPrompt = onDelayPrompt
         self.onEmergencyBreak = onEmergencyBreak
     }
 
@@ -314,8 +426,40 @@ private struct HarshModeOverlayView: View {
     }
 
     private var canSubmitReview: Bool {
-        (!awarenessService.config.harshModeRequireEndRating || state.selectedRating != nil) &&
+        (!awarenessService.config.harshModeRequireEndRating || (state.selectedRating != nil && state.selectedAlignment != nil)) &&
             (!awarenessService.config.harshModeRequireReviewNote || !state.reflectionText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    }
+
+    private var availableDelayMinutes: [Int] {
+        awarenessService.availableHarshDelayMinutes(for: prompt)
+    }
+
+    private var titleSuggestions: [String] {
+        guard let sessionType = prompt.sessionType else { return [] }
+        let query = state.titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let names = nameHistory.getNames(for: sessionType)
+        guard !query.isEmpty else { return Array(names.prefix(6)) }
+        return names
+            .filter {
+                $0.localizedCaseInsensitiveContains(query) &&
+                $0.localizedCaseInsensitiveCompare(query) != .orderedSame
+            }
+            .prefix(6)
+            .map { $0 }
+    }
+
+    private var goalSuggestions: [String] {
+        guard let sessionType = prompt.sessionType else { return [] }
+        let query = state.currentGoalLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lines = taskLineHistory.getLines(for: sessionType)
+        guard !query.isEmpty else { return Array(lines.prefix(7)) }
+        return lines
+            .filter {
+                $0.localizedCaseInsensitiveContains(query) &&
+                $0.localizedCaseInsensitiveCompare(query) != .orderedSame
+            }
+            .prefix(7)
+            .map { $0 }
     }
 
     private var progress: Double {
@@ -371,6 +515,11 @@ private struct HarshModeOverlayView: View {
         }
         .preferredColorScheme(.dark)
         .focusEffectDisabled()
+        .onAppear {
+            if prompt.phase == .start && isActivePanel {
+                isTitleFocused = true
+            }
+        }
     }
 
     private var activeDialog: some View {
@@ -454,6 +603,17 @@ private struct HarshModeOverlayView: View {
                 .foregroundColor(.secondary.opacity(0.82))
 
             Spacer()
+
+            Button(role: .destructive) {
+                onEmergencyBreak()
+            } label: {
+                Label("Emergency Exit", systemImage: "escape")
+                    .labelStyle(.iconOnly)
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+            .help("Emergency Exit")
         }
         .textCase(.none)
     }
@@ -527,7 +687,7 @@ private struct HarshModeOverlayView: View {
 
     private var taskFocus: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(prompt.sessionTitle)
+            Text(state.titleText.isEmpty ? prompt.sessionTitle : state.titleText)
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(.primary)
                 .lineLimit(3)
@@ -541,11 +701,72 @@ private struct HarshModeOverlayView: View {
 
     private var startForm: some View {
         VStack(alignment: .leading, spacing: 12) {
+            nextTaskRow
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Session title", systemImage: "textformat")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+
+                TextField("Session title", text: $state.titleText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15, weight: .semibold))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 9)
+                    .background(Color.black.opacity(0.22))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                    )
+                    .focused($isTitleFocused)
+                    .onTapGesture {
+                        titleSuggestionsVisible = true
+                    }
+                    .onSubmit(submitGoals)
+                    .onChange(of: isTitleFocused) { _, focused in
+                        if focused {
+                            titleSuggestionsVisible = true
+                        } else {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                if !isTitleFocused {
+                                    titleSuggestionsVisible = false
+                                }
+                            }
+                        }
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if titleSuggestionsVisible && !titleSuggestions.isEmpty {
+                            HarshModeSuggestionList(
+                                suggestions: titleSuggestions,
+                                accentColor: blockerAccent,
+                                onSelect: applyTitleSuggestion
+                            )
+                            .frame(maxWidth: .infinity)
+                            .offset(y: 42)
+                            .zIndex(20)
+                        }
+                    }
+                    .zIndex(titleSuggestionsVisible ? 20 : 0)
+            }
+            .zIndex(titleSuggestionsVisible ? 100 : 0)
+
             HStack {
                 Label("Goals for this session", systemImage: "scope")
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.primary)
                 Spacer()
+                Button {
+                    copyTitleToGoals()
+                } label: {
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help("Copy session title into goals")
+                .disabled(state.titleText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
                 Text("\(goalLines.count) goal\(goalLines.count == 1 ? "" : "s")")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(canSubmitGoals ? Color(hex: "86EFAC") : Color(hex: "FCA5A5"))
@@ -554,9 +775,33 @@ private struct HarshModeOverlayView: View {
             HarshModeTextArea(
                 text: $state.goalsText,
                 fontSize: 16,
-                isFocused: isActivePanel,
+                isFocused: false,
                 canSubmit: canSubmitGoals,
-                onSubmit: submitGoals
+                onSubmit: submitGoals,
+                onFocusChange: { focused in
+                    goalsAreFocused = focused
+                    if focused {
+                        goalSuggestionsVisible = true
+                    } else {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            if !goalsAreFocused {
+                                goalSuggestionsVisible = false
+                            }
+                        }
+                    }
+                },
+                onCurrentLineChange: { line, range in
+                    guard state.currentGoalLine != line ||
+                            state.currentGoalLineRange.location != range.location ||
+                            state.currentGoalLineRange.length != range.length else {
+                        return
+                    }
+                    state.currentGoalLine = line
+                    state.currentGoalLineRange = range
+                    if goalsAreFocused {
+                        goalSuggestionsVisible = true
+                    }
+                }
             )
             .padding(10)
             .frame(height: 104)
@@ -566,13 +811,27 @@ private struct HarshModeOverlayView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .stroke(canSubmitGoals ? Color.green.opacity(0.42) : Color.red.opacity(0.45), lineWidth: 1)
             )
+            .overlay(alignment: .topLeading) {
+                if goalSuggestionsVisible && !goalSuggestions.isEmpty {
+                    HarshModeSuggestionList(
+                        suggestions: goalSuggestions,
+                        accentColor: blockerAccent,
+                        onSelect: applyGoalSuggestion
+                    )
+                    .frame(maxWidth: .infinity)
+                    .offset(y: 10)
+                    .zIndex(20)
+                }
+            }
+            .zIndex(goalSuggestionsVisible ? 100 : 0)
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("One goal per line. Minimum: \(max(1, awarenessService.config.harshModeMinimumGoals)). Saved into this Calendar event.")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
 
-                actionRow(
+                promptActionRow(
+                    askLaterHelp: "Move this Calendar event later and ask again at the new start time",
                     primaryTitle: "Start Session",
                     primaryIcon: "play.fill",
                     isPrimaryEnabled: canSubmitGoals,
@@ -583,14 +842,52 @@ private struct HarshModeOverlayView: View {
     }
 
     private var endForm: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
+            nextTaskRow
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Session goals", systemImage: "scope")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.primary)
+
+                HarshModeTextArea(
+                    text: $state.goalsText,
+                    fontSize: 14,
+                    isFocused: false,
+                    canSubmit: false,
+                    onSubmit: {}
+                )
+                .padding(10)
+                .frame(height: 64)
+                .background(Color.black.opacity(0.20))
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                )
+            }
+
             Text("How did it go?")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundColor(.primary)
 
+            Text("Focus")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+
             HStack(spacing: 10) {
                 ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                     ratingButton(rating)
+                }
+            }
+
+            Text("Alignment")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.secondary)
+
+            HStack(spacing: 8) {
+                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                    alignmentButton(alignment)
                 }
             }
 
@@ -607,7 +904,7 @@ private struct HarshModeOverlayView: View {
                     onSubmit: submitReview
                 )
                 .padding(10)
-                .frame(height: 96)
+                .frame(height: 72)
                 .background(Color.black.opacity(0.26))
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .overlay(
@@ -621,9 +918,10 @@ private struct HarshModeOverlayView: View {
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
 
-                actionRow(
-                    primaryTitle: "Stop and Save",
-                    primaryIcon: "stop.fill",
+                promptActionRow(
+                    askLaterHelp: "Extend this Calendar event and ask again later",
+                    primaryTitle: "Save and Close",
+                    primaryIcon: "checkmark.circle.fill",
                     isPrimaryEnabled: canSubmitReview,
                     primaryAction: submitReview
                 )
@@ -631,21 +929,59 @@ private struct HarshModeOverlayView: View {
         }
     }
 
-    private func actionRow(
+    private var nextTaskRow: some View {
+        HStack(spacing: 8) {
+            Image(systemName: prompt.nextTaskTitle == nil ? "calendar" : "arrow.forward.circle")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundColor(.secondary)
+
+            if let title = prompt.nextTaskTitle, let startTime = prompt.nextTaskStartTime {
+                Text("Next: \(title) at \(formatSessionTime(startTime))")
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            } else {
+                Text("No next task in the current schedule window")
+                    .lineLimit(1)
+            }
+        }
+        .font(.system(size: 12, weight: .medium))
+        .foregroundColor(.secondary)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.white.opacity(0.055))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func promptActionRow(
+        askLaterHelp: String,
         primaryTitle: String,
         primaryIcon: String,
         isPrimaryEnabled: Bool,
         primaryAction: @escaping () -> Void
     ) -> some View {
-        HStack(spacing: 10) {
-            Button(role: .destructive) {
-                onEmergencyBreak()
+        let delayMinutes = availableDelayMinutes
+
+        return HStack(spacing: 10) {
+            Menu {
+                ForEach(delayMinutes, id: \.self) { minutes in
+                    Button {
+                        delayPrompt(minutes: minutes)
+                    } label: {
+                        Text("\(minutes) min")
+                    }
+                }
+
+                if delayMinutes.isEmpty {
+                    Text("No room before next task")
+                }
             } label: {
-                Label("Emergency", systemImage: "escape")
+                Label("Ask Later", systemImage: "clock.badge.plus")
                     .font(.system(size: 12, weight: .semibold))
+                    .frame(minHeight: 34)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.regular)
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .help(delayMinutes.isEmpty ? "No safe delay before the next task" : askLaterHelp)
 
             Button {
                 primaryAction()
@@ -711,11 +1047,11 @@ private struct HarshModeOverlayView: View {
     private var reviewRequirementText: String {
         switch (awarenessService.config.harshModeRequireEndRating, awarenessService.config.harshModeRequireReviewNote) {
         case (true, true):
-            return "Rating and review are required, then saved into this Calendar event."
+            return "Focus, Alignment, and review notes are required, then saved into this Calendar event."
         case (true, false):
-            return "Rating is required. Review notes are optional."
+            return "Focus and Alignment are required. Review notes are optional."
         case (false, true):
-            return "Review notes are required. Rating is optional."
+            return "Review notes are required. Focus and Alignment are optional."
         case (false, false):
             return "Review is optional and saved into this Calendar event when present."
         }
@@ -738,7 +1074,7 @@ private struct HarshModeOverlayView: View {
             }
             .foregroundColor(isSelected ? color : .secondary)
             .frame(maxWidth: .infinity)
-            .frame(height: 72)
+            .frame(height: 58)
             .background(isSelected ? color.opacity(0.18) : Color.white.opacity(0.06))
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
@@ -750,24 +1086,98 @@ private struct HarshModeOverlayView: View {
         .hoverEffect(brightness: 0.12)
     }
 
+    private func alignmentButton(_ alignment: SessionAlignment) -> some View {
+        let isSelected = state.selectedAlignment == alignment
+        let color = awarenessAlignmentColor(alignment, isDark: true)
+
+        return Button {
+            state.selectedAlignment = alignment
+            state.errorMessage = nil
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: alignment.icon)
+                    .font(.system(size: 17, weight: .semibold))
+                Text(alignment.shortLabel)
+                    .font(.system(size: 10, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
+            }
+            .foregroundColor(isSelected ? color : .secondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 50)
+            .background(isSelected ? color.opacity(0.16) : Color.white.opacity(0.05))
+            .overlay(
+                RoundedRectangle(cornerRadius: 9)
+                    .stroke(isSelected ? color.opacity(0.55) : Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.12)
+        .help("\(alignment.label): \(alignment.description)")
+    }
+
     private func submitGoals() {
+        let title = state.titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            state.errorMessage = "Keep a session title before starting."
+            return
+        }
         guard canSubmitGoals else {
             state.errorMessage = "Add at least \(max(1, awarenessService.config.harshModeMinimumGoals)) goal\(awarenessService.config.harshModeMinimumGoals == 1 ? "" : "s") before starting."
             return
         }
-        state.errorMessage = onSubmitGoals(goalLines) ? nil : "Could not save goals to Calendar."
+        state.errorMessage = onSubmitGoals(title, goalLines) ? nil : "Could not save session details to Calendar."
     }
 
     private func submitReview() {
         guard canSubmitReview else {
             if awarenessService.config.harshModeRequireEndRating && state.selectedRating == nil {
-                state.errorMessage = "Choose a rating before stopping."
+                state.errorMessage = "Choose a Focus rating before stopping."
+            } else if awarenessService.config.harshModeRequireEndRating && state.selectedAlignment == nil {
+                state.errorMessage = "Choose an Alignment rating before stopping."
             } else {
                 state.errorMessage = "Write a review note before stopping."
             }
             return
         }
-        state.errorMessage = onSubmitReview(state.selectedRating, state.reflectionText) ? nil : "Could not save review to Calendar."
+        state.errorMessage = onSubmitReview(state.selectedRating, state.selectedAlignment, state.reflectionText, goalLines) ? nil : "Could not save review to Calendar."
+    }
+
+    private func applyTitleSuggestion(_ suggestion: String) {
+        state.titleText = suggestion
+        titleSuggestionsVisible = false
+        state.errorMessage = nil
+    }
+
+    private func applyGoalSuggestion(_ suggestion: String) {
+        let text = state.goalsText as NSString
+        let safeRange: NSRange
+        if state.currentGoalLineRange.location <= text.length &&
+            state.currentGoalLineRange.location + state.currentGoalLineRange.length <= text.length {
+            safeRange = state.currentGoalLineRange
+        } else {
+            safeRange = NSRange(location: text.length, length: 0)
+        }
+
+        state.goalsText = text.replacingCharacters(in: safeRange, with: suggestion)
+        state.currentGoalLine = suggestion
+        goalSuggestionsVisible = false
+        state.errorMessage = nil
+    }
+
+    private func delayPrompt(minutes: Int) {
+        state.errorMessage = onDelayPrompt(minutes) ? nil : "Could not delay before the next task."
+    }
+
+    private func copyTitleToGoals() {
+        let title = state.titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        var lines = HarshModeSessionNotes.goalLines(from: state.goalsText)
+        guard !lines.contains(title) else { return }
+        lines.append(title)
+        state.goalsText = lines.joined(separator: "\n")
+        state.errorMessage = nil
     }
 
 }
@@ -778,6 +1188,7 @@ struct HarshModeGuide: View {
     @State private var currentPage = 0
     @State private var demoGoals = "Ship the hard part\nWrite down the next step"
     @State private var selectedRating: SessionRating? = .completed
+    @State private var selectedAlignment: SessionAlignment? = .direct
     @State private var reflection = "Stayed on task after defining the target."
 
     private var colors: AppColors {
@@ -799,7 +1210,7 @@ struct HarshModeGuide: View {
         ),
         (
             title: "Stop With A Review",
-            subtitle: "When the session ends, Commit Mode blocks again until you rate the session and optionally add review notes.",
+            subtitle: "When the session ends, Commit Mode blocks again until you rate Focus, choose Alignment, and optionally add review notes.",
             icon: "checkmark.seal.fill",
             color: Color(hex: "10B981")
         ),
@@ -951,6 +1362,12 @@ struct HarshModeGuide: View {
                     }
                 }
 
+                HStack(spacing: 6) {
+                    ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                        guideAlignmentButton(alignment)
+                    }
+                }
+
                 TextEditor(text: $reflection)
                     .font(.system(size: 13))
                     .scrollContentBackground(.hidden)
@@ -959,11 +1376,11 @@ struct HarshModeGuide: View {
                     .clipShape(RoundedRectangle(cornerRadius: 8))
 
                 Button {
-                    if selectedRating != nil {
+                    if selectedRating != nil && selectedAlignment != nil {
                         dismiss()
                     }
                 } label: {
-                    Label("Stop and Save", systemImage: "stop.fill")
+                    Label("Save and Close", systemImage: "checkmark.circle.fill")
                         .font(.system(size: 13, weight: .bold))
                         .foregroundColor(colors.textPrimary)
                         .padding(.vertical, 10)
@@ -975,7 +1392,7 @@ struct HarshModeGuide: View {
                 }
                 .buttonStyle(.plain)
                 .hoverEffect(brightness: 0.12)
-                .disabled(selectedRating == nil)
+                .disabled(selectedRating == nil || selectedAlignment == nil)
             }
         }
     }
@@ -1051,6 +1468,33 @@ struct HarshModeGuide: View {
             .frame(maxWidth: .infinity)
             .frame(height: 58)
             .background(isSelected ? color.opacity(0.16) : colors.subtleBackground)
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(isSelected ? color.opacity(0.45) : Color.clear, lineWidth: 1)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.12)
+    }
+
+    private func guideAlignmentButton(_ alignment: SessionAlignment) -> some View {
+        let color = awarenessAlignmentColor(alignment, isDark: colorScheme == .dark)
+        let isSelected = selectedAlignment == alignment
+        return Button {
+            selectedAlignment = alignment
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: alignment.icon)
+                    .font(.system(size: 14, weight: .semibold))
+                Text(alignment.shortLabel)
+                    .font(.system(size: 9, weight: .bold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(isSelected ? color : colors.textSecondary)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(isSelected ? color.opacity(0.14) : colors.subtleBackground)
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
                     .stroke(isSelected ? color.opacity(0.45) : Color.clear, lineWidth: 1)

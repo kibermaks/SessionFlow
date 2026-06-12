@@ -452,7 +452,7 @@ class CalendarService: ObservableObject {
         let newEnd = newStart.addingTimeInterval(duration)
 
         var notes = source.notes ?? ""
-        for tag in SessionRating.allTags {
+        for tag in SessionRating.allTags + SessionAlignment.allTags {
             notes = notes.replacingOccurrences(of: tag, with: "")
         }
         notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -489,7 +489,7 @@ class CalendarService: ObservableObject {
         let newEnd = sourceEnd
 
         var notes = source.notes ?? ""
-        for tag in SessionRating.allTags {
+        for tag in SessionRating.allTags + SessionAlignment.allTags {
             notes = notes.replacingOccurrences(of: tag, with: "")
         }
         notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -598,6 +598,28 @@ class CalendarService: ObservableObject {
             return false
         }
     }
+
+    func eventIsFlexible(identifier: String) -> Bool? {
+        guard let event = eventStore.event(withIdentifier: identifier) else { return nil }
+        return FlowFlexibilityNotes.isFlexible(event.notes)
+    }
+
+    func setEventFlexible(eventId: String, isFlexible: Bool) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else {
+            errorMessage = "Event not found"
+            return false
+        }
+
+        event.notes = FlowFlexibilityNotes.applyingFlexible(isFlexible, to: event.notes)
+
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to update event flexibility: \(error.localizedDescription)"
+            return false
+        }
+    }
     
     // MARK: - Feedback Tag
 
@@ -615,6 +637,35 @@ class CalendarService: ObservableObject {
         }
     }
 
+    /// Atomically reads event notes, replaces any alignment tag, and saves
+    @discardableResult
+    func setAlignmentTag(eventId: String, alignment: SessionAlignment) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else { return false }
+        event.notes = alignment.applyTo(notes: event.notes)
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to save alignment: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Atomically applies both review axes, preserving other event notes.
+    @discardableResult
+    func setReviewTags(eventId: String, rating: SessionRating, alignment: SessionAlignment) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else { return false }
+        let withRating = rating.applyTo(notes: event.notes)
+        event.notes = alignment.applyTo(notes: withRating)
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            errorMessage = "Failed to save session review: \(error.localizedDescription)"
+            return false
+        }
+    }
+
     /// Removes any feedback tag from event notes
     @discardableResult
     func clearFeedbackTag(eventId: String) -> Bool {
@@ -622,6 +673,24 @@ class CalendarService: ObservableObject {
         var notes = event.notes ?? ""
         for tag in SessionRating.allTags {
             notes = notes.replacingOccurrences(of: tag, with: "")
+        }
+        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        event.notes = notes.isEmpty ? nil : notes
+        do {
+            try eventStore.save(event, span: .thisEvent)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Removes any alignment tag from event notes
+    @discardableResult
+    func clearAlignmentTag(eventId: String) -> Bool {
+        guard let event = eventStore.event(withIdentifier: eventId) else { return false }
+        var notes = event.notes ?? ""
+        for tag in SessionAlignment.allTags {
+            notes = notes.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
         notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         event.notes = notes.isEmpty ? nil : notes
@@ -650,16 +719,41 @@ class CalendarService: ObservableObject {
         return counts
     }
 
+    struct DaySessionReview: Identifiable {
+        let id: String
+        let title: String
+        let startDate: Date
+        let endDate: Date
+        let rating: SessionRating
+        let alignment: SessionAlignment?
+        let alignmentCountsTowardScore: Bool
+        let durationMinutes: Int
+        let focusMinutes: Int
+    }
+
     /// Per-day stats: feedback counts + total events (for computing unrated)
     struct DayFeedbackStats {
         var counts: [SessionRating: Int] = [:]
+        var alignmentCounts: [SessionAlignment: Int] = [:]
+        var sessionReviews: [DaySessionReview] = []
         var totalEvents: Int = 0
         var focusMinutes: Double = 0
+        var alignedFocusMinutes: Double = 0
+        var alignmentEligibleFocusMinutes: Double = 0
+        var alignmentEligibleRated: Int = 0
         var unrated: Int { totalEvents - counts.values.reduce(0, +) }
+        var alignmentRated: Int { alignmentCounts.values.reduce(0, +) }
+        var alignmentMissing: Int { max(0, alignmentEligibleRated - alignmentRated) }
     }
 
     /// Returns per-day feedback stats for a given month
-    func monthlyFeedbackStats(year: Int, month: Int, weights: FocusWeights = .init(), sessionType: SessionType? = nil) -> [Int: DayFeedbackStats] {
+    func monthlyFeedbackStats(
+        year: Int,
+        month: Int,
+        weights: FocusWeights = .init(),
+        alignmentWeights: AlignmentWeights = .init(),
+        sessionType: SessionType? = nil
+    ) -> [Int: DayFeedbackStats] {
         let cal = Calendar.current
         guard let monthStart = cal.date(from: DateComponents(year: year, month: month, day: 1)),
               let monthEnd = cal.date(byAdding: .month, value: 1, to: monthStart) else { return [:] }
@@ -680,6 +774,12 @@ class CalendarService: ObservableObject {
                 CalendarService.sessionType(fromNotes: event.notes) == sessionType
             }
         }
+        events.sort {
+            if $0.startDate == $1.startDate {
+                return ($0.title ?? "") < ($1.title ?? "")
+            }
+            return $0.startDate < $1.startDate
+        }
 
         var result: [Int: DayFeedbackStats] = [:]
         for event in events {
@@ -688,20 +788,48 @@ class CalendarService: ObservableObject {
             if let rating = SessionRating.fromNotes(event.notes) {
                 result[day, default: DayFeedbackStats()].counts[rating, default: 0] += 1
                 let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
-                result[day, default: DayFeedbackStats()].focusMinutes += minutes * weights.multiplier(for: rating)
+                let focusMinutes = minutes * weights.multiplier(for: rating)
+                let alignment = SessionAlignment.fromNotes(event.notes)
+                let countsTowardAlignment = FlowFlexibilityNotes.countsTowardAlignmentScore(
+                    event.notes,
+                    alignment: alignment
+                )
+                result[day, default: DayFeedbackStats()].focusMinutes += focusMinutes
+                if countsTowardAlignment {
+                    result[day, default: DayFeedbackStats()].alignmentEligibleFocusMinutes += focusMinutes
+                    result[day, default: DayFeedbackStats()].alignmentEligibleRated += 1
+                }
+                result[day, default: DayFeedbackStats()].sessionReviews.append(DaySessionReview(
+                    id: event.eventIdentifier ?? "\(event.startDate.timeIntervalSince1970)-\(event.title ?? "")",
+                    title: event.title ?? "Untitled",
+                    startDate: event.startDate,
+                    endDate: event.endDate,
+                    rating: rating,
+                    alignment: alignment,
+                    alignmentCountsTowardScore: countsTowardAlignment,
+                    durationMinutes: Int(minutes.rounded()),
+                    focusMinutes: Int(focusMinutes.rounded())
+                ))
+                if let alignment {
+                    result[day, default: DayFeedbackStats()].alignmentCounts[alignment, default: 0] += 1
+                    result[day, default: DayFeedbackStats()].alignedFocusMinutes += focusMinutes * alignmentWeights.multiplier(for: alignment)
+                }
             }
         }
         return result
     }
 
     /// Returns today's feedback stats (total events + focus minutes)
-    func todayFeedbackStats(weights: FocusWeights = .init()) -> DayFeedbackStats {
+    func todayFeedbackStats(
+        weights: FocusWeights = .init(),
+        alignmentWeights: AlignmentWeights = .init()
+    ) -> DayFeedbackStats {
         let cal = Calendar.current
         let now = Date()
         let year = cal.component(.year, from: now)
         let month = cal.component(.month, from: now)
         let day = cal.component(.day, from: now)
-        let stats = monthlyFeedbackStats(year: year, month: month, weights: weights)
+        let stats = monthlyFeedbackStats(year: year, month: month, weights: weights, alignmentWeights: alignmentWeights)
         return stats[day] ?? DayFeedbackStats()
     }
 
@@ -745,6 +873,37 @@ class CalendarService: ObservableObject {
             return true
         } catch {
             errorMessage = "Failed to update event time: \(error.localizedDescription)"
+            return false
+        }
+    }
+
+    /// Updates several event times and commits them to EventKit together.
+    func updateEventTimes(_ updates: [(eventId: String, newStart: Date, newEnd: Date)]) -> Bool {
+        guard !updates.isEmpty else { return true }
+
+        var resolved: [(event: EKEvent, newStart: Date, newEnd: Date)] = []
+        resolved.reserveCapacity(updates.count)
+
+        for update in updates {
+            guard let event = eventStore.event(withIdentifier: update.eventId) else {
+                errorMessage = "Event not found"
+                eventStore.reset()
+                return false
+            }
+            resolved.append((event, update.newStart, update.newEnd))
+        }
+
+        do {
+            for item in resolved {
+                item.event.startDate = item.newStart
+                item.event.endDate = item.newEnd
+                try eventStore.save(item.event, span: .thisEvent, commit: false)
+            }
+            try eventStore.commit()
+            return true
+        } catch {
+            eventStore.reset()
+            errorMessage = "Failed to update event times: \(error.localizedDescription)"
             return false
         }
     }

@@ -50,6 +50,16 @@ func awarenessRatingColor(_ rating: SessionRating, isDark: Bool = true) -> Color
     }
 }
 
+func awarenessAlignmentColor(_ alignment: SessionAlignment, isDark: Bool = true) -> Color {
+    switch alignment {
+    case .offTrack: return .red
+    case .maintenance: return isDark ? Color(hex: "A3A3A3") : Color(hex: "525252")
+    case .support: return isDark ? Color(hex: "38BDF8") : Color(hex: "0369A1")
+    case .strategic: return isDark ? Color(hex: "A78BFA") : Color(hex: "7C3AED")
+    case .direct: return isDark ? Color(hex: "34D399") : Color(hex: "047857")
+    }
+}
+
 func awarenessIconName(service: SessionAwarenessService) -> String {
     service.isBusySlotMode ? "calendar" : (service.currentSessionType?.icon ?? "circle")
 }
@@ -202,6 +212,44 @@ struct AwarenessFeedbackButton: View {
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.2)
         .help(rating.label)
+    }
+}
+
+// MARK: - Alignment Button
+
+struct AwarenessAlignmentButton: View {
+    let alignment: SessionAlignment
+    let onSubmit: (SessionAlignment) -> Void
+
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        let color = awarenessAlignmentColor(alignment, isDark: colorScheme == .dark)
+
+        Button {
+            onSubmit(alignment)
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: alignment.icon)
+                    .font(.system(size: 13, weight: .semibold))
+                Text(alignment.shortLabel)
+                    .font(.system(size: 9, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundColor(color.opacity(0.95))
+            .frame(width: 54, height: 34)
+            .background(color.opacity(0.12))
+            .cornerRadius(6)
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(color.opacity(0.22), lineWidth: 1)
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
+        .help("\(alignment.label): \(alignment.description)")
     }
 }
 
@@ -605,6 +653,7 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
     @ObservedObject var audioService: SessionAudioService
     @Binding var feedbackConfirmation: SessionRating?
     let toggleButton: ToggleButton
+    @State private var selectedRating: SessionRating? = nil
 
     @Environment(\.colorScheme) var colorScheme
     var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
@@ -623,8 +672,40 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                             .foregroundColor(colors.textSecondary)
                     }
                     .transition(.scale.combined(with: .opacity))
+                } else if let rating = selectedRating {
+                    Text("Aligned with your goal?")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(colors.textSecondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    HStack(spacing: 6) {
+                        ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                            AwarenessAlignmentButton(alignment: alignment) {
+                                submitFeedback(rating: rating, alignment: $0)
+                            }
+                        }
+                    }
+
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            selectedRating = nil
+                        }
+                    } label: {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(colors.textMuted)
+                            .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
+                    .help("Back")
+
+                    AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
                 } else {
-                    Text("How was \"\(feedback.sessionTitle)\"?")
+                    Text("Focus on \"\(feedback.sessionTitle)\"?")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(colors.textSecondary)
                         .lineLimit(1)
@@ -658,12 +739,21 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
     }
 
     private func submitFeedback(_ rating: SessionRating) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            selectedRating = rating
+        }
+    }
+
+    private func submitFeedback(rating: SessionRating, alignment: SessionAlignment) {
         withAnimation(.easeInOut(duration: 0.2)) {
             feedbackConfirmation = rating
         }
-        awarenessService.submitFeedback(rating: rating)
+        awarenessService.submitFeedback(rating: rating, alignment: alignment)
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            withAnimation { feedbackConfirmation = nil }
+            withAnimation {
+                feedbackConfirmation = nil
+                selectedRating = nil
+            }
         }
     }
 }

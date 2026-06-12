@@ -30,6 +30,7 @@ struct AppSettingsView: View {
     @AppStorage("devNowLineOverrideMinute") private var devNowLineOverrideMinute = 30
 
     @State private var focusWeightsExpanded = false
+    @State private var alignmentWeightsExpanded = false
     @AppStorage("hasSeenHarshModeGuide") var hasSeenHarshModeGuide = false
     @State private var showingHarshModeGuide = false
     @AppStorage("hasSeenShortcutsGuide") var hasSeenShortcutsGuide = false
@@ -642,16 +643,25 @@ struct AppSettingsView: View {
 
             if sessionAwarenessService.config.enabled {
                 Section {
-                    Toggle("Productivity Feedback", isOn: Binding(
+                    Toggle("Focus & Alignment Review", isOn: Binding(
                         get: { sessionAwarenessService.config.productivityEnabled },
                         set: { sessionAwarenessService.config.productivityEnabled = $0 }
                     ))
 
-                    Text("Rate sessions after they end. Shows productivity stats in the right panel.")
+                    Text("Rate ended sessions by Focus and Alignment. Shows Focus Time, Aligned Focus, and daily diagnosis in the right panel.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
                     if sessionAwarenessService.config.productivityEnabled {
+                        Toggle("Daily Phrase", isOn: Binding(
+                            get: { sessionAwarenessService.config.dailyPhraseEnabled },
+                            set: { sessionAwarenessService.config.dailyPhraseEnabled = $0 }
+                        ))
+
+                        Text("Shows a short daily diagnosis in the right panel based on Focus Time and Alignment.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+
                         HStack {
                             Button {
                                 withAnimation(.easeInOut(duration: 0.2)) {
@@ -710,6 +720,73 @@ struct AppSettingsView: View {
                                                value: Binding(
                                                    get: { sessionAwarenessService.config.focusWeights.skippedPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.skippedPercent = $0 }
+                                               ))
+                            }
+                        }
+
+                        HStack {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    alignmentWeightsExpanded.toggle()
+                                }
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.secondary)
+                                        .rotationEffect(.degrees(alignmentWeightsExpanded ? 90 : 0))
+                                        .animation(.easeInOut(duration: 0.2), value: alignmentWeightsExpanded)
+                                    Text("Alignment Weights")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            Spacer()
+                            if alignmentWeightsExpanded {
+                                Button {
+                                    sessionAwarenessService.config.alignmentWeights = .init()
+                                } label: {
+                                    Text("Reset")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .hoverEffect(brightness: 0.3)
+                            }
+                        }
+
+                        if alignmentWeightsExpanded {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("How much each Alignment rating contributes to Aligned Focus. A 1h Focus block with 50% Alignment adds 30 min.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                    .fixedSize(horizontal: false, vertical: true)
+
+                                focusWeightRow(label: "Off-track", icon: SessionAlignment.offTrack.icon, color: awarenessAlignmentColor(.offTrack, isDark: colors.isDark),
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.alignmentWeights.offTrackPercent },
+                                                   set: { sessionAwarenessService.config.alignmentWeights.offTrackPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Maintenance", icon: SessionAlignment.maintenance.icon, color: awarenessAlignmentColor(.maintenance, isDark: colors.isDark),
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.alignmentWeights.maintenancePercent },
+                                                   set: { sessionAwarenessService.config.alignmentWeights.maintenancePercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Support", icon: SessionAlignment.support.icon, color: awarenessAlignmentColor(.support, isDark: colors.isDark),
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.alignmentWeights.supportPercent },
+                                                   set: { sessionAwarenessService.config.alignmentWeights.supportPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Strategic", icon: SessionAlignment.strategic.icon, color: awarenessAlignmentColor(.strategic, isDark: colors.isDark),
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.alignmentWeights.strategicPercent },
+                                                   set: { sessionAwarenessService.config.alignmentWeights.strategicPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Direct", icon: SessionAlignment.direct.icon, color: awarenessAlignmentColor(.direct, isDark: colors.isDark),
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.alignmentWeights.directPercent },
+                                                   set: { sessionAwarenessService.config.alignmentWeights.directPercent = $0 }
                                                ))
                             }
                         }
@@ -1007,11 +1084,6 @@ struct AppSettingsView: View {
                             set: { sessionAwarenessService.config.harshModeMinimumGoals = min(max($0, 1), 5) }
                         ), range: 1...5)
                     }
-
-                    Toggle("Prefill first goal with session name", isOn: Binding(
-                        get: { sessionAwarenessService.config.harshModePrefillTitleGoal },
-                        set: { sessionAwarenessService.config.harshModePrefillTitleGoal = $0 }
-                    ))
                 }
             }
 
@@ -1063,7 +1135,7 @@ struct AppSettingsView: View {
             }
 
             Section("Stop Gate") {
-                Toggle("Require rating at end", isOn: Binding(
+                Toggle("Require Focus & Alignment at end", isOn: Binding(
                     get: { sessionAwarenessService.config.harshModeRequireEndRating },
                     set: { sessionAwarenessService.config.harshModeRequireEndRating = $0 }
                 ))
@@ -1903,7 +1975,7 @@ Spacer()
                 .frame(width: 16)
             Text(label)
                 .font(.system(size: 13))
-                .frame(width: 55, alignment: .leading)
+                .frame(width: 82, alignment: .leading)
             Spacer()
             NumericInputField(value: value, range: 0...200, step: 5, unit: "%")
         }

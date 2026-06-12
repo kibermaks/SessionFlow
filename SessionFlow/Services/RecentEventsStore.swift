@@ -13,16 +13,34 @@ class RecentEventsStore: ObservableObject {
         let calendarName: String
         let calendarIdentifier: String?
         let eventId: String?  // reference to the original calendar event
+        let isFlexible: Bool
         let lastUsed: Date
 
-        init(title: String, durationMinutes: Int, calendarName: String, calendarIdentifier: String?, eventId: String? = nil, lastUsed: Date = Date()) {
+        init(title: String, durationMinutes: Int, calendarName: String, calendarIdentifier: String?, eventId: String? = nil, isFlexible: Bool = false, lastUsed: Date = Date()) {
             self.id = UUID()
             self.title = title
             self.durationMinutes = durationMinutes
             self.calendarName = calendarName
             self.calendarIdentifier = calendarIdentifier
             self.eventId = eventId
+            self.isFlexible = isFlexible
             self.lastUsed = lastUsed
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, title, durationMinutes, calendarName, calendarIdentifier, eventId, isFlexible, lastUsed
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            title = try container.decode(String.self, forKey: .title)
+            durationMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+            calendarName = try container.decode(String.self, forKey: .calendarName)
+            calendarIdentifier = try container.decodeIfPresent(String.self, forKey: .calendarIdentifier)
+            eventId = try container.decodeIfPresent(String.self, forKey: .eventId)
+            isFlexible = try container.decodeIfPresent(Bool.self, forKey: .isFlexible) ?? false
+            lastUsed = try container.decode(Date.self, forKey: .lastUsed)
         }
     }
 
@@ -33,7 +51,7 @@ class RecentEventsStore: ObservableObject {
     }
 
     /// Records a created event. Updates existing template if title matches, otherwise adds new.
-    func record(title: String, durationMinutes: Int, calendarName: String, calendarIdentifier: String?, eventId: String? = nil) {
+    func record(title: String, durationMinutes: Int, calendarName: String, calendarIdentifier: String?, eventId: String? = nil, isFlexible: Bool = false) {
         let trimmed = title.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
 
@@ -45,7 +63,8 @@ class RecentEventsStore: ObservableObject {
             durationMinutes: durationMinutes,
             calendarName: calendarName,
             calendarIdentifier: calendarIdentifier,
-            eventId: eventId
+            eventId: eventId,
+            isFlexible: isFlexible
         )
         templates.insert(template, at: 0)
 
@@ -106,6 +125,14 @@ class RecentEventsStore: ObservableObject {
             return liveDuration
         }
         return template.durationMinutes
+    }
+
+    func resolveFlexible(for template: EventTemplate, using calendarService: CalendarService) -> Bool {
+        if let eventId = template.eventId,
+           let liveFlexible = calendarService.eventIsFlexible(identifier: eventId) {
+            return liveFlexible
+        }
+        return template.isFlexible
     }
 
     private func load() {

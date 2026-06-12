@@ -28,8 +28,8 @@ struct SessionAwarenessGuide: View {
             color: Color(hex: "3B82F6")
         ),
         (
-            title: "Session Feedback",
-            subtitle: "After each session ends, rate how it went: Done, Partly, or Skipped. Feedback badges appear on the timeline so you can track your follow-through at a glance.",
+            title: "Focus & Alignment",
+            subtitle: "After each session ends, rate your Focus and whether the work moved your current goal. Badges appear on the timeline so you can track follow-through and direction at a glance.",
             icon: "checkmark.circle.fill",
             color: Color(hex: "10B981")
         )

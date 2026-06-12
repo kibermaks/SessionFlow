@@ -10,7 +10,8 @@ struct EventCreationPopover: View {
 
     @Binding var startTime: Date
     @Binding var durationMinutes: Int
-    let onCommit: (String, Date, Date, CalendarDescriptor) -> Void
+    @Binding var isFlexible: Bool
+    let onCommit: (String, Date, Date, CalendarDescriptor, Bool) -> Void
     let onCancel: () -> Void
 
     @EnvironmentObject var calendarService: CalendarService
@@ -26,10 +27,12 @@ struct EventCreationPopover: View {
 
     init(startTime: Binding<Date>,
          durationMinutes: Binding<Int>,
-         onCommit: @escaping (String, Date, Date, CalendarDescriptor) -> Void,
+         isFlexible: Binding<Bool>,
+         onCommit: @escaping (String, Date, Date, CalendarDescriptor, Bool) -> Void,
          onCancel: @escaping () -> Void) {
         self._startTime = startTime
         self._durationMinutes = durationMinutes
+        self._isFlexible = isFlexible
         self.onCommit = onCommit
         self.onCancel = onCancel
     }
@@ -146,6 +149,7 @@ struct EventCreationPopover: View {
 
                             if let match = bestMatch {
                                 durationMinutes = recentEventsStore.resolveDuration(for: match, using: calendarService)
+                                isFlexible = recentEventsStore.resolveFlexible(for: match, using: calendarService)
                                 if let calId = match.calendarIdentifier,
                                    let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                                     selectedCalendarName = info.name
@@ -205,6 +209,18 @@ struct EventCreationPopover: View {
                     durationChip(90)
                 }
             }
+
+            Toggle(isOn: $isFlexible) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.left.and.right")
+                        .font(.system(size: 11))
+                    Text("Flexible")
+                        .font(.system(size: 12, weight: .medium))
+                }
+                .foregroundColor(colors.textSecondary)
+            }
+            .toggleStyle(.checkbox)
+            .help("Allows elastic editing to move this external calendar event.")
 
             // Time summary
             HStack {
@@ -470,6 +486,7 @@ struct EventCreationPopover: View {
         switch suggestion {
         case .recentEvent(let template):
             durationMinutes = recentEventsStore.resolveDuration(for: template, using: calendarService)
+            isFlexible = recentEventsStore.resolveFlexible(for: template, using: calendarService)
             if let calId = template.calendarIdentifier,
                let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                 selectedCalendarName = info.name
@@ -478,6 +495,7 @@ struct EventCreationPopover: View {
         case .calendar(let info):
             selectedCalendarName = info.name
             eventCreationCoordinator.calendarColor = info.color
+            isFlexible = false
         }
     }
 
@@ -505,6 +523,7 @@ struct EventCreationPopover: View {
         case .recentEvent(let template):
             eventTitle = template.title
             durationMinutes = recentEventsStore.resolveDuration(for: template, using: calendarService)
+            isFlexible = recentEventsStore.resolveFlexible(for: template, using: calendarService)
             if let calId = template.calendarIdentifier,
                let info = sortedCalendars.first(where: { $0.identifier == calId }) {
                 selectedCalendarName = info.name
@@ -514,6 +533,7 @@ struct EventCreationPopover: View {
             selectedCalendarName = info.name
             eventCreationCoordinator.calendarColor = info.color
             eventTitle = ""
+            isFlexible = false
         }
         selectedSuggestionIndex = -1
         eventCreationCoordinator.draftTitle = eventTitle.trimmingCharacters(in: .whitespaces)
@@ -537,6 +557,6 @@ struct EventCreationPopover: View {
         guard !title.isEmpty, let info = selectedCalendarInfo else { return }
         let end = startTime.addingTimeInterval(Double(durationMinutes) * 60)
         let descriptor = CalendarDescriptor(name: info.name, identifier: info.identifier)
-        onCommit(title, startTime, end, descriptor)
+        onCommit(title, startTime, end, descriptor, isFlexible)
     }
 }

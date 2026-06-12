@@ -299,6 +299,53 @@ struct FocusWeights: Codable, Equatable {
     }
 }
 
+// MARK: - Alignment weights (percentage each alignment contributes to aligned focus)
+
+struct AlignmentWeights: Codable, Equatable {
+    var offTrackPercent: Int = 0
+    var maintenancePercent: Int = 25
+    var supportPercent: Int = 50
+    var strategicPercent: Int = 75
+    var directPercent: Int = 100
+
+    init(
+        offTrackPercent: Int = 0,
+        maintenancePercent: Int = 25,
+        supportPercent: Int = 50,
+        strategicPercent: Int = 75,
+        directPercent: Int = 100
+    ) {
+        self.offTrackPercent = offTrackPercent
+        self.maintenancePercent = maintenancePercent
+        self.supportPercent = supportPercent
+        self.strategicPercent = strategicPercent
+        self.directPercent = directPercent
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        offTrackPercent = try c.decodeIfPresent(Int.self, forKey: .offTrackPercent) ?? 0
+        maintenancePercent = try c.decodeIfPresent(Int.self, forKey: .maintenancePercent) ?? 25
+        supportPercent = try c.decodeIfPresent(Int.self, forKey: .supportPercent) ?? 50
+        strategicPercent = try c.decodeIfPresent(Int.self, forKey: .strategicPercent) ?? 75
+        directPercent = try c.decodeIfPresent(Int.self, forKey: .directPercent) ?? 100
+    }
+
+    func percent(for alignment: SessionAlignment) -> Int {
+        switch alignment {
+        case .offTrack: return offTrackPercent
+        case .maintenance: return maintenancePercent
+        case .support: return supportPercent
+        case .strategic: return strategicPercent
+        case .direct: return directPercent
+        }
+    }
+
+    func multiplier(for alignment: SessionAlignment) -> Double {
+        Double(percent(for: alignment)) / 100.0
+    }
+}
+
 // MARK: - Harsh Mode config
 
 enum HarshModeReminderStyle: String, Codable, CaseIterable, Identifiable {
@@ -418,7 +465,9 @@ struct SessionAwarenessConfig: Codable, Equatable {
 
     // Productivity feedback
     var productivityEnabled: Bool = true
+    var dailyPhraseEnabled: Bool = true
     var focusWeights: FocusWeights = .init()
+    var alignmentWeights: AlignmentWeights = .init()
 
     // Harsh Mode
     var harshModeEnabled: Bool = false
@@ -482,7 +531,7 @@ struct SessionAwarenessConfig: Codable, Equatable {
         case presenceReminderEnabled, presenceReminderIntervalMinutes, presenceReminderSound
         case workSoundAccelerando, sideSoundAccelerando, deepSoundAccelerando
         case planningSoundAccelerando, otherEventsSoundAccelerando
-        case productivityEnabled, focusWeights
+        case productivityEnabled, dailyPhraseEnabled, focusWeights, alignmentWeights
         case harshModeEnabled, harshModeSessionTypes
         case harshModeRequireStartGoals, harshModeMinimumGoals, harshModePrefillTitleGoal
         case harshModeShowEventNotes, harshModeBlockerTemplate, harshModeShowProgressOnBlocker
@@ -524,7 +573,9 @@ struct SessionAwarenessConfig: Codable, Equatable {
         try c.encode(planningSoundAccelerando, forKey: .planningSoundAccelerando)
         try c.encode(otherEventsSoundAccelerando, forKey: .otherEventsSoundAccelerando)
         try c.encode(productivityEnabled, forKey: .productivityEnabled)
+        try c.encode(dailyPhraseEnabled, forKey: .dailyPhraseEnabled)
         try c.encode(focusWeights, forKey: .focusWeights)
+        try c.encode(alignmentWeights, forKey: .alignmentWeights)
         try c.encode(harshModeEnabled, forKey: .harshModeEnabled)
         try c.encode(harshModeSessionTypes, forKey: .harshModeSessionTypes)
         try c.encode(harshModeRequireStartGoals, forKey: .harshModeRequireStartGoals)
@@ -588,7 +639,9 @@ struct SessionAwarenessConfig: Codable, Equatable {
         otherEventsSoundAccelerando = try c.decodeIfPresent(AccelerandoConfig.self, forKey: .otherEventsSoundAccelerando) ?? .init(enabled: true, maxMultiplier: 1.2)
 
         productivityEnabled = try c.decodeIfPresent(Bool.self, forKey: .productivityEnabled) ?? true
+        dailyPhraseEnabled = try c.decodeIfPresent(Bool.self, forKey: .dailyPhraseEnabled) ?? true
         focusWeights = try c.decodeIfPresent(FocusWeights.self, forKey: .focusWeights) ?? .init()
+        alignmentWeights = try c.decodeIfPresent(AlignmentWeights.self, forKey: .alignmentWeights) ?? .init()
         harshModeEnabled = try c.decodeIfPresent(Bool.self, forKey: .harshModeEnabled) ?? false
         harshModeSessionTypes = try c.decodeIfPresent(HarshModeTypeFilter.self, forKey: .harshModeSessionTypes) ?? .init()
         harshModeRequireStartGoals = try c.decodeIfPresent(Bool.self, forKey: .harshModeRequireStartGoals) ?? true

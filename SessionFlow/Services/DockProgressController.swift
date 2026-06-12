@@ -22,12 +22,13 @@ class DockProgressController {
                 awarenessService.$currentSessionType,
                 awarenessService.$isBusySlotMode
             )
+            .combineLatest(awarenessService.$timeDisplayMode)
             .throttle(for: .seconds(1), scheduler: DispatchQueue.main, latest: true)
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isActive, progress, sessionType, isBusySlot in
+            .sink { [weak self] state, mode in
+                let (isActive, progress, sessionType, isBusySlot) = state
                 let enabled = awarenessService.config.showDockProgress
                 let busyColor: NSColor? = awarenessService.busySlotCalendarColor.map { NSColor($0) }
-                let mode = awarenessService.timeDisplayMode
                 self?.update(
                     isActive: isActive && enabled,
                     progress: progress,
@@ -179,8 +180,8 @@ private class DockTileProgressView: NSView {
         let startAngle: CGFloat = 90  // top in AppKit coordinates
 
         if isRemainingMode {
-            // Remaining: full donut eaten counterclockwise from 12 o'clock
-            // Colored arc = remaining portion, clockwise from the eaten edge back to 12
+            // Remaining: starts full and is eaten counterclockwise from 12 o'clock.
+            // The colored arc always runs clockwise from 12 to the current remaining position.
             let remainingFraction = 1.0 - progress
             guard remainingFraction > 0 else { return }
             let endAngle: CGFloat = startAngle - CGFloat(remainingFraction) * 360
@@ -189,10 +190,10 @@ private class DockTileProgressView: NSView {
             progressPath.appendArc(withCenter: center, radius: ringRadius, startAngle: startAngle, endAngle: endAngle, clockwise: true)
             progressPath.lineWidth = ringLineWidth
             progressPath.lineCapStyle = .round
-            progressColor.withAlphaComponent(0.95).setStroke()
+            remainingDonutColor(progress: progress).withAlphaComponent(0.95).setStroke()
             progressPath.stroke()
         } else {
-            // Elapsed: empty donut fills clockwise as time passes
+            // Elapsed: empty donut fills clockwise as time passes.
             guard progress > 0 else { return }
             let endAngle: CGFloat = startAngle - CGFloat(progress) * 360
 
@@ -203,6 +204,24 @@ private class DockTileProgressView: NSView {
             progressColor.withAlphaComponent(0.95).setStroke()
             progressPath.stroke()
         }
+    }
+
+    private func remainingDonutColor(progress: Double) -> NSColor {
+        let urgency = min(1, max(0, (progress - 0.55) / 0.45))
+        let green = (r: CGFloat(16), g: CGFloat(185), b: CGFloat(129))
+        let amber = (r: CGFloat(245), g: CGFloat(158), b: CGFloat(11))
+        let red = (r: CGFloat(239), g: CGFloat(68), b: CGFloat(68))
+
+        let start = urgency < 0.55 ? green : amber
+        let end = urgency < 0.55 ? amber : red
+        let t = urgency < 0.55 ? urgency / 0.55 : (urgency - 0.55) / 0.45
+
+        return NSColor(
+            calibratedRed: (start.r + (end.r - start.r) * t) / 255,
+            green: (start.g + (end.g - start.g) * t) / 255,
+            blue: (start.b + (end.b - start.b) * t) / 255,
+            alpha: 1
+        )
     }
 }
 

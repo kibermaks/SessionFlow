@@ -76,7 +76,8 @@ struct GetTodaysFocusTime: AppIntent {
         }
 
         let stats = calendarService.todayFeedbackStats(
-            weights: awarenessService.config.focusWeights
+            weights: awarenessService.config.focusWeights,
+            alignmentWeights: awarenessService.config.alignmentWeights
         )
 
         let hours = Int(stats.focusMinutes) / 60

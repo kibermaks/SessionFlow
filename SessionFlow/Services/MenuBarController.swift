@@ -146,18 +146,27 @@ class MenuBarController: ObservableObject {
     }
 
     private func addFeedbackSection(_ feedback: SessionFeedback, service: SessionAwarenessService, to menu: NSMenu) {
-        addInfoItem("Feedback needed\(typeSuffix(feedback.sessionType, isBusySlot: feedback.sessionType == nil))", systemImage: "checkmark.circle.badge.questionmark", to: menu, isHeader: true)
-        addInfoItem("How was \"\(truncate(feedback.sessionTitle, maxLength: 56))\"?", systemImage: "quote.bubble", to: menu)
+        addInfoItem("Focus review needed\(typeSuffix(feedback.sessionType, isBusySlot: feedback.sessionType == nil))", systemImage: "checkmark.circle.badge.questionmark", to: menu, isHeader: true)
+        addInfoItem("Focus on \"\(truncate(feedback.sessionTitle, maxLength: 56))\"?", systemImage: "quote.bubble", to: menu)
         addInfoItem("Time: \(timeRange(start: feedback.startTime, end: feedback.endTime))", systemImage: "clock", to: menu)
 
         menu.addItem(NSMenuItem.separator())
 
         for rating in SessionRating.allCases {
-            let item = NSMenuItem(title: rating.label, action: #selector(submitFeedbackFromMenu(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = rating.rawValue
+            let item = NSMenuItem(title: rating.label, action: nil, keyEquivalent: "")
             item.image = symbolImage(rating.icon, pointSize: 13)
             item.isEnabled = true
+
+            let alignmentMenu = NSMenu()
+            for alignment in SessionAlignment.allCases {
+                let alignmentItem = NSMenuItem(title: alignment.label, action: #selector(submitFeedbackWithAlignmentFromMenu(_:)), keyEquivalent: "")
+                alignmentItem.target = self
+                alignmentItem.representedObject = "\(rating.rawValue)|\(alignment.rawValue)"
+                alignmentItem.image = symbolImage(alignment.icon, pointSize: 12)
+                alignmentItem.isEnabled = true
+                alignmentMenu.addItem(alignmentItem)
+            }
+            item.submenu = alignmentMenu
             menu.addItem(item)
         }
 
@@ -265,6 +274,15 @@ class MenuBarController: ObservableObject {
         awarenessService?.submitFeedback(rating: rating)
     }
 
+    @objc private func submitFeedbackWithAlignmentFromMenu(_ sender: NSMenuItem) {
+        guard let rawValue = sender.representedObject as? String else { return }
+        let parts = rawValue.split(separator: "|", maxSplits: 1).map(String.init)
+        guard parts.count == 2,
+              let rating = SessionRating(rawValue: parts[0]),
+              let alignment = SessionAlignment(rawValue: parts[1]) else { return }
+        awarenessService?.submitFeedback(rating: rating, alignment: alignment)
+    }
+
     @objc private func dismissFeedbackFromMenu() {
         awarenessService?.dismissFeedback()
     }
@@ -303,7 +321,7 @@ class MenuBarController: ObservableObject {
         if service.sessionFeedbackPending != nil {
             button.image = statusStackedLensIcon
             button.attributedTitle = NSAttributedString(string: "")
-            button.toolTip = "Feedback needed"
+            button.toolTip = "Focus review needed"
         } else if service.isActive {
             // Show session type icon + time metric
             let iconName = service.isBusySlotMode ? "calendar" : (service.currentSessionType?.icon ?? "circle")
@@ -379,7 +397,7 @@ class MenuBarController: ObservableObject {
 
     private func statusToolTip(for service: SessionAwarenessService) -> String {
         if let feedback = service.sessionFeedbackPending {
-            return "Feedback needed for \(feedback.sessionTitle)"
+            return "Focus review needed for \(feedback.sessionTitle)"
         }
         if service.isActive {
             return service.currentSessionTitle.isEmpty ? "Current session" : service.currentSessionTitle

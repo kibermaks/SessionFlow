@@ -201,7 +201,10 @@ struct MiniPlayerView: View {
     // MARK: - Compact donut progress
 
     private var compactProgressDonut: some View {
-        let barColor = awarenessBarColor(service: awarenessService)
+        let progress = max(0, min(1, awarenessService.progress))
+        let isRemainingMode = awarenessService.timeDisplayMode == .remaining
+        let donutFraction = isRemainingMode ? 1 - progress : progress
+        let barColor = isRemainingMode ? remainingDonutColor(progress: progress) : awarenessBarColor(service: awarenessService)
         let size: CGFloat = 28
         let lineWidth: CGFloat = 3.5
 
@@ -209,11 +212,11 @@ struct MiniPlayerView: View {
             Circle()
                 .stroke(colors.divider, lineWidth: lineWidth)
             Circle()
-                .trim(from: 0, to: CGFloat(awarenessService.progress))
+                .trim(from: 0, to: CGFloat(donutFraction))
                 .stroke(barColor, style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
             (
-                Text("\(Int(awarenessService.progress * 100))")
+                Text("\(Int(donutFraction * 100))")
                     .font(.system(size: 9, weight: .medium, design: .monospaced))
                 +
                 Text("%")
@@ -222,6 +225,23 @@ struct MiniPlayerView: View {
             .foregroundColor(colors.textSecondary)
         }
         .frame(width: size, height: size)
+    }
+
+    private func remainingDonutColor(progress: Double) -> Color {
+        let urgency = min(1, max(0, (progress - 0.55) / 0.45))
+        let green = (r: 16.0, g: 185.0, b: 129.0)
+        let amber = (r: 245.0, g: 158.0, b: 11.0)
+        let red = (r: 239.0, g: 68.0, b: 68.0)
+
+        let start = urgency < 0.55 ? green : amber
+        let end = urgency < 0.55 ? amber : red
+        let t = urgency < 0.55 ? urgency / 0.55 : (urgency - 0.55) / 0.45
+
+        return Color(
+            red: (start.r + (end.r - start.r) * t) / 255,
+            green: (start.g + (end.g - start.g) * t) / 255,
+            blue: (start.b + (end.b - start.b) * t) / 255
+        )
     }
 }
 

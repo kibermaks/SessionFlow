@@ -92,6 +92,7 @@ class SessionAwarenessService: ObservableObject {
     // Harsh Mode
     @Published var harshModePrompt: HarshModePrompt? = nil
     private static let debugHarshModeEventPrefix = "sessionflow-debug-commit-mode-"
+    static let harshDelayMinuteOptions = [1, 2, 3, 4, 5, 10, 15, 20]
 
     // Current time (updated every second) — proxied through timeState
     var currentTime: Date {
@@ -219,6 +220,10 @@ class SessionAwarenessService: ObservableObject {
     private var harshEndBypassedEventIds: Set<String> = []
     private var harshGoalCapturedEventIds: Set<String> = []
     private var harshReviewCapturedEventIds: Set<String> = []
+    private var harshPromptSnoozeUntilByID: [String: Date] = [:]
+    private var harshLifecycleStartedEventIds: Set<String> = []
+    private var harshLifecycleEndedEventIds: Set<String> = []
+    private var harshEndPendingMutedByID: [String: Bool] = [:]
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
@@ -288,7 +293,7 @@ class SessionAwarenessService: ObservableObject {
     static func strippedNotes(_ notes: String?) -> String? {
         guard let notes = notes, !notes.isEmpty else { return nil }
         var result = HarshModeSessionNotes.removingManagedBlocks(from: notes)
-        for tag in ["#work", "#side", "#deep", "#plan", "#break"] + SessionRating.allTags {
+        for tag in FlowFlexibilityNotes.sessionFlowTags + FlowFlexibilityNotes.allTags + SessionRating.allTags + SessionAlignment.allTags {
             result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
         }
         result = result.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -368,15 +373,18 @@ class SessionAwarenessService: ObservableObject {
             clearActiveState()
         }
 
+        let isHarshStartBlocked = isCurrentHarshStartBlocked(now: now)
+        let isHarshEndPromptPending = harshModePrompt?.phase == .end
+
         // Audio/visual features require awareness enabled
         if isEnabled {
             // Phase 3: Presence reminder (suppressed when session-muted)
-            if isActive && config.presenceReminderEnabled && !isSessionMuted {
+            if isActive && !isHarshStartBlocked && config.presenceReminderEnabled && !isSessionMuted {
                 checkPresenceReminder(at: now)
             }
 
             // Phase 3: Ending soon (suppressed when session-muted)
-            if isActive && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable && !isSessionMuted {
+            if isActive && !isHarshStartBlocked && !hasPlayedEndingSoon && config.endingSoonSound.isPlayable && !isSessionMuted {
                 if remaining <= 120 && remaining > 0 {
                     audioService?.playTransition(config: config.endingSoonSound)
                     hasPlayedEndingSoon = true
@@ -385,7 +393,7 @@ class SessionAwarenessService: ObservableObject {
             }
 
             // Phase 3: Accelerando — update playback rate (skip when session-muted)
-            if isActive && !isSessionMuted {
+            if isActive && !isHarshStartBlocked && !isSessionMuted {
                 let accelConfig: AccelerandoConfig
                 if let type = currentSessionType {
                     accelConfig = config.accelerandoConfig(for: type)
@@ -399,7 +407,7 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Ending soon shortcut — fires regardless of awareness state
-        if isActive && !hasFiredEndingSoonShortcut {
+        if isActive && !isHarshStartBlocked && !hasFiredEndingSoonShortcut {
             let leadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
             let leadSeconds = TimeInterval(leadMinutes * 60)
             if remaining <= leadSeconds && remaining > 0 {
@@ -417,9 +425,9 @@ class SessionAwarenessService: ObservableObject {
         updateNextSession(in: todaySlots, at: now)
 
         // Rest tracking — runs whenever awareness OR shortcut detection is active
-        if (isEnabled || hasActiveShortcuts) && !isActive {
+        if (isEnabled || hasActiveShortcuts) && !isActive && !isHarshEndPromptPending {
             checkRestState(in: todaySlots, at: now)
-        } else if isResting {
+        } else if isResting && !isHarshEndPromptPending {
             endRestState()
         }
 
@@ -615,6 +623,13 @@ class SessionAwarenessService: ObservableObject {
 
     private func activateSession(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool, at now: Date) {
         let isNewSession = currentEventId != slot.id
+        let shouldWaitForHarshStart = shouldGateHarshStart(
+            eventId: slot.id,
+            sessionType: sessionType,
+            isBusySlot: isBusySlot,
+            notes: slot.notes,
+            now: now
+        )
 
         // Update identity properties on new session, and keep title/notes/type in sync for live edits
         if isNewSession {
@@ -680,14 +695,14 @@ class SessionAwarenessService: ObservableObject {
             // fire late for sessions we never tracked from the start. This needs to
             // run regardless of awareness state — otherwise toggling off awareness
             // would re-fire endingSoon late once shortcut detection re-attaches.
-            if isJoiningMidEvent {
+            if isJoiningMidEvent && !shouldWaitForHarshStart {
                 let endingSoonLeadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
                 if remaining <= TimeInterval(endingSoonLeadMinutes * 60) {
                     hasFiredEndingSoonShortcut = true
                 }
             }
 
-            if isEnabled {
+            if isEnabled && !shouldWaitForHarshStart {
                 // When joining mid-event, suppress immediate presence/ending triggers
                 // (only fire when DateTime Now naturally crosses the next interval boundary)
                 if isJoiningMidEvent {
@@ -712,7 +727,7 @@ class SessionAwarenessService: ObservableObject {
             }
 
             // Fire "Session Started" shortcut (skip if joining mid-event)
-            if !isJoiningMidEvent {
+            if !isJoiningMidEvent && !shouldWaitForHarshStart {
                 shortcutService.fire(
                     trigger: .started,
                     session: .init(title: slot.title, type: sessionType, isBusySlot: isBusySlot,
@@ -758,15 +773,81 @@ class SessionAwarenessService: ObservableObject {
         return config.harshModeSessionTypes.matches(sessionType)
     }
 
+    private func isHarshStartAccepted(eventId: String, notes: String?) -> Bool {
+        !HarshModeSessionNotes.goals(from: notes).isEmpty || harshGoalCapturedEventIds.contains(eventId)
+    }
+
+    private func shouldGateHarshStart(
+        eventId: String,
+        sessionType: SessionType?,
+        isBusySlot: Bool,
+        notes: String?,
+        now: Date
+    ) -> Bool {
+        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: isBusySlot) else { return false }
+        guard config.harshModeRequireStartGoals else { return false }
+        guard !isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
+        return !harshStartBypassedEventIds.contains(eventId)
+    }
+
+    private func isCurrentHarshStartBlocked(now: Date) -> Bool {
+        guard let eventId = currentEventId else { return false }
+        return shouldGateHarshStart(
+            eventId: eventId,
+            sessionType: currentSessionType,
+            isBusySlot: isBusySlotMode,
+            notes: currentEventNotes,
+            now: now
+        )
+    }
+
+    private func shouldGateHarshEnd(
+        eventId: String,
+        sessionType: SessionType?,
+        notes: String?,
+        isNaturalEnd: Bool,
+        now: Date
+    ) -> Bool {
+        guard isNaturalEnd else { return false }
+        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
+        guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return false }
+        if config.harshModeRequireStartGoals {
+            guard isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
+        }
+        guard !harshReviewCapturedEventIds.contains(eventId),
+              !harshEndBypassedEventIds.contains(eventId),
+              !harshLifecycleEndedEventIds.contains(eventId) else { return false }
+        return !isHarshPromptSnoozed(phase: .end, eventId: eventId, now: now)
+    }
+
+    private func shouldSuppressHarshEndWithoutStart(
+        eventId: String,
+        sessionType: SessionType?,
+        notes: String?,
+        isNaturalEnd: Bool
+    ) -> Bool {
+        guard isNaturalEnd else { return false }
+        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
+        guard config.harshModeRequireStartGoals else { return false }
+        return !isHarshStartAccepted(eventId: eventId, notes: notes)
+    }
+
     private func presentHarshModeStartPromptIfNeeded(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool) {
-        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: isBusySlot) else { return }
-        guard config.harshModeRequireStartGoals else { return }
-        guard HarshModeSessionNotes.goals(from: slot.notes).isEmpty else { return }
+        guard shouldGateHarshStart(
+            eventId: slot.id,
+            sessionType: sessionType,
+            isBusySlot: isBusySlot,
+            notes: slot.notes,
+            now: effectiveNow
+        ) else { return }
+        guard !isHarshPromptSnoozed(phase: .start, eventId: slot.id, now: effectiveNow) else { return }
         guard !harshGoalCapturedEventIds.contains(slot.id),
               !harshStartBypassedEventIds.contains(slot.id) else { return }
         if harshModePrompt?.phase == .start && harshModePrompt?.eventId == slot.id {
             return
         }
+
+        let nextSlot = nextBlockingSlot(after: slot.endTime, excluding: slot.id, in: cachedNowSlots)
 
         harshModePrompt = HarshModePrompt(
             phase: .start,
@@ -775,7 +856,9 @@ class SessionAwarenessService: ObservableObject {
             sessionType: sessionType,
             startTime: slot.startTime,
             endTime: slot.endTime,
-            notes: slot.notes
+            notes: slot.notes,
+            nextTaskTitle: nextSlot?.title,
+            nextTaskStartTime: nextSlot?.startTime
         )
     }
 
@@ -787,13 +870,19 @@ class SessionAwarenessService: ObservableObject {
         endTime: Date,
         notes: String?
     ) {
-        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return }
-        guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return }
+        guard shouldGateHarshEnd(
+            eventId: eventId,
+            sessionType: sessionType,
+            notes: notes,
+            isNaturalEnd: true,
+            now: effectiveNow
+        ) else { return }
         guard !harshReviewCapturedEventIds.contains(eventId),
               !harshEndBypassedEventIds.contains(eventId) else { return }
         if harshModePrompt?.phase == .end && harshModePrompt?.eventId == eventId {
             return
         }
+        let nextSlot = nextBlockingSlot(after: endTime, excluding: eventId, in: cachedNowSlots)
 
         harshModePrompt = HarshModePrompt(
             phase: .end,
@@ -802,7 +891,9 @@ class SessionAwarenessService: ObservableObject {
             sessionType: sessionType,
             startTime: startTime,
             endTime: endTime,
-            notes: notes
+            notes: notes,
+            nextTaskTitle: nextSlot?.title,
+            nextTaskStartTime: nextSlot?.startTime
         )
     }
 
@@ -839,12 +930,116 @@ class SessionAwarenessService: ObservableObject {
             sessionType: currentSessionType ?? .work,
             startTime: start,
             endTime: end,
-            notes: currentEventNotes ?? "Manual developer test prompt."
+            notes: currentEventNotes ?? "Manual developer test prompt.",
+            nextTaskTitle: nil,
+            nextTaskStartTime: nil
         )
     }
 
     private static func isDebugHarshModeEvent(_ eventId: String) -> Bool {
         eventId.hasPrefix(debugHarshModeEventPrefix)
+    }
+
+    func availableHarshDelayMinutes(for prompt: HarshModePrompt) -> [Int] {
+        if Self.isDebugHarshModeEvent(prompt.eventId) {
+            return Self.harshDelayMinuteOptions
+        }
+        return Self.harshDelayMinuteOptions.filter { delayedTiming(for: prompt, minutes: $0) != nil }
+    }
+
+    func submitHarshDelay(minutes: Int) -> Bool {
+        guard let prompt = harshModePrompt else { return false }
+
+        if Self.isDebugHarshModeEvent(prompt.eventId) {
+            harshModePrompt = nil
+            return true
+        }
+
+        guard let timing = delayedTiming(for: prompt, minutes: minutes) else { return false }
+        guard calendarService?.updateEventTime(eventId: prompt.eventId, newStart: timing.start, newEnd: timing.end) == true else {
+            return false
+        }
+
+        // Re-enter tracking immediately; do not mark goal/review captured so the gate returns later.
+        harshPromptSnoozeUntilByID[prompt.id] = timing.snoozeUntil
+        sessionStartTime = timing.start
+        sessionEndTime = timing.end
+        remaining = max(0, timing.end.timeIntervalSince(effectiveNow))
+        progress = max(0, min(1, effectiveNow.timeIntervalSince(timing.start) / max(1, timing.end.timeIntervalSince(timing.start))))
+        lastSlotsFetch = .distantPast
+        calendarService?.refreshCurrentEvents()
+        harshModePrompt = nil
+        tick()
+        return true
+    }
+
+    private func delayedTiming(for prompt: HarshModePrompt, minutes: Int) -> (start: Date, end: Date, snoozeUntil: Date)? {
+        let now = effectiveNow
+        var slots = cachedNowSlots
+        if (slots.isEmpty || lastSlotsFetch == .distantPast), let calendarService {
+            slots = calendarService.fetchNowSlots(referenceTime: now)
+        }
+
+        let nextStart = nextBlockingSlot(after: prompt.endTime, excluding: prompt.eventId, in: slots)?.startTime
+            ?? prompt.nextTaskStartTime
+        return Self.harshDelayTiming(
+            phase: prompt.phase,
+            startTime: prompt.startTime,
+            endTime: prompt.endTime,
+            now: now,
+            minutes: minutes,
+            nextTaskStart: nextStart
+        )
+    }
+
+    static func harshDelayTiming(
+        phase: HarshModePromptPhase,
+        startTime: Date,
+        endTime: Date,
+        now: Date,
+        minutes: Int,
+        nextTaskStart: Date?
+    ) -> (start: Date, end: Date, snoozeUntil: Date)? {
+        guard minutes > 0 else { return nil }
+
+        let delay = TimeInterval(minutes * 60)
+        let snoozeUntil = now.addingTimeInterval(delay)
+        let requestedStart: Date
+        let requestedEnd: Date
+
+        switch phase {
+        case .start:
+            requestedStart = startTime.addingTimeInterval(delay)
+            requestedEnd = endTime.addingTimeInterval(delay)
+        case .end:
+            requestedStart = startTime
+            requestedEnd = max(now, endTime).addingTimeInterval(delay)
+        }
+
+        if let nextTaskStart, requestedEnd > nextTaskStart { return nil }
+        guard requestedEnd > now else { return nil }
+        guard phase == .start || requestedEnd > endTime else { return nil }
+        return (requestedStart, requestedEnd, snoozeUntil)
+    }
+
+    private func nextBlockingSlot(after date: Date, excluding eventId: String, in slots: [BusyTimeSlot]) -> BusyTimeSlot? {
+        slots
+            .filter { $0.id != eventId && $0.startTime >= date }
+            .sorted {
+                if $0.startTime == $1.startTime { return $0.endTime < $1.endTime }
+                return $0.startTime < $1.startTime
+            }
+            .first
+    }
+
+    private func isHarshPromptSnoozed(phase: HarshModePromptPhase, eventId: String, now: Date) -> Bool {
+        let promptID = "\(eventId)-\(phase.rawValue)"
+        guard let snoozeUntil = harshPromptSnoozeUntilByID[promptID] else { return false }
+        if snoozeUntil > now {
+            return true
+        }
+        harshPromptSnoozeUntilByID[promptID] = nil
+        return false
     }
 
     // MARK: - Session transitions
@@ -862,6 +1057,59 @@ class SessionAwarenessService: ObservableObject {
         notes: String?,
         isNaturalEnd: Bool
     ) {
+        if shouldSuppressHarshEndWithoutStart(
+            eventId: eventId,
+            sessionType: sessionType,
+            notes: notes,
+            isNaturalEnd: isNaturalEnd
+        ) {
+            cancelPendingSessionAudioStart()
+            if isEnabled {
+                audioService?.stopAmbient()
+            }
+            return
+        }
+
+        if shouldGateHarshEnd(
+            eventId: eventId,
+            sessionType: sessionType,
+            notes: notes,
+            isNaturalEnd: isNaturalEnd,
+            now: effectiveNow
+        ) {
+            harshEndPendingMutedByID["\(eventId)-\(HarshModePromptPhase.end.rawValue)"] = isSessionMuted
+            cancelPendingSessionAudioStart()
+            presentHarshModeEndPromptIfNeeded(
+                eventId: eventId,
+                sessionTitle: sessionTitle,
+                sessionType: sessionType,
+                startTime: startTime,
+                endTime: endTime,
+                notes: notes
+            )
+            return
+        }
+
+        fireSessionEndLifecycle(
+            eventId: eventId,
+            sessionTitle: sessionTitle,
+            sessionType: sessionType,
+            startTime: startTime,
+            endTime: endTime,
+            isNaturalEnd: isNaturalEnd,
+            wasSessionMuted: isSessionMuted
+        )
+    }
+
+    private func fireSessionEndLifecycle(
+        eventId: String,
+        sessionTitle: String,
+        sessionType: SessionType?,
+        startTime: Date,
+        endTime: Date,
+        isNaturalEnd: Bool,
+        wasSessionMuted: Bool
+    ) {
         // Shortcuts fire on ALL session end transitions (natural end or drag-away)
         shortcutService.fire(
             trigger: .ended,
@@ -875,26 +1123,15 @@ class SessionAwarenessService: ObservableObject {
         // If we were in rest when session ended (shouldn't normally happen, but safety)
         if isResting { endRestState() }
 
-        if isNaturalEnd {
-            presentHarshModeEndPromptIfNeeded(
-                eventId: eventId,
-                sessionTitle: sessionTitle,
-                sessionType: sessionType,
-                startTime: startTime,
-                endTime: endTime,
-                notes: notes
-            )
-        }
-
         // Audio and feedback require awareness enabled
         guard isEnabled else { return }
 
         audioService?.stopAmbient()
-        if isSessionMuted {
+        if wasSessionMuted {
             audioService?.stopTransition()
         }
 
-        if isNaturalEnd && !isSessionMuted && config.endSound.isPlayable {
+        if isNaturalEnd && !wasSessionMuted && config.endSound.isPlayable {
             audioService?.playTransition(config: config.endSound)
         }
 
@@ -910,12 +1147,61 @@ class SessionAwarenessService: ObservableObject {
             )
 
             feedbackDismissTimer?.invalidate()
-            feedbackDismissTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: false) { [weak self] _ in
+            feedbackDismissTimer = Timer.scheduledTimer(withTimeInterval: 30, repeats: false) { [weak self] _ in
                 DispatchQueue.main.async {
                     self?.sessionFeedbackPending = nil
                 }
             }
         }
+    }
+
+    private func fireHarshStartLifecycle(prompt: HarshModePrompt, title: String) {
+        guard currentEventId == prompt.eventId, isActive else { return }
+        guard !harshLifecycleStartedEventIds.contains(prompt.eventId) else { return }
+        harshLifecycleStartedEventIds.insert(prompt.eventId)
+
+        let now = effectiveNow
+        lastPresenceReminderTime = now
+        hasPlayedEndingSoon = false
+        hasFiredEndingSoonShortcut = false
+
+        if isEnabled {
+            triggerFlash(.sessionStarted)
+            if !isSessionMuted {
+                playSessionStartAudio(sessionType: prompt.sessionType, skipTransition: false)
+            }
+        }
+
+        shortcutService.fire(
+            trigger: .started,
+            session: .init(
+                title: title,
+                type: prompt.sessionType,
+                isBusySlot: false,
+                startTime: prompt.startTime,
+                endTime: prompt.endTime
+            ),
+            config: config.shortcuts
+        )
+    }
+
+    private func fireHarshEndLifecycle(prompt: HarshModePrompt) {
+        guard !harshLifecycleEndedEventIds.contains(prompt.eventId) else { return }
+        harshLifecycleEndedEventIds.insert(prompt.eventId)
+
+        let promptID = prompt.id
+        let wasSessionMuted = harshEndPendingMutedByID[promptID] ?? isSessionMuted
+        harshEndPendingMutedByID[promptID] = nil
+
+        fireSessionEndLifecycle(
+            eventId: prompt.eventId,
+            sessionTitle: prompt.sessionTitle,
+            sessionType: prompt.sessionType,
+            startTime: prompt.startTime,
+            endTime: prompt.endTime,
+            isNaturalEnd: true,
+            wasSessionMuted: wasSessionMuted
+        )
     }
 
     private func playSessionStartAudio(sessionType: SessionType?, skipTransition: Bool = false) {
@@ -1018,55 +1304,77 @@ class SessionAwarenessService: ObservableObject {
 
     // MARK: - Feedback actions
 
-    func submitHarshGoals(_ goals: [String]) -> Bool {
+    func submitHarshGoals(title: String, goals: [String]) -> Bool {
         guard let prompt = harshModePrompt, prompt.phase == .start else { return false }
+        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedGoals = goals
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+        guard !cleanedTitle.isEmpty else { return false }
         guard cleanedGoals.count >= max(1, config.harshModeMinimumGoals) else { return false }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
+            currentSessionTitle = cleanedTitle
             harshGoalCapturedEventIds.insert(prompt.eventId)
+            harshPromptSnoozeUntilByID[prompt.id] = nil
             harshModePrompt = nil
             return true
         }
 
         let sourceNotes = currentEventId == prompt.eventId ? currentEventNotes : prompt.notes
         let updatedNotes = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: sourceNotes)
-        guard calendarService?.updateEvent(eventId: prompt.eventId, title: nil, notes: updatedNotes, url: nil) == true else {
+        guard calendarService?.updateEvent(eventId: prompt.eventId, title: cleanedTitle, notes: updatedNotes, url: nil) == true else {
             return false
         }
 
+        if let sessionType = prompt.sessionType {
+            SessionNameHistory.shared.addName(cleanedTitle, for: sessionType)
+            TaskLineHistory.shared.addLines(cleanedGoals, for: sessionType)
+        }
         if currentEventId == prompt.eventId {
+            currentSessionTitle = cleanedTitle
             currentEventNotes = updatedNotes
         }
         harshGoalCapturedEventIds.insert(prompt.eventId)
+        harshPromptSnoozeUntilByID[prompt.id] = nil
+        fireHarshStartLifecycle(prompt: prompt, title: cleanedTitle)
         harshModePrompt = nil
         calendarService?.refreshCurrentEvents()
         return true
     }
 
-    func submitHarshReview(rating: SessionRating?, reflection: String) -> Bool {
+    func submitHarshReview(rating: SessionRating?, alignment: SessionAlignment?, reflection: String, goals: [String]) -> Bool {
         guard let prompt = harshModePrompt, prompt.phase == .end else { return false }
         let cleanedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanedGoals = goals
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         guard !config.harshModeRequireEndRating || rating != nil else { return false }
+        guard !config.harshModeRequireEndRating || alignment != nil else { return false }
         guard !config.harshModeRequireReviewNote || !cleanedReflection.isEmpty else { return false }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
             harshReviewCapturedEventIds.insert(prompt.eventId)
+            harshPromptSnoozeUntilByID[prompt.id] = nil
             sessionFeedbackPending = nil
             feedbackDismissTimer?.invalidate()
             harshModePrompt = nil
             return true
         }
 
-        let updatedNotes = HarshModeSessionNotes.applyingReview(rating: rating, reflection: cleanedReflection, to: prompt.notes)
+        let notesWithGoals = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: prompt.notes)
+        let updatedNotes = HarshModeSessionNotes.applyingReview(rating: rating, alignment: alignment, reflection: cleanedReflection, to: notesWithGoals)
         guard calendarService?.updateEvent(eventId: prompt.eventId, title: nil, notes: updatedNotes, url: nil) == true else {
             return false
         }
 
+        if let sessionType = prompt.sessionType {
+            TaskLineHistory.shared.addLines(cleanedGoals, for: sessionType)
+        }
         if currentEventId == prompt.eventId {
             currentEventNotes = updatedNotes
         }
         harshReviewCapturedEventIds.insert(prompt.eventId)
+        harshPromptSnoozeUntilByID[prompt.id] = nil
+        fireHarshEndLifecycle(prompt: prompt)
         sessionFeedbackPending = nil
         feedbackDismissTimer?.invalidate()
         harshModePrompt = nil
@@ -1081,13 +1389,24 @@ class SessionAwarenessService: ObservableObject {
             harshStartBypassedEventIds.insert(prompt.eventId)
         case .end:
             harshEndBypassedEventIds.insert(prompt.eventId)
+            fireHarshEndLifecycle(prompt: prompt)
         }
+        harshPromptSnoozeUntilByID[prompt.id] = nil
+        harshEndPendingMutedByID[prompt.id] = nil
         harshModePrompt = nil
     }
 
     func submitFeedback(rating: SessionRating) {
         guard let feedback = sessionFeedbackPending else { return }
         calendarService?.setFeedbackTag(eventId: feedback.eventId, rating: rating)
+        calendarService?.refreshCurrentEvents()
+        feedbackDismissTimer?.invalidate()
+        sessionFeedbackPending = nil
+    }
+
+    func submitFeedback(rating: SessionRating, alignment: SessionAlignment) {
+        guard let feedback = sessionFeedbackPending else { return }
+        calendarService?.setReviewTags(eventId: feedback.eventId, rating: rating, alignment: alignment)
         calendarService?.refreshCurrentEvents()
         feedbackDismissTimer?.invalidate()
         sessionFeedbackPending = nil

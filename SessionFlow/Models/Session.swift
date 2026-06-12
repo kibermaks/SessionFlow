@@ -1,6 +1,53 @@
 import SwiftUI
 import EventKit
 
+enum FlowFlexibilityNotes {
+    static let flexibleTag = "#flow-flexible"
+    static let allTags = [flexibleTag]
+    static let sessionFlowTags = ["#work", "#side", "#deep", "#plan", "#break"]
+
+    static func hasExplicitFlexibleTag(_ notes: String?) -> Bool {
+        guard let notes = notes?.lowercased() else { return false }
+        return allTags.contains { notes.contains($0) }
+    }
+
+    static func isSessionFlowOwned(_ notes: String?) -> Bool {
+        guard let notes = notes?.lowercased() else { return false }
+        return sessionFlowTags.contains { notes.contains($0) }
+    }
+
+    static func isFlexible(_ notes: String?) -> Bool {
+        isSessionFlowOwned(notes) || hasExplicitFlexibleTag(notes)
+    }
+
+    static func alignmentIsOptional(_ notes: String?) -> Bool {
+        !isSessionFlowOwned(notes)
+    }
+
+    static func countsTowardAlignmentScore(_ notes: String?, alignment: SessionAlignment?) -> Bool {
+        !alignmentIsOptional(notes) || alignment != nil
+    }
+
+    static func strippingTags(from notes: String?) -> String? {
+        guard let notes, !notes.isEmpty else { return nil }
+        var result = notes
+        for tag in allTags {
+            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? nil : result
+    }
+
+    static func applyingFlexible(_ isFlexible: Bool, to notes: String?) -> String? {
+        var result = strippingTags(from: notes) ?? ""
+        if isFlexible && !isSessionFlowOwned(result) {
+            result += (result.isEmpty ? "" : " ") + flexibleTag
+        }
+        let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 // MARK: - Session Type
 enum SessionType: String, Codable, CaseIterable, Identifiable {
     case work = "Work"
@@ -107,6 +154,14 @@ struct BusyTimeSlot: Identifiable {
     let calendarName: String
     let calendarColor: Color
     let calendarIdentifier: String?
+
+    var isFlowFlexible: Bool {
+        FlowFlexibilityNotes.isFlexible(notes)
+    }
+
+    var isSessionFlowOwned: Bool {
+        FlowFlexibilityNotes.isSessionFlowOwned(notes)
+    }
 
     init(from event: EKEvent) {
         self.id = event.eventIdentifier ?? UUID().uuidString

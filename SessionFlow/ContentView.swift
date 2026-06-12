@@ -582,8 +582,9 @@ struct ContentViewBody: View {
                     set: { eventCreationCoordinator.startTime = $0 }
                 ),
                 durationMinutes: $eventCreationCoordinator.durationMinutes,
-                onCommit: { title, start, end, calendar in
-                    eventCreationCoordinator.onCommit?(title, start, end, calendar)
+                isFlexible: $eventCreationCoordinator.draftIsFlexible,
+                onCommit: { title, start, end, calendar, isFlexible in
+                    eventCreationCoordinator.onCommit?(title, start, end, calendar, isFlexible)
                 },
                 onCancel: {
                     withAnimation(.easeOut(duration: 0.15)) {
@@ -1604,8 +1605,8 @@ struct RightPanel: View {
                 VStack(spacing: 20) {
                     availabilityCard
                     sessionsSummaryCard
-                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlotsForFetchedDate(selectedDate).contains(where: { SessionRating.fromNotes($0.notes) != nil }) {
-                        ProductivityCard()
+                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlotsForFetchedDate(selectedDate).contains(where: { SessionRating.fromNotes($0.notes) != nil || SessionAlignment.fromNotes($0.notes) != nil }) {
+                        ProductivityCard(selectedDate: selectedDate)
                     }
                     if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
                         DidYouKnowCard(
