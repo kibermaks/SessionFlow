@@ -16,6 +16,7 @@
 		005 /* Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* Preset.swift */; };
 		006 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* CalendarService.swift */; };
 		007 /* SchedulingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* SchedulingEngine.swift */; };
+		SFD002 /* SessionFlowDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFD001 /* SessionFlowDefaults.swift */; };
 		009 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* TimelineView.swift */; };
 		010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* SettingsPanel.swift */; };
 		011 /* PresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* PresetManager.swift */; };
@@ -107,6 +108,7 @@
 		105 /* Preset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preset.swift; sourceTree = "<group>"; };
 		106 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
 		107 /* SchedulingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulingEngine.swift; sourceTree = "<group>"; };
+		SFD001 /* SessionFlowDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowDefaults.swift; sourceTree = "<group>"; };
 		109 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		110 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
@@ -321,6 +323,7 @@
 			children = (
 				106 /* CalendarService.swift */,
 				107 /* SchedulingEngine.swift */,
+				SFD001 /* SessionFlowDefaults.swift */,
 				120 /* UpdateService.swift */,
 			121 /* TimeSnapping.swift */,
 			122 /* EventUndoManager.swift */,
@@ -542,6 +545,7 @@
 				2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */,
 				2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */,
 				007 /* SchedulingEngine.swift in Sources */,
+				SFD002 /* SessionFlowDefaults.swift in Sources */,
 				009 /* TimelineView.swift in Sources */,
 				010 /* SettingsPanel.swift in Sources */,
 				011 /* PresetManager.swift in Sources */,
@@ -740,7 +744,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1057;
+				CURRENT_PROJECT_VERSION = 1060;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -778,7 +782,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1057;
+				CURRENT_PROJECT_VERSION = 1060;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

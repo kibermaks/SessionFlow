@@ -75,7 +75,7 @@ struct ContentView: View {
     @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
     @AppStorage("hasSeenHarshModeGuide") private var hasSeenHarshModeGuide = false
-    @AppStorage("SessionFlow.HasCompletedSetup") private var hasCompletedSetup = false
+    @AppStorage("SessionFlow.HasCompletedSetup", store: SessionFlowDefaults.store) private var hasCompletedSetup = false
     @State private var showingWelcome = false
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
@@ -216,8 +216,8 @@ struct ContentView: View {
     }
 
     private var persistedSetupCompleted: Bool {
-        UserDefaults.standard.bool(forKey: "SessionFlow.HasCompletedSetup") ||
-            UserDefaults.standard.bool(forKey: "hasCompletedSetup")
+        SessionFlowDefaults.store.bool(forKey: "SessionFlow.HasCompletedSetup") ||
+            SessionFlowDefaults.store.bool(forKey: "hasCompletedSetup")
     }
 
     private func checkForWhatsNew() {

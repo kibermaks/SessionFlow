@@ -69,6 +69,15 @@ extension MCPFeatureTests {
         await server.stop()
     }
 
+    @Test func defaultsSandboxDoesNotTouchStandardDefaults() {
+        let key = "SessionFlowTests.StandardDefaultsSentinel.\(UUID().uuidString)"
+
+        SessionFlowDefaults.store.set("sandbox", forKey: key)
+
+        #expect(SessionFlowDefaults.store.string(forKey: key) == "sandbox")
+        #expect(UserDefaults.standard.string(forKey: key) == nil)
+    }
+
     @Test func setConfigRejectsInvalidPattern() async throws {
         let server = try await MCPTestServer.start()
         await #expect(throws: MCPTestError.self) {
@@ -211,14 +220,14 @@ extension MCPFeatureTests {
     @Test func presetStorageMigratesLegacyTaskSchedulerPresetsKey() {
         let legacy = Preset(name: "Legacy Preset", workSessionCount: 3)
         let data = try! JSONEncoder().encode([legacy])
-        UserDefaults.standard.set(data, forKey: "TaskScheduler.Presets")
-        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+        SessionFlowDefaults.store.set(data, forKey: "TaskScheduler.Presets")
+        SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.Presets")
 
         let presets = PresetStorage.shared.loadPresets()
 
         #expect(presets.map(\.name) == ["Legacy Preset"])
-        #expect(UserDefaults.standard.data(forKey: "SessionFlow.Presets") != nil)
-        #expect(UserDefaults.standard.data(forKey: "TaskScheduler.Presets") == nil)
+        #expect(SessionFlowDefaults.store.data(forKey: "SessionFlow.Presets") != nil)
+        #expect(SessionFlowDefaults.store.data(forKey: "TaskScheduler.Presets") == nil)
     }
 
     @Test func presetStorageRecoversSavedStateWhenPresetKeyMissingAfterSetup() {
@@ -229,9 +238,9 @@ extension MCPFeatureTests {
             calendarMapping: CalendarMapping(workCalendarName: "Focused", sideCalendarName: "Admin")
         )
         let data = try! JSONEncoder().encode(state)
-        UserDefaults.standard.set(true, forKey: "SessionFlow.HasCompletedSetup")
-        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
-        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+        SessionFlowDefaults.store.set(true, forKey: "SessionFlow.HasCompletedSetup")
+        SessionFlowDefaults.store.set(data, forKey: "SessionFlow.SavedState")
+        SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.Presets")
 
         let presets = PresetStorage.shared.loadPresets()
 
@@ -249,10 +258,10 @@ extension MCPFeatureTests {
             calendarMapping: CalendarMapping(workCalendarName: "Legacy Work", sideCalendarName: "Legacy Side")
         )
         let data = try! JSONEncoder().encode(state)
-        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
-        UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
-        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
-        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+        SessionFlowDefaults.store.set(false, forKey: "SessionFlow.HasCompletedSetup")
+        SessionFlowDefaults.store.set(true, forKey: "hasCompletedSetup")
+        SessionFlowDefaults.store.set(data, forKey: "SessionFlow.SavedState")
+        SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.Presets")
 
         let presets = PresetStorage.shared.loadPresets()
 
@@ -265,14 +274,14 @@ extension MCPFeatureTests {
     @Test func presetStoragePreservesIntentionallyEmptyPresetListAfterSetup() {
         let state = Preset(name: "Current State", workSessionCount: 9)
         let data = try! JSONEncoder().encode(state)
-        UserDefaults.standard.set(true, forKey: "SessionFlow.HasCompletedSetup")
-        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+        SessionFlowDefaults.store.set(true, forKey: "SessionFlow.HasCompletedSetup")
+        SessionFlowDefaults.store.set(data, forKey: "SessionFlow.SavedState")
         PresetStorage.shared.savePresets([])
 
         let presets = PresetStorage.shared.loadPresets()
 
         #expect(presets.isEmpty)
-        #expect(UserDefaults.standard.data(forKey: "SessionFlow.Presets") != nil)
+        #expect(SessionFlowDefaults.store.data(forKey: "SessionFlow.Presets") != nil)
     }
 
     @Test func getDayReturnsAvailability() async throws {

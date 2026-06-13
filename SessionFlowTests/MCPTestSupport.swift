@@ -63,24 +63,28 @@ final class FakeCalendarStore: CalendarWriting, @unchecked Sendable {
     }
 }
 
-/// Snapshots and restores the host app's persistent UserDefaults domain so state-mutating tools
-/// (set_config, save_preset, …) cannot pollute the user's real SessionFlow settings.
+/// Gives state-mutating tool tests an isolated defaults adapter so they cannot pollute or restore
+/// over the user's real SessionFlow settings.
 final class DefaultsSandbox {
-    private let domain: String
-    private let saved: [String: Any]?
+    private let suiteName: String
+    private let defaults: UserDefaults
+    private var restored = false
 
     init() {
-        domain = Bundle.main.bundleIdentifier ?? "com.kibermaks.SessionFlow"
-        saved = UserDefaults.standard.persistentDomain(forName: domain)
-        UserDefaults.standard.removePersistentDomain(forName: domain)
+        suiteName = "SessionFlowTests.Defaults.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            fatalError("Could not create isolated UserDefaults suite.")
+        }
+        self.defaults = defaults
+        defaults.removePersistentDomain(forName: suiteName)
+        SessionFlowDefaults.useOverrideStore(defaults)
     }
 
     func restore() {
-        if let saved {
-            UserDefaults.standard.setPersistentDomain(saved, forName: domain)
-        } else {
-            UserDefaults.standard.removePersistentDomain(forName: domain)
-        }
+        guard !restored else { return }
+        restored = true
+        SessionFlowDefaults.useOverrideStore(nil)
+        defaults.removePersistentDomain(forName: suiteName)
     }
 }
 

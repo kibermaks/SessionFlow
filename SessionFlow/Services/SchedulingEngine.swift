@@ -22,56 +22,56 @@ class SchedulingEngine: ObservableObject {
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
     @Published var workCalendarIdentifier: String? { didSet { saveState() } }
     @Published var sideCalendarIdentifier: String? { didSet { saveState() } }
-    @Published var hideNightHours: Bool = UserDefaults.standard.object(forKey: "SessionFlow.HideNightHours") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(hideNightHours, forKey: "SessionFlow.HideNightHours") }
+    @Published var hideNightHours: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.HideNightHours") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(hideNightHours, forKey: "SessionFlow.HideNightHours") }
     }
-    @Published var awareExistingTasks: Bool = UserDefaults.standard.object(forKey: "SessionFlow.AwareExistingTasks") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(awareExistingTasks, forKey: "SessionFlow.AwareExistingTasks") }
+    @Published var awareExistingTasks: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.AwareExistingTasks") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(awareExistingTasks, forKey: "SessionFlow.AwareExistingTasks") }
     }
-    @Published var showDidYouKnowCard: Bool = UserDefaults.standard.object(forKey: "SessionFlow.ShowDidYouKnowCardV2") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showDidYouKnowCard, forKey: "SessionFlow.ShowDidYouKnowCardV2") }
+    @Published var showDidYouKnowCard: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.ShowDidYouKnowCardV2") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(showDidYouKnowCard, forKey: "SessionFlow.ShowDidYouKnowCardV2") }
     }
-    @Published var dayStartHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DayStartHour") as? Int) ?? 6 {
-        didSet { UserDefaults.standard.set(dayStartHour, forKey: "SessionFlow.DayStartHour") }
+    @Published var dayStartHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DayStartHour") as? Int) ?? 6 {
+        didSet { SessionFlowDefaults.store.set(dayStartHour, forKey: "SessionFlow.DayStartHour") }
     }
-    @Published var dayEndHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DayEndHour") as? Int) ?? 24 {
-        didSet { UserDefaults.standard.set(dayEndHour, forKey: "SessionFlow.DayEndHour") }
+    @Published var dayEndHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DayEndHour") as? Int) ?? 24 {
+        didSet { SessionFlowDefaults.store.set(dayEndHour, forKey: "SessionFlow.DayEndHour") }
     }
-    @Published var scheduleEndHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.ScheduleEndHour") as? Int) ?? 24 {
-        didSet { UserDefaults.standard.set(scheduleEndHour, forKey: "SessionFlow.ScheduleEndHour") }
+    @Published var scheduleEndHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.ScheduleEndHour") as? Int) ?? 24 {
+        didSet { SessionFlowDefaults.store.set(scheduleEndHour, forKey: "SessionFlow.ScheduleEndHour") }
     }
-    @Published var flexibleSideScheduling: Bool = UserDefaults.standard.object(forKey: "SessionFlow.FlexibleSideScheduling") as? Bool ?? true {
+    @Published var flexibleSideScheduling: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.FlexibleSideScheduling") as? Bool ?? true {
         didSet {
-            UserDefaults.standard.set(flexibleSideScheduling, forKey: "SessionFlow.FlexibleSideScheduling")
+            SessionFlowDefaults.store.set(flexibleSideScheduling, forKey: "SessionFlow.FlexibleSideScheduling")
             saveState()
         }
     }
     
     
     // Task lists and enablement
-    @Published var workTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.WorkTasks") ?? "" {
-        didSet { UserDefaults.standard.set(workTasks, forKey: "SessionFlow.WorkTasks") }
+    @Published var workTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.WorkTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(workTasks, forKey: "SessionFlow.WorkTasks") }
     }
-    @Published var sideTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.SideTasks") ?? "" {
-        didSet { UserDefaults.standard.set(sideTasks, forKey: "SessionFlow.SideTasks") }
+    @Published var sideTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.SideTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(sideTasks, forKey: "SessionFlow.SideTasks") }
     }
-    @Published var deepTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.DeepTasks") ?? "" {
-        didSet { UserDefaults.standard.set(deepTasks, forKey: "SessionFlow.DeepTasks") }
+    @Published var deepTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.DeepTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(deepTasks, forKey: "SessionFlow.DeepTasks") }
     }
-    @Published var useWorkTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseWorkTasks") {
-        didSet { UserDefaults.standard.set(useWorkTasks, forKey: "SessionFlow.UseWorkTasks") }
+    @Published var useWorkTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseWorkTasks") {
+        didSet { SessionFlowDefaults.store.set(useWorkTasks, forKey: "SessionFlow.UseWorkTasks") }
     }
-    @Published var useSideTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseSideTasks") {
-        didSet { UserDefaults.standard.set(useSideTasks, forKey: "SessionFlow.UseSideTasks") }
+    @Published var useSideTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseSideTasks") {
+        didSet { SessionFlowDefaults.store.set(useSideTasks, forKey: "SessionFlow.UseSideTasks") }
     }
-    @Published var useDeepTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseDeepTasks") {
-        didSet { UserDefaults.standard.set(useDeepTasks, forKey: "SessionFlow.UseDeepTasks") }
+    @Published var useDeepTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseDeepTasks") {
+        didSet { SessionFlowDefaults.store.set(useDeepTasks, forKey: "SessionFlow.UseDeepTasks") }
     }
     
     @Published var sideRestDuration: Int = 15 { didSet { saveState() } }
     @Published var deepRestDuration: Int = 20 { didSet { saveState() } }
-    @Published var defaultStartHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DefaultStartHour") as? Int) ?? 8 {
-        didSet { UserDefaults.standard.set(defaultStartHour, forKey: "SessionFlow.DefaultStartHour") }
+    @Published var defaultStartHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DefaultStartHour") as? Int) ?? 8 {
+        didSet { SessionFlowDefaults.store.set(defaultStartHour, forKey: "SessionFlow.DefaultStartHour") }
     }
     
     @Published var deepSessionConfig: DeepSessionConfig = .default { didSet { saveState() } }
@@ -1033,12 +1033,12 @@ class SchedulingEngine: ObservableObject {
         )
 
         if let data = try? JSONEncoder().encode(state) {
-            UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+            SessionFlowDefaults.store.set(data, forKey: "SessionFlow.SavedState")
         }
     }
     
     private func loadState() {
-        guard let data = UserDefaults.standard.data(forKey: "SessionFlow.SavedState"),
+        guard let data = SessionFlowDefaults.store.data(forKey: "SessionFlow.SavedState"),
               var state = try? JSONDecoder().decode(Preset.self, from: data) else {
             return
         }
