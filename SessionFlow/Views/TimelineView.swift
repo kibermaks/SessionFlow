@@ -391,16 +391,7 @@ struct TimelineView: View {
                         Button("Copy") {
                             if let slotId = copySlotId,
                                let slot = filteredBusySlots.first(where: { $0.id == slotId }) {
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "EEE, MMM d"
-                                let label = formatter.string(from: copyTargetDate)
-                                let result = calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate)
-                                if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                                    onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: label, targetDate: copyTargetDate, targetStartTime: targetStart, newEventId: eventId))
-                                    Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                                } else {
-                                    schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
-                                }
+                                copyBusySlot(slot, toCustomDate: copyTargetDate)
                             }
                             showingCopyDatePicker = false
                         }
@@ -1961,51 +1952,39 @@ extension TimelineView {
         }
         .contextMenu {
             Button("View & Edit Event Details") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     selectedSession = nil
                     selectedBusySlot = slot
                 }
             }
             Button(slot.isFlowFlexible ? "Mark Fixed" : "Mark Flexible") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     setBusySlotFlexible(slot, isFlexible: !slot.isFlowFlexible)
                 }
             }
             Divider()
             Button("Delete", role: .destructive) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     deleteBusySlot(slot)
                 }
             }
             Divider()
             Button("Duplicate") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    let result = calendarService.duplicateEvent(eventId: slot.id)
-                    if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                        onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: "the same day", targetDate: actionContext.selectedDate, targetStartTime: targetStart, newEventId: eventId))
-                        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                    } else {
-                        schedulingEngine.schedulingMessage = "Failed to duplicate \"\(slot.title)\""
-                    }
+                performContextMenuAction {
+                    duplicateBusySlot(slot)
                 }
             }
             Menu("Copy to...") {
-                ForEach(copyTargetDays(), id: \.date) { target in
+                ForEach(TimelineEventActions.copyTargets(selectedDate: selectedDate), id: \.date) { target in
                     Button(target.label) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
-                            if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                                onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
-                                Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                            } else {
-                                schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
-                            }
+                        performContextMenuAction {
+                            copyBusySlot(slot, to: target)
                         }
                     }
                 }
                 Divider()
                 Button("Custom...") {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    performContextMenuAction {
                         copySlotId = slot.id
                         copyTargetDate = actionContext.selectedDate
                         showingCopyDatePicker = true
@@ -2723,51 +2702,75 @@ extension TimelineView {
         }
     }
     
-    // MARK: - Copy Target Days
+    // MARK: - Busy Slot Actions
 
-    private struct CopyTarget: Hashable {
-        let label: String
-        let date: Date
-        func hash(into hasher: inout Hasher) { hasher.combine(label) }
-        static func == (lhs: CopyTarget, rhs: CopyTarget) -> Bool { lhs.label == rhs.label }
+    private func performContextMenuAction(_ action: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + TimelineEventActions.contextMenuActionDelay) {
+            action()
+        }
     }
 
-    private func copyTargetDays() -> [CopyTarget] {
-        let cal = Calendar.current
-        let today = Date()
-        var targets: [CopyTarget] = []
-        for offset in 0...6 {
-            let date = cal.date(byAdding: .day, value: offset, to: today) ?? today
-            if cal.isDate(date, inSameDayAs: selectedDate) { continue }
-            let label: String
-            switch offset {
-            case 0: label = "Today"
-            case 1: label = "Tomorrow"
-            default:
-                let formatter = DateFormatter()
-                formatter.dateFormat = "EEE, MMM d"
-                label = formatter.string(from: date)
-            }
-            targets.append(CopyTarget(label: label, date: date))
+    private func duplicateBusySlot(_ slot: BusyTimeSlot) {
+        let result = calendarService.duplicateEvent(eventId: slot.id)
+        handleCopyOutcome(TimelineEventActions.duplicateOutcome(
+            title: slot.title,
+            selectedDate: actionContext.selectedDate,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func copyBusySlot(_ slot: BusyTimeSlot, to target: TimelineEventActions.CopyTarget) {
+        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
+        handleCopyOutcome(TimelineEventActions.copyOutcome(
+            title: slot.title,
+            target: target,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func copyBusySlot(_ slot: BusyTimeSlot, toCustomDate targetDate: Date) {
+        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: targetDate)
+        handleCopyOutcome(TimelineEventActions.customCopyOutcome(
+            title: slot.title,
+            targetDate: targetDate,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func handleCopyOutcome(_ outcome: TimelineEventActions.CopyOutcome) {
+        switch outcome {
+        case .success(let toast):
+            onCopySuccess?(CopyToastInfo(
+                title: toast.title,
+                targetLabel: toast.targetLabel,
+                targetDate: toast.targetDate,
+                targetStartTime: toast.targetStartTime,
+                newEventId: toast.newEventId
+            ))
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+        case .failure(let message):
+            schedulingEngine.schedulingMessage = message
         }
-        return targets
     }
 
     private func deleteBusySlot(_ slot: BusyTimeSlot) {
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
-        let snapshot = EventDeleteSnapshot(
-            eventId: slot.id,
-            title: slot.title,
-            notes: slot.notes,
-            url: slot.url,
-            startDate: slot.startTime,
-            endDate: slot.endTime,
-            calendarIdentifier: slot.calendarIdentifier,
-            calendarName: slot.calendarName
-        )
+        let snapshot = TimelineEventActions.deleteSnapshot(for: slot)
         if calendarService.deleteEvent(identifier: slot.id) {
             eventUndoManager.recordDelete(snapshot)
             dismissTransientInteractionState()
@@ -2778,17 +2781,13 @@ extension TimelineView {
     /// Atomically deletes multiple slots — one undo step for the whole batch.
     private func deleteSelectedSlots(_ slots: [BusyTimeSlot]) {
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
         guard !slots.isEmpty else { return }
         var snapshots: [EventDeleteSnapshot] = []
         for slot in slots {
-            let snapshot = EventDeleteSnapshot(
-                eventId: slot.id, title: slot.title, notes: slot.notes, url: slot.url,
-                startDate: slot.startTime, endDate: slot.endTime,
-                calendarIdentifier: slot.calendarIdentifier, calendarName: slot.calendarName
-            )
+            let snapshot = TimelineEventActions.deleteSnapshot(for: slot)
             if calendarService.deleteEvent(identifier: slot.id) {
                 snapshots.append(snapshot)
             }
@@ -2840,7 +2839,7 @@ extension TimelineView {
             return
         }
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
         // Close any open detail sheet
