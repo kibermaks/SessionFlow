@@ -127,13 +127,7 @@ struct TimelineView: View {
     @StateObject private var actionContext = TimelineActionContext()
     @State private var eventsLocked: Bool = false
     @State private var isTimelinePanelHovered: Bool = false
-    @State private var elasticOriginalBusySlots: [BusyTimeSlot]? = nil
-    @State private var elasticStagedBusySlots: [BusyTimeSlot] = []
-    @State private var elasticPreDragBusySlots: [BusyTimeSlot]? = nil
-    @State private var elasticUndoStack: [ElasticEditSnapshot] = []
-    @State private var elasticRedoStack: [ElasticEditSnapshot] = []
-    @State private var elasticDisplacementMode: ElasticDisplacementMode = .bubble
-    @State private var elasticEmptySpaceAfterBySlotId: [String: TimeInterval] = [:]
+    @State private var elasticEditor = TimelineElasticEditor()
     @State private var showingUnfreezeConfirmation: Bool = false
     @State private var showingCopyDatePicker: Bool = false
     @State private var copyTargetDate: Date = Date()
@@ -165,11 +159,6 @@ struct TimelineView: View {
         case resizeBottom
     }
 
-    private struct ElasticEditSnapshot {
-        let slots: [BusyTimeSlot]
-        let emptySpaceAfterBySlotId: [String: TimeInterval]
-    }
-    
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
         containerWidth < 750
@@ -181,11 +170,11 @@ struct TimelineView: View {
     }
 
     private var isElasticEditing: Bool {
-        elasticOriginalBusySlots != nil
+        elasticEditor.isEditing
     }
 
     private var elasticChangeCount: Int {
-        elasticTimeChanges().count
+        elasticEditor.changeCount
     }
     
     private var showingDetailSheet: Bool {
@@ -284,10 +273,10 @@ struct TimelineView: View {
                     }
                     if isElasticEditing {
                         if event.modifierFlags.contains(.shift) {
-                            guard !elasticRedoStack.isEmpty else { return event }
+                            guard elasticEditor.canRedo else { return event }
                             redoElasticChange()
                         } else {
-                            guard !elasticUndoStack.isEmpty else { return event }
+                            guard elasticEditor.canUndo else { return event }
                             undoElasticChange()
                         }
                         return nil
@@ -1019,7 +1008,7 @@ Elastic edit: stage calendar moves before saving.
             Divider()
                 .frame(height: 22)
 
-            Picker("", selection: $elasticDisplacementMode) {
+            Picker("", selection: $elasticEditor.displacementMode) {
                 ForEach(ElasticDisplacementMode.allCases) { mode in
                     Text(mode.shortLabel).tag(mode)
                 }
@@ -1210,7 +1199,7 @@ extension TimelineView {
 
     private func timelineBusySlots(for date: Date) -> [BusyTimeSlot] {
         if isElasticEditing, Calendar.current.isDate(date, inSameDayAs: selectedDate) {
-            return elasticStagedBusySlots
+            return elasticEditor.stagedSlots
         }
         return calendarService.busySlotsForFetchedDate(date)
     }
@@ -1278,13 +1267,7 @@ extension TimelineView {
             selectedBusySlotIds = preservedSelection
         }
         let snapshot = calendarService.busySlotsForFetchedDate(actionContext.selectedDate)
-        elasticOriginalBusySlots = snapshot
-        elasticStagedBusySlots = snapshot
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = calculateElasticEmptySpaceAfterBySlotId(for: snapshot)
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
-        elasticDisplacementMode = mode
+        elasticEditor.begin(with: snapshot, mode: mode)
 
         if showToast {
             onModeToast?("Elastic editing enabled")
@@ -1307,7 +1290,7 @@ extension TimelineView {
     private func activateElasticModeForDragIfNeeded() {
         guard let requestedMode = requestedElasticModeForDrag() else { return }
         if isElasticEditing {
-            elasticDisplacementMode = requestedMode
+            elasticEditor.displacementMode = requestedMode
         } else {
             beginElasticEditing(mode: requestedMode, preserveSelection: true)
         }
@@ -1315,12 +1298,7 @@ extension TimelineView {
 
     private func cancelElasticEditing(showToast: Bool = true) {
         guard isElasticEditing else { return }
-        elasticOriginalBusySlots = nil
-        elasticStagedBusySlots = []
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = [:]
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
+        elasticEditor.reset()
         selectedBusySlotIds.removeAll()
         resetDragState()
         recalculateWithOriginalSlots()
@@ -1331,7 +1309,7 @@ extension TimelineView {
     }
 
     private func saveElasticEditing() {
-        let changes = elasticTimeChanges()
+        let changes = elasticEditor.timeChanges()
         guard !changes.isEmpty else {
             cancelElasticEditing()
             return
@@ -1352,12 +1330,7 @@ extension TimelineView {
         }
 
         let savedCount = changes.count
-        elasticOriginalBusySlots = nil
-        elasticStagedBusySlots = []
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = [:]
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
+        elasticEditor.reset()
         selectedBusySlotIds.removeAll()
         resetDragState()
 
@@ -1366,66 +1339,19 @@ extension TimelineView {
     }
 
     private func recordElasticUndoSnapshot(_ snapshot: [BusyTimeSlot]) {
-        elasticUndoStack.append(
-            ElasticEditSnapshot(
-                slots: snapshot,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        if elasticUndoStack.count > 50 {
-            elasticUndoStack.removeFirst()
-        }
-        elasticRedoStack.removeAll()
+        elasticEditor.recordUndoSnapshot(snapshot)
     }
 
     private func undoElasticChange() {
-        guard let previous = elasticUndoStack.popLast() else { return }
-        elasticRedoStack.append(
-            ElasticEditSnapshot(
-                slots: elasticStagedBusySlots,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        elasticStagedBusySlots = previous.slots
-        elasticEmptySpaceAfterBySlotId = previous.emptySpaceAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        guard elasticEditor.undo() else { return }
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("Undid elastic move")
     }
 
     private func redoElasticChange() {
-        guard let next = elasticRedoStack.popLast() else { return }
-        elasticUndoStack.append(
-            ElasticEditSnapshot(
-                slots: elasticStagedBusySlots,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        elasticStagedBusySlots = next.slots
-        elasticEmptySpaceAfterBySlotId = next.emptySpaceAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        guard elasticEditor.redo() else { return }
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("Redid elastic move")
-    }
-
-    private func elasticTimeChanges() -> [EventUndoManager.EventTimeChange] {
-        guard let original = elasticOriginalBusySlots else { return [] }
-        let originalsById = Dictionary(uniqueKeysWithValues: original.map { ($0.id, $0) })
-
-        return elasticStagedBusySlots
-            .compactMap { staged -> EventUndoManager.EventTimeChange? in
-                guard let old = originalsById[staged.id],
-                      old.startTime != staged.startTime || old.endTime != staged.endTime else {
-                    return nil
-                }
-                return EventUndoManager.EventTimeChange(
-                    eventId: staged.id,
-                    oldStartTime: old.startTime,
-                    oldEndTime: old.endTime,
-                    newStartTime: staged.startTime,
-                    newEndTime: staged.endTime,
-                    description: "Elastic move \(staged.title)"
-                )
-            }
-            .sorted { $0.oldStartTime < $1.oldStartTime }
     }
 
     private func busySlot(_ slot: BusyTimeSlot, replacingStart start: Date, end: Date) -> BusyTimeSlot {
@@ -1439,19 +1365,11 @@ extension TimelineView {
         TimelineEditPlanner.applyingTimeUpdates(to: slots, updates: updates)
     }
 
-    private func calculateElasticEmptySpaceAfterBySlotId(for slots: [BusyTimeSlot]) -> [String: TimeInterval] {
-        TimelineEditPlanner.calculateEmptySpaceAfterBySlotId(for: slots)
-    }
-
     private func elasticGapMap(
         adjustingForDraggedUpdates draggedUpdates: [String: (start: Date, end: Date)],
         in baseSlots: [BusyTimeSlot]
     ) -> [String: TimeInterval] {
-        TimelineEditPlanner.adjustedGapMap(
-            existingGapMap: elasticEmptySpaceAfterBySlotId,
-            draggedUpdates: draggedUpdates,
-            in: baseSlots
-        )
+        elasticEditor.adjustedGapMap(forDraggedUpdates: draggedUpdates, in: baseSlots)
     }
 
     private func displaceBusySlots(
@@ -1464,12 +1382,11 @@ extension TimelineView {
             adjustingForDraggedUpdates: draggedUpdates,
             in: baseSlots
         )
-        return TimelineEditPlanner.displaceBusySlots(
+        return elasticEditor.displacedSlots(
             baseSlots: baseSlots,
             draggedUpdates: draggedUpdates,
             commitDraggedSlots: commitDraggedSlots,
-            existingGapMap: existingGapMap,
-            mode: elasticDisplacementMode,
+            gapAfterBySlotId: existingGapMap,
             floor: timelineDisplacementFloor
         )
     }
@@ -1829,7 +1746,7 @@ extension TimelineView {
                             dragMode = .move
                             NSCursor.closedHand.push()
                             if isElasticEditing {
-                                elasticPreDragBusySlots = elasticStagedBusySlots
+                                elasticEditor.capturePreDragSnapshot()
                             }
                             // If dragged slot isn't part of the selection, reset selection to it.
                             // Resize stays single-event (no selection change).
@@ -1850,7 +1767,7 @@ extension TimelineView {
                             }
                         }
                         if isElasticEditing, dragMode != .move {
-                            elasticPreDragBusySlots = elasticStagedBusySlots
+                            elasticEditor.capturePreDragSnapshot()
                         }
                         dragSlotId = slot.id
                     }
@@ -1910,13 +1827,13 @@ extension TimelineView {
                                 let updates: [String: (start: Date, end: Date)] = !groupDragPreviewTimes.isEmpty
                                     ? groupDragPreviewTimes
                                     : [slot.id: (start: previewStart, end: previewEnd)]
-                                let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+                                let baseSlots = elasticEditor.dragBaseSlots
                                 let displaced = displaceBusySlots(
                                     baseSlots: baseSlots,
                                     draggedUpdates: updates,
                                     commitDraggedSlots: false
                                 )
-                                elasticStagedBusySlots = displaced
+                                elasticEditor.stagedSlots = displaced
                                 recalculateProjectedSchedule(using: applyingTimeUpdates(to: displaced, updates: updates))
                             } else if !groupDragOriginalTimes.isEmpty {
                                 recalculateWithDraggedSlots(groupDragPreviewTimes)
@@ -3564,7 +3481,7 @@ extension TimelineView {
             updates = [slot.id: (start: newStart, end: newEnd)]
         }
 
-        let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+        let baseSlots = elasticEditor.dragBaseSlots
         let originalsById = Dictionary(uniqueKeysWithValues: baseSlots.map { ($0.id, $0) })
         let hasChanges = updates.contains { entry in
             guard let original = originalsById[entry.key] else { return false }
@@ -3573,7 +3490,7 @@ extension TimelineView {
         }
 
         guard hasChanges else {
-            elasticStagedBusySlots = baseSlots
+            elasticEditor.stagedSlots = baseSlots
             recalculateProjectedSchedule(using: baseSlots)
             resetDragState()
             return
@@ -3585,14 +3502,14 @@ extension TimelineView {
         )
 
         recordElasticUndoSnapshot(baseSlots)
-        elasticStagedBusySlots = displaceBusySlots(
+        elasticEditor.stagedSlots = displaceBusySlots(
             baseSlots: baseSlots,
             draggedUpdates: updates,
             commitDraggedSlots: true,
             gapAfterBySlotId: adjustedGapAfterBySlotId
         )
-        elasticEmptySpaceAfterBySlotId = adjustedGapAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        elasticEditor.emptySpaceAfterBySlotId = adjustedGapAfterBySlotId
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("\(elasticChangeCount) staged")
 
         resetDragState()
@@ -3652,7 +3569,7 @@ extension TimelineView {
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
         preDisplacementSessions = nil
-        elasticPreDragBusySlots = nil
+        elasticEditor.clearPreDragSnapshot()
         groupDragOriginalTimes.removeAll()
         groupDragPreviewTimes.removeAll()
     }
@@ -3663,13 +3580,13 @@ extension TimelineView {
         if let snapshot = preDisplacementSessions {
             schedulingEngine.projectedSessions = snapshot
         }
-        if isElasticEditing, let snapshot = elasticPreDragBusySlots {
-            elasticStagedBusySlots = snapshot
+        if isElasticEditing, let snapshot = elasticEditor.restorePreDragSnapshot() {
+            elasticEditor.stagedSlots = snapshot
         }
         // Revert real-time schedule recalculation (calendar event drag)
         if dragSlotId != nil, !schedulingEngine.sessionsFrozen {
             if isElasticEditing {
-                recalculateProjectedSchedule(using: elasticStagedBusySlots)
+                recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
             } else {
                 recalculateWithOriginalSlots()
             }
@@ -4102,15 +4019,15 @@ extension TimelineView {
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
         }
-        if let idx = elasticStagedBusySlots.firstIndex(where: { $0.id == id }) {
-            let old = elasticStagedBusySlots[idx]
-            elasticStagedBusySlots[idx] = BusyTimeSlot(
+        if let idx = elasticEditor.stagedSlots.firstIndex(where: { $0.id == id }) {
+            let old = elasticEditor.stagedSlots[idx]
+            elasticEditor.stagedSlots[idx] = BusyTimeSlot(
                 id: old.id, title: old.title, startTime: old.startTime, endTime: old.endTime,
                 notes: notes, url: old.url, calendarName: old.calendarName,
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
         }
-        if var originals = elasticOriginalBusySlots,
+        if var originals = elasticEditor.originalSlots,
            let idx = originals.firstIndex(where: { $0.id == id }) {
             let old = originals[idx]
             originals[idx] = BusyTimeSlot(
@@ -4118,7 +4035,7 @@ extension TimelineView {
                 notes: notes, url: old.url, calendarName: old.calendarName,
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
-            elasticOriginalBusySlots = originals
+            elasticEditor.replaceOriginalSlots(originals)
         }
     }
 }
