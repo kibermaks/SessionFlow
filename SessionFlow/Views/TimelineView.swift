@@ -180,6 +180,17 @@ struct TimelineView: View {
         guard let selectedBusySlot else { return nil }
         return filteredBusySlots.first { $0.id == selectedBusySlot.id }
     }
+
+    private var timelineTimeScale: TimelineTimeScale {
+        TimelineTimeScale(
+            selectedDate: selectedDate,
+            hourHeight: hourHeight,
+            hideNightHours: schedulingEngine.hideNightHours,
+            dayStartHour: schedulingEngine.dayStartHour,
+            dayEndHour: schedulingEngine.dayEndHour,
+            scheduleEndHour: schedulingEngine.scheduleEndHour
+        )
+    }
     
     var body: some View {
         GeometryReader { geo in
@@ -502,7 +513,7 @@ struct TimelineView: View {
                         eventsAreaView
                     }
                     .padding(.vertical, 20)
-                    .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
+                    .frame(height: timelineTimeScale.contentHeight)
                     .onAppear {
                         scrollProxy = proxy
                         lastScrolledStartHour = Calendar.current.component(.hour, from: startTime)
@@ -1411,37 +1422,7 @@ extension TimelineView {
     }
     
     private func formattedHour(_ hour: Int) -> String {
-        let normalizedHour = ((hour % 24) + 24) % 24
-
-        if uses12HourClock {
-            let displayHour = normalizedHour % 12 == 0 ? 12 : normalizedHour % 12
-            let period = normalizedHour < 12 ? "AM" : "PM"
-            return "\(displayHour) \(period)"
-        }
-
-        let calendar = Calendar.current
-        var components = DateComponents()
-        components.hour = normalizedHour
-        
-        // Handle hour 24 and beyond for formatting by shifting to next day
-        if hour >= 24 {
-            if let date = calendar.date(from: components),
-               let nextDay = calendar.date(byAdding: .day, value: 1, to: date) {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .none
-                formatter.timeStyle = .short
-                return formatter.string(from: nextDay)
-            }
-        }
-        
-        
-        if let date = calendar.date(from: components) {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .none
-            formatter.timeStyle = .short
-            return formatter.string(from: date)
-        }
-        return "\(hour):00"
+        timelineTimeScale.formattedHour(hour, uses12HourClock: uses12HourClock)
     }
     
     /// The upper bound for visible hours.
@@ -1449,45 +1430,31 @@ extension TimelineView {
     /// up to `scheduleEndHour` so scheduled sessions are never clipped off the
     /// timeline. When night hours are shown, we expose a full 24h minimum.
     private var effectiveEndHour: Int {
-        if schedulingEngine.hideNightHours {
-            return max(schedulingEngine.dayEndHour, schedulingEngine.scheduleEndHour)
-        } else {
-            return max(24, schedulingEngine.scheduleEndHour)
-        }
+        timelineTimeScale.effectiveEndHour
     }
 
     private var visibleHours: [Int] {
-        if schedulingEngine.hideNightHours {
-            return Array(schedulingEngine.dayStartHour..<effectiveEndHour)
-        } else {
-            return Array(0..<effectiveEndHour)
-        }
+        timelineTimeScale.visibleHours
     }
 
     /// Effective "now" for the red line: real time or dev override.
     private var effectiveNowTimeForIndicator: Date {
-        guard devNowLineOverrideEnabled else { return currentTime }
-        let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: selectedDate)
-        return cal.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
-            .flatMap { cal.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? currentTime
+        timelineTimeScale.effectiveNowTime(
+            currentTime: currentTime,
+            overrideEnabled: devNowLineOverrideEnabled,
+            overrideHour: devNowLineOverrideHour,
+            overrideMinute: devNowLineOverrideMinute
+        )
     }
 
     /// Show current-time indicator when viewing today, or when viewing yesterday
     /// and the current time falls within the extended hours (past midnight).
     /// With dev override enabled, always show so screenshots can use any date.
     private var shouldShowCurrentTimeIndicator: Bool {
-        if devNowLineOverrideEnabled { return true }
-        let cal = Calendar.current
-        if cal.isDateInToday(selectedDate) { return true }
-        if effectiveEndHour > 24,
-           let yesterday = cal.date(byAdding: .day, value: -1, to: Date()),
-           cal.isDate(selectedDate, inSameDayAs: yesterday) {
-            let dayStart = cal.startOfDay(for: selectedDate)
-            let hoursFromStart = Date().timeIntervalSince(dayStart) / 3600
-            return hoursFromStart < Double(effectiveEndHour)
-        }
-        return false
+        timelineTimeScale.shouldShowCurrentTimeIndicator(
+            currentDate: Date(),
+            overrideEnabled: devNowLineOverrideEnabled
+        )
     }
     
     private func currentTimeIndicator(currentTime: Date, width: CGFloat) -> some View {
@@ -2605,9 +2572,9 @@ extension TimelineView {
     private func eventCreationBackgroundLayer(containerWidth: CGFloat) -> some View {
         let leftHalfWidth = max((containerWidth / 2), 10)
         return Color.clear
-            .frame(width: leftHalfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .frame(width: leftHalfWidth, height: timelineTimeScale.contentHeight)
             .contentShape(Rectangle())
-            .position(x: leftHalfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .position(x: leftHalfWidth / 2, y: timelineTimeScale.contentHeight / 2)
             .onTapGesture(count: 2) { location in
                 let clickedTime = snapToInterval(dateFromYOffset(location.y))
                 beginEventCreation(at: clickedTime)
@@ -2623,9 +2590,9 @@ extension TimelineView {
     private func rightHalfDeselectLayer(containerWidth: CGFloat) -> some View {
         let halfWidth = max((containerWidth / 2), 10)
         return Color.clear
-            .frame(width: halfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .frame(width: halfWidth, height: timelineTimeScale.contentHeight)
             .contentShape(Rectangle())
-            .position(x: containerWidth - halfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .position(x: containerWidth - halfWidth / 2, y: timelineTimeScale.contentHeight / 2)
             .onTapGesture {
                 if !selectedBusySlotIds.isEmpty {
                     selectedBusySlotIds.removeAll()
@@ -2709,47 +2676,28 @@ extension TimelineView {
     // MARK: - Position Calculations
 
     private func calculateYPosition(for date: Date) -> CGFloat {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: selectedDate)
-        let secondsSinceStart = date.timeIntervalSince(dayStart)
-        let hours = secondsSinceStart / 3600
-
-        let finalHours = hours - (schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0)
-        return finalHours * hourHeight
+        timelineTimeScale.yPosition(for: date)
     }
 
     /// Inverse of calculateYPosition — converts a Y offset back to a Date.
     private func dateFromYOffset(_ yPosition: CGFloat) -> Date {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: selectedDate)
-        let offsetHours = schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0
-        let hours = yPosition / hourHeight + offsetHours
-        return dayStart.addingTimeInterval(Double(hours) * 3600)
+        timelineTimeScale.date(fromYOffset: yPosition)
     }
 
     private func snapToInterval(_ date: Date) -> Date {
-        TimeSnapping.snapToNearest(date, intervalMinutes: 5)
+        timelineTimeScale.snapToInterval(date)
     }
 
     private func calculateHeight(from start: Date, to end: Date) -> CGFloat {
-        let duration = end.timeIntervalSince(start)
-        let hours = duration / 3600
-        return CGFloat(hours) * hourHeight
+        timelineTimeScale.height(from: start, to: end)
     }
     
     private func timeRangeString(start: Date, end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        timelineTimeScale.timeRangeString(start: start, end: end)
     }
 
     private func startAndDurationString(start: Date, end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        let durationMinutes = Int(end.timeIntervalSince(start) / 60)
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
+        timelineTimeScale.startAndDurationString(start: start, end: end)
     }
     
     // MARK: - Feedback Badge
