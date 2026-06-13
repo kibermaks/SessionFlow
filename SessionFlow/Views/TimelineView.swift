@@ -113,7 +113,7 @@ struct TimelineView: View {
     @State private var dragSessionId: UUID? = nil
     @State private var dragPreviewStartTime: Date? = nil
     @State private var dragPreviewEndTime: Date? = nil
-    @State private var dragMode: DragMode = .none
+    @State private var dragMode: TimelineDragMode = .none
     @State private var isShiftHeld: Bool = false
     @State private var isCommandHeld: Bool = false
     @State private var isOptionHeld: Bool = false
@@ -148,13 +148,6 @@ struct TimelineView: View {
     @State private var scrollViewFrame: CGRect = .zero
     /// Last hour we scrolled to; used to avoid resetting scroll on every timer tick (only scroll when hour changes)
     @State private var lastScrolledStartHour: Int? = nil
-
-    private enum DragMode: Equatable {
-        case none
-        case move
-        case resizeTop
-        case resizeBottom
-    }
 
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
@@ -1733,14 +1726,14 @@ extension TimelineView {
                     guard !eventsLocked, !dragCancelled else { return }
                     // Determine mode on first movement
                     if dragMode == .none {
-                        let startY = value.startLocation.y
-                        if startY < edgeZone {
-                            dragMode = .resizeTop
-                        } else if startY > blockHeight - edgeZone {
-                            dragMode = .resizeBottom
-                        } else {
+                        dragMode = TimelineDragPreview.mode(
+                            startY: value.startLocation.y,
+                            blockHeight: blockHeight,
+                            edgeZone: edgeZone,
+                            canResize: true
+                        )
+                        if dragMode == .move {
                             activateElasticModeForDragIfNeeded()
-                            dragMode = .move
                             NSCursor.closedHand.push()
                             if isElasticEditing {
                                 elasticEditor.capturePreDragSnapshot()
@@ -1764,41 +1757,24 @@ extension TimelineView {
                         dragSlotId = slot.id
                     }
 
-                    switch dragMode {
-                    case .move:
-                        let duration = slot.endTime.timeIntervalSince(slot.startTime)
-                        let originalY = calculateYPosition(for: slot.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        dragPreviewStartTime = newStart
-                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
+                    if let preview = TimelineDragPreview.timeRange(
+                        mode: dragMode,
+                        originalStart: slot.startTime,
+                        originalEnd: slot.endTime,
+                        translationY: value.translation.height,
+                        yPosition: calculateYPosition,
+                        dateFromYOffset: dateFromYOffset,
+                        snap: snapToInterval,
+                        clampStart: clampedForElasticDrag,
+                        preservesRawTime: isShiftHeld
+                    ) {
+                        dragPreviewStartTime = preview.start
+                        dragPreviewEndTime = preview.end
 
                         // Group drag: translate every other selected event by the same delta.
-                        if groupDrag.isActive {
-                            groupDrag.updateTranslation(from: slot.startTime, to: newStart)
+                        if dragMode == .move && groupDrag.isActive {
+                            groupDrag.updateTranslation(from: slot.startTime, to: preview.start)
                         }
-
-                    case .resizeTop:
-                        let originalY = calculateYPosition(for: slot.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        let maxStart = slot.endTime.addingTimeInterval(-5 * 60)
-                        dragPreviewStartTime = min(newStart, maxStart)
-                        dragPreviewEndTime = slot.endTime
-
-                    case .resizeBottom:
-                        let originalY = calculateYPosition(for: slot.endTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
-                        let minEnd = slot.startTime.addingTimeInterval(5 * 60)
-                        dragPreviewStartTime = slot.startTime
-                        dragPreviewEndTime = max(newEnd, minEnd)
-
-                    case .none:
-                        break
                     }
 
                     // Real-time recalculation with throttle
@@ -2050,13 +2026,13 @@ extension TimelineView {
                 .onChanged { value in
                     guard !eventsLocked, !dragCancelled else { return }
                     if dragMode == .none {
-                        let startY = value.startLocation.y
-                        if !isBigRest && startY < edgeZone {
-                            dragMode = .resizeTop
-                        } else if !isBigRest && startY > blockHeight - edgeZone {
-                            dragMode = .resizeBottom
-                        } else {
-                            dragMode = .move
+                        dragMode = TimelineDragPreview.mode(
+                            startY: value.startLocation.y,
+                            blockHeight: blockHeight,
+                            edgeZone: edgeZone,
+                            canResize: !isBigRest
+                        )
+                        if dragMode == .move {
                             NSCursor.closedHand.push()
                         }
                         dragSessionId = session.id
@@ -2067,36 +2043,19 @@ extension TimelineView {
                         projectedSessionDrag.begin(with: schedulingEngine.projectedSessions)
                     }
 
-                    switch dragMode {
-                    case .move:
-                        let duration = session.endTime.timeIntervalSince(session.startTime)
-                        let originalY = calculateYPosition(for: session.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        dragPreviewStartTime = newStart
-                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
-
-                    case .resizeTop:
-                        let originalY = calculateYPosition(for: session.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        let maxStart = session.endTime.addingTimeInterval(-5 * 60)
-                        dragPreviewStartTime = min(newStart, maxStart)
-                        dragPreviewEndTime = session.endTime
-
-                    case .resizeBottom:
-                        let originalY = calculateYPosition(for: session.endTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
-                        let minEnd = session.startTime.addingTimeInterval(5 * 60)
-                        dragPreviewStartTime = session.startTime
-                        dragPreviewEndTime = max(newEnd, minEnd)
-
-                    case .none:
-                        break
+                    if let preview = TimelineDragPreview.timeRange(
+                        mode: dragMode,
+                        originalStart: session.startTime,
+                        originalEnd: session.endTime,
+                        translationY: value.translation.height,
+                        yPosition: calculateYPosition,
+                        dateFromYOffset: dateFromYOffset,
+                        snap: snapToInterval,
+                        clampStart: clampedForElasticDrag,
+                        preservesRawTime: isShiftHeld
+                    ) {
+                        dragPreviewStartTime = preview.start
+                        dragPreviewEndTime = preview.end
                     }
 
                     // Displacement with throttle
