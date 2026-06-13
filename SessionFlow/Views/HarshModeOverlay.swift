@@ -1068,9 +1068,10 @@ private struct HarshModeOverlayView: View {
             VStack(spacing: 8) {
                 Image(systemName: rating.icon)
                     .font(.system(size: 22, weight: .semibold))
-                Text(rating.label)
+                Text(rating.shortLabel)
                     .font(.system(size: 12, weight: .bold))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundColor(isSelected ? color : .secondary)
             .frame(maxWidth: .infinity)
@@ -1084,6 +1085,7 @@ private struct HarshModeOverlayView: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.12)
+        .help(rating.label)
     }
 
     private func alignmentButton(_ alignment: SessionAlignment) -> some View {
@@ -1461,8 +1463,10 @@ struct HarshModeGuide: View {
             VStack(spacing: 6) {
                 Image(systemName: rating.icon)
                     .font(.system(size: 18, weight: .semibold))
-                Text(rating.label)
+                Text(rating.shortLabel)
                     .font(.system(size: 11, weight: .bold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundColor(isSelected ? color : colors.textSecondary)
             .frame(maxWidth: .infinity)
@@ -1476,6 +1480,7 @@ struct HarshModeGuide: View {
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.12)
+        .help(rating.label)
     }
 
     private func guideAlignmentButton(_ alignment: SessionAlignment) -> some View {

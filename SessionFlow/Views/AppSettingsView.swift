@@ -716,7 +716,12 @@ struct AppSettingsView: View {
                                                    get: { sessionAwarenessService.config.focusWeights.partialPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.partialPercent = $0 }
                                                ))
-                                focusWeightRow(label: "Skipped", icon: "xmark.circle.fill", color: .red,
+                                focusWeightRow(label: "Procrast.", icon: "iphone", color: .red,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.procrastinatedPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.procrastinatedPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Skipped", icon: "xmark.circle.fill", color: colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"),
                                                value: Binding(
                                                    get: { sessionAwarenessService.config.focusWeights.skippedPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.skippedPercent = $0 }
@@ -1967,7 +1972,7 @@ Spacer()
         ("external", "External"),
     ]
 
-    private func focusWeightRow(label: String, icon: String, color: Color, value: Binding<Int>) -> some View {
+    private func focusWeightRow(label: String, icon: String, color: Color, range: ClosedRange<Int> = 0...200, value: Binding<Int>) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 12))
@@ -1977,7 +1982,7 @@ Spacer()
                 .font(.system(size: 13))
                 .frame(width: 82, alignment: .leading)
             Spacer()
-            NumericInputField(value: value, range: 0...200, step: 5, unit: "%")
+            NumericInputField(value: value, range: range, step: 5, unit: "%")
         }
     }
 
@@ -2204,6 +2209,7 @@ Spacer()
 
     private func resetCalendarSetup() {
         UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
+        UserDefaults.standard.set(false, forKey: "hasCompletedSetup")
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
     }
 
@@ -2212,6 +2218,7 @@ Spacer()
         UserDefaults.standard.removeObject(forKey: "SessionFlow.LastActivePresetID")
         timelineIntroBarDismissed = false
         UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
+        UserDefaults.standard.set(false, forKey: "hasCompletedSetup")
         NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
         if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {

@@ -129,7 +129,6 @@ struct TimelineView: View {
     @State private var isShiftHeld: Bool = false
     @State private var isCommandHeld: Bool = false
     @State private var isOptionHeld: Bool = false
-    @State private var isControlHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
     // Group drag: original times of every selected slot at drag start, and live preview targets.
     @State private var groupDragOriginalTimes: [String: (start: Date, end: Date)] = [:]
@@ -139,6 +138,7 @@ struct TimelineView: View {
     @StateObject private var eventUndoManager = EventUndoManager()
     @StateObject private var actionContext = TimelineActionContext()
     @State private var eventsLocked: Bool = false
+    @State private var isTimelinePanelHovered: Bool = false
     @State private var elasticOriginalBusySlots: [BusyTimeSlot]? = nil
     @State private var elasticStagedBusySlots: [BusyTimeSlot] = []
     @State private var elasticPreDragBusySlots: [BusyTimeSlot]? = nil
@@ -258,7 +258,6 @@ struct TimelineView: View {
                     isShiftHeld = event.modifierFlags.contains(.shift)
                     isCommandHeld = event.modifierFlags.contains(.command)
                     isOptionHeld = event.modifierFlags.contains(.option)
-                    isControlHeld = event.modifierFlags.contains(.control)
                     return event
                 }
                 // Use keyDown monitor for Esc (cancel drag) and undo/redo.
@@ -556,38 +555,53 @@ struct TimelineView: View {
     }
     
     private var timelineScrollView: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            ScrollViewReader { proxy in
-                HStack(alignment: .top, spacing: 0) {
-                    timeColumnView
-                    eventsAreaView
+        ZStack(alignment: .topLeading) {
+            ScrollView(.vertical, showsIndicators: true) {
+                ScrollViewReader { proxy in
+                    HStack(alignment: .top, spacing: 0) {
+                        timeColumnView
+                        eventsAreaView
+                    }
+                    .padding(.vertical, 20)
+                    .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
+                    .onAppear {
+                        scrollProxy = proxy
+                        lastScrolledStartHour = Calendar.current.component(.hour, from: startTime)
+                        scrollToStartTime(proxy: proxy)
+                    }
+                    .onChange(of: startTime) { _, new in
+                        let hour = Calendar.current.component(.hour, from: new)
+                        guard lastScrolledStartHour != hour else { return }
+                        lastScrolledStartHour = hour
+                        scrollToStartTime(proxy: proxy)
+                    }
                 }
-                .padding(.vertical, 20)
-                .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
-                .onAppear {
-                    scrollProxy = proxy
-                    lastScrolledStartHour = Calendar.current.component(.hour, from: startTime)
-                    scrollToStartTime(proxy: proxy)
+            }
+            .background(
+                GeometryReader { geo in
+                    colors.subtleBackground
+                        .onAppear { scrollViewFrame = geo.frame(in: .global) }
+                        .onChange(of: geo.frame(in: .global)) { _, newFrame in scrollViewFrame = newFrame }
                 }
-                .onChange(of: startTime) { _, new in
-                    let hour = Calendar.current.component(.hour, from: new)
-                    guard lastScrolledStartHour != hour else { return }
-                    lastScrolledStartHour = hour
-                    scrollToStartTime(proxy: proxy)
-                }
+            )
+            .cornerRadius(12)
+            .simultaneousGesture(TapGesture().onEnded { _ in
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            })
+
+            if shouldShowTimelineCornerControls {
+                timelineCornerControls
+                    .padding(.top, 10)
+                    .padding(.leading, 10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                    .zIndex(20)
             }
         }
-        .background(
-            GeometryReader { geo in
-                colors.subtleBackground
-                    .onAppear { scrollViewFrame = geo.frame(in: .global) }
-                    .onChange(of: geo.frame(in: .global)) { _, newFrame in scrollViewFrame = newFrame }
+        .onHover { hovering in
+            withAnimation(.easeOut(duration: 0.12)) {
+                isTimelinePanelHovered = hovering
             }
-        )
-        .cornerRadius(12)
-        .simultaneousGesture(TapGesture().onEnded { _ in
-            NSApp.keyWindow?.makeFirstResponder(nil)
-        })
+        }
     }
     
     private var eventsAreaView: some View {
@@ -940,67 +954,95 @@ struct TimelineView: View {
                 }
             }
 
-            // Lock/unlock event dragging
-            Button {
-                withAnimation { eventsLocked.toggle() }
-                onModeToast?(eventsLocked ? "Events locked" : "Events unlocked")
-            } label: {
-                Image(systemName: eventsLocked ? "hand.raised.slash" : "hand.draw")
-                    .frame(width: 16, height: 16)
-                    .padding(8)
-                    .background(eventsLocked ? colors.subtleBackground : colors.divider)
-                    .cornerRadius(6)
-                    .foregroundColor(eventsLocked ? colors.textMuted : colors.textPrimary)
-            }
-            .buttonStyle(.plain)
-            .hoverEffect(brightness: 0.2)
-            .help(eventsLocked ? "Unlock dragging & resizing events and sessions" : "Lock all event and session positions")
+        }
+    }
 
-            // Elastic edit mode for existing calendar events
-            Button {
-                toggleElasticEditing()
-            } label: {
-                TimelineSpringIcon()
-                    .frame(width: 16, height: 16)
-                    .padding(8)
-                    .background(isElasticEditing ? Color(hex: "3B82F6").opacity(0.16) : colors.divider)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(isElasticEditing ? Color(hex: "3B82F6").opacity(0.55) : Color.clear, lineWidth: 1)
-                    )
-                    .cornerRadius(6)
-                    .foregroundColor(isElasticEditing ? Color(hex: "3B82F6") : colors.textPrimary)
-            }
-            .buttonStyle(.plain)
-            .hoverEffect(brightness: 0.2)
-            .help("""
-Elastic edit: stage calendar moves before saving.
-⌥ Option-drag: Bubble
-⌃ Control-drag: Push down
-⌘Z / ⇧⌘Z: Undo / redo staged moves
-""")
+    private var shouldShowTimelineCornerControls: Bool {
+        isTimelinePanelHovered || isElasticEditing
+    }
+
+    private var timelineCornerControls: some View {
+        HStack(spacing: 6) {
+            timelineNightHoursButton
+            timelineLockButton
 
             if isElasticEditing {
                 springEditingControls
-                    .transition(.scale(scale: 0.96).combined(with: .opacity))
+                    .transition(.scale(scale: 0.96, anchor: .topLeading).combined(with: .opacity))
+            } else if !eventsLocked {
+                timelineSpringButton
             }
-
-            // Toggle night button
-            Button(action: {
-                withAnimation {
-                    schedulingEngine.hideNightHours.toggle()
-                }
-                onModeToast?(schedulingEngine.hideNightHours ? "Night hours hidden" : "Night hours visible")
-            }) {
-                Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
-                    .padding(8)
-                    .background(colors.divider)
-                    .cornerRadius(6)
-            }
-            .buttonStyle(.plain)
-            .hoverEffect(brightness: 0.2)
-            .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
         }
+    }
+
+    private var timelineNightHoursButton: some View {
+        Button {
+            withAnimation {
+                schedulingEngine.hideNightHours.toggle()
+            }
+            onModeToast?(schedulingEngine.hideNightHours ? "Night hours hidden" : "Night hours visible")
+        } label: {
+            Image(systemName: schedulingEngine.hideNightHours ? "moon.stars.fill" : "moon.stars")
+                .frame(width: 16, height: 16)
+                .padding(8)
+                .background(colors.panelBackground.opacity(0.92))
+                .cornerRadius(6)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
+        .help(schedulingEngine.hideNightHours ? "Show 00:00 - 06:00" : "Hide 00:00 - 06:00")
+    }
+
+    private var timelineLockButton: some View {
+        let lockColor = Color(hex: "EF4444")
+        let background = eventsLocked
+            ? lockColor.opacity(colors.isDark ? 0.24 : 0.16)
+            : colors.panelBackground.opacity(0.92)
+        let border = eventsLocked
+            ? lockColor.opacity(0.58)
+            : colors.border.opacity(0.65)
+
+        return Button {
+            toggleEventsLocked()
+        } label: {
+            Image(systemName: eventsLocked ? "hand.raised.slash" : "hand.draw")
+                .frame(width: 16, height: 16)
+                .padding(8)
+                .background(background)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(border, lineWidth: 1)
+                )
+                .cornerRadius(6)
+                .foregroundColor(eventsLocked ? lockColor : colors.textPrimary)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
+        .help(eventsLocked ? "Unlock dragging & resizing events and sessions" : "Lock all event and session positions")
+    }
+
+    private var timelineSpringButton: some View {
+        Button {
+            toggleElasticEditing()
+        } label: {
+            TimelineSpringIcon()
+                .frame(width: 16, height: 16)
+                .padding(8)
+                .background(colors.panelBackground.opacity(0.92))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.clear, lineWidth: 1)
+                )
+                .cornerRadius(6)
+                .foregroundColor(colors.textPrimary)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
+        .help("""
+Elastic edit: stage calendar moves before saving.
+⌥ Option-drag: Bubble
+⌥⌘ Option-Command-drag: Push down
+""")
     }
 
     private var springEditingControls: some View {
@@ -1128,7 +1170,7 @@ private struct WidthPreferenceKey: PreferenceKey {
 private struct TimelineSpringIcon: View {
     var body: some View {
         SpringShape()
-            .stroke(style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+            .stroke(style: StrokeStyle(lineWidth: 2.15, lineCap: .round, lineJoin: .round))
     }
 }
 
@@ -1136,27 +1178,32 @@ private struct SpringShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let midY = rect.midY
-        let amplitude = rect.height * 0.28
-        let left = rect.minX + rect.width * 0.08
-        let right = rect.maxX - rect.width * 0.08
-        let lead = rect.width * 0.12
+        let amplitude = rect.height * 0.30
+        let left = rect.minX + rect.width * 0.07
+        let right = rect.maxX - rect.width * 0.07
+        let lead = rect.width * 0.14
         let coilStart = left + lead
         let coilEnd = right - lead
-        let segments = 8
-        let step = (coilEnd - coilStart) / CGFloat(segments)
+        let coils = 4
+        let step = (coilEnd - coilStart) / CGFloat(coils)
 
         path.move(to: CGPoint(x: left, y: midY))
         path.addLine(to: CGPoint(x: coilStart, y: midY))
 
-        for index in 0...segments {
+        for index in 0..<coils {
             let x = coilStart + CGFloat(index) * step
-            let y: CGFloat
-            if index == 0 || index == segments {
-                y = midY
-            } else {
-                y = midY + (index.isMultiple(of: 2) ? -amplitude : amplitude)
-            }
-            path.addLine(to: CGPoint(x: x, y: y))
+            let half = step / 2
+            let quarter = step / 4
+            path.addCurve(
+                to: CGPoint(x: x + half, y: midY),
+                control1: CGPoint(x: x + quarter * 0.55, y: midY - amplitude),
+                control2: CGPoint(x: x + half - quarter * 0.55, y: midY - amplitude)
+            )
+            path.addCurve(
+                to: CGPoint(x: x + step, y: midY),
+                control1: CGPoint(x: x + half + quarter * 0.55, y: midY + amplitude),
+                control2: CGPoint(x: x + step - quarter * 0.55, y: midY + amplitude)
+            )
         }
 
         path.addLine(to: CGPoint(x: right, y: midY))
@@ -1227,6 +1274,25 @@ extension TimelineView {
         isElasticEditing ? max(actionContext.startTime, timelineDisplacementFloor) : actionContext.startTime
     }
 
+    private func toggleEventsLocked() {
+        if eventsLocked {
+            withAnimation { eventsLocked = false }
+            onModeToast?("Events unlocked")
+            return
+        }
+
+        if isElasticEditing {
+            if elasticChangeCount > 0 {
+                onModeToast?("Save or cancel elastic edits before locking")
+                return
+            }
+            cancelElasticEditing(showToast: false)
+        }
+
+        withAnimation { eventsLocked = true }
+        onModeToast?("Events locked")
+    }
+
     private func toggleElasticEditing() {
         if isElasticEditing {
             if elasticChangeCount == 0 {
@@ -1267,10 +1333,12 @@ extension TimelineView {
 
     private func requestedElasticModeForDrag() -> ElasticDisplacementMode? {
         let flags = NSEvent.modifierFlags
-        if flags.contains(.control) || isControlHeld {
+        let optionHeld = flags.contains(.option) || isOptionHeld
+        let commandHeld = flags.contains(.command) || isCommandHeld
+        if optionHeld && commandHeld {
             return .pushDown
         }
-        if flags.contains(.option) || isOptionHeld {
+        if optionHeld {
             return .bubble
         }
         return nil
@@ -1938,11 +2006,7 @@ extension TimelineView {
             VStack(alignment: .leading, spacing: 1) {
                 if height <= compactBlockLayoutHeight {
                     HStack(spacing: 3) {
-                        if slot.isFlowFlexible && !slot.isSessionFlowOwned {
-                            TimelineSpringIcon()
-                                .frame(width: 10, height: 10)
-                                .foregroundColor(colors.textSecondary)
-                        }
+                        flowFlexibilityIndicator(for: slot, size: 10)
                         Text(slot.title)
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(colors.textPrimary)
@@ -1962,11 +2026,7 @@ extension TimelineView {
                     }
                 } else {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        if slot.isFlowFlexible && !slot.isSessionFlowOwned {
-                            TimelineSpringIcon()
-                                .frame(width: 11, height: 11)
-                                .foregroundColor(colors.textSecondary)
-                        }
+                        flowFlexibilityIndicator(for: slot, size: 11)
                         Text(slot.title)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(colors.textPrimary)
@@ -2171,11 +2231,9 @@ extension TimelineView {
                     selectedBusySlot = slot
                 }
             }
-            if !slot.isSessionFlowOwned {
-                Button(slot.isFlowFlexible ? "Mark Fixed" : "Mark Flexible") {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                        setBusySlotFlexible(slot, isFlexible: !slot.isFlowFlexible)
-                    }
+            Button(slot.isFlowFlexible ? "Mark Fixed" : "Mark Flexible") {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    setBusySlotFlexible(slot, isFlexible: !slot.isFlowFlexible)
                 }
             }
             Divider()
@@ -2223,11 +2281,11 @@ extension TimelineView {
     }
 
     private func busySlotGoalReminder(_ goals: [String], inline: Bool = false, compact: Bool = false) -> some View {
-        HStack(alignment: .top, spacing: 4) {
+        HStack(alignment: .center, spacing: 4) {
             Image(systemName: "scope")
                 .font(.system(size: compact ? 8 : 9, weight: .semibold))
                 .foregroundColor(busySlotGoalColor)
-                .padding(.top, compact ? 0 : 1)
+                .frame(width: compact ? 8 : 9, height: compact ? 8 : 9, alignment: .center)
 
             Text(busySlotGoalReminderText(goals))
                 .font(.system(size: compact ? 8 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 10 : 9), weight: .semibold))
@@ -2651,12 +2709,8 @@ extension TimelineView {
                         .foregroundColor(slot.calendarColor)
                         .frame(width: 18)
 
-                    if slot.isFlowFlexible && !slot.isSessionFlowOwned {
-                        TimelineSpringIcon()
-                            .frame(width: 14, height: 14)
-                            .foregroundColor(colors.textSecondary)
-                            .padding(.top, 2)
-                    }
+                    flowFlexibilityIndicator(for: slot, size: 14)
+                        .padding(.top, 2)
                 
                 // Inline editable title
                 if isEditingTitle {
@@ -2723,12 +2777,10 @@ extension TimelineView {
                         set: { setBusySlotFlexible(slot, isFlexible: $0) }
                     ))
                     .toggleStyle(.checkbox)
-                    .disabled(slot.isSessionFlowOwned)
-                    .help(slot.isSessionFlowOwned
-                        ? "SessionFlow-tagged events are flexible automatically."
-                        : "Allows elastic editing to move this external calendar event.")
                 }
-                
+                .contentShape(Rectangle())
+                .help(flexibilityHelpText(for: slot))
+
                 // Notes section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
@@ -2932,7 +2984,6 @@ extension TimelineView {
     }
 
     private func setBusySlotFlexible(_ slot: BusyTimeSlot, isFlexible: Bool) {
-        guard !slot.isSessionFlowOwned else { return }
         guard calendarService.setEventFlexible(eventId: slot.id, isFlexible: isFlexible) else {
             onModeToast?("Failed to update flexibility")
             return
@@ -2946,6 +2997,27 @@ extension TimelineView {
         }
         onModeToast?(isFlexible ? "Marked flexible" : "Marked fixed")
         Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+    }
+
+    private func flexibilityHelpText(for slot: BusyTimeSlot) -> String {
+        if slot.isSessionFlowOwned {
+            return "Flexible SessionFlow events can move when you rearrange the timeline. Turn this off to pin the event in place so elastic edits work around it."
+        }
+        return "Flexible external events can be moved by SessionFlow during elastic timeline editing. Leave this off for real-world commitments that should stay fixed."
+    }
+
+    @ViewBuilder
+    private func flowFlexibilityIndicator(for slot: BusyTimeSlot, size: CGFloat) -> some View {
+        if slot.isFlowFlexible && !slot.isSessionFlowOwned {
+            TimelineSpringIcon()
+                .frame(width: size, height: size)
+                .foregroundColor(colors.textSecondary)
+        } else if slot.isSessionFlowOwned && !slot.isFlowFlexible {
+            Image(systemName: "pin.fill")
+                .font(.system(size: size, weight: .semibold))
+                .foregroundColor(colors.textSecondary)
+                .frame(width: size, height: size)
+        }
     }
     
     // MARK: - Copy Target Days
@@ -3230,7 +3302,11 @@ extension TimelineView {
                 return (colors.isDark ? Color(hex: "FACC15") : Color(hex: "92400E"),
                         "circle.lefthalf.filled",
                         Color(hex: "422006"))
-            case .skipped: return (Color(hex: "EF4444"), "xmark", .white)
+            case .procrastinated: return (Color(hex: "EF4444"), "iphone", .white)
+            case .skipped:
+                return (colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"),
+                        "xmark",
+                        .white)
             }
         }()
         let badgeSize: CGFloat = colors.isDark ? 16 : 14
@@ -3281,15 +3357,16 @@ extension TimelineView {
                     Button {
                         updatePopoverFeedback(for: slot, rating: rating)
                     } label: {
-                        HStack(spacing: 5) {
+                        VStack(spacing: 3) {
                             Image(systemName: rating.icon)
-                                .font(.system(size: 11, weight: .medium))
-                            Text(rating.label)
-                                .font(.system(size: 11, weight: .medium))
+                                .font(.system(size: 12, weight: .medium))
+                            Text(rating.shortLabel)
+                                .font(.system(size: 9, weight: .semibold))
                                 .lineLimit(1)
+                                .minimumScaleFactor(0.7)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 6)
+                        .frame(height: 40)
                         .background(existingRating == rating
                                     ? ratingColor(rating).opacity(0.35)
                                     : Color.clear)
@@ -3413,12 +3490,7 @@ extension TimelineView {
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {
-        switch rating {
-        case .rocket: return .orange
-        case .completed: return .green
-        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
-        case .skipped: return .red
-        }
+        awarenessRatingColor(rating, isDark: colors.isDark)
     }
 
     private func alignmentColor(_ alignment: SessionAlignment) -> Color {

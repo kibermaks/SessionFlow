@@ -2,13 +2,23 @@ import SwiftUI
 import EventKit
 
 enum FlowFlexibilityNotes {
-    static let flexibleTag = "#flow-flexible"
-    static let allTags = [flexibleTag]
+    static let flexibleTag = "#flowflexible"
+    static let fixedTag = "#flowfixed"
+    private static let legacyFlexibleTag = "#flow-flexible"
+    private static let legacyFixedTag = "#flow-fixed"
+    static let flexibleTags = [flexibleTag, legacyFlexibleTag]
+    static let fixedTags = [fixedTag, legacyFixedTag]
+    static let allTags = flexibleTags + fixedTags
     static let sessionFlowTags = ["#work", "#side", "#deep", "#plan", "#break"]
 
     static func hasExplicitFlexibleTag(_ notes: String?) -> Bool {
         guard let notes = notes?.lowercased() else { return false }
-        return allTags.contains { notes.contains($0) }
+        return flexibleTags.contains { notes.contains($0) }
+    }
+
+    static func hasExplicitFixedTag(_ notes: String?) -> Bool {
+        guard let notes = notes?.lowercased() else { return false }
+        return fixedTags.contains { notes.contains($0) }
     }
 
     static func isSessionFlowOwned(_ notes: String?) -> Bool {
@@ -17,7 +27,8 @@ enum FlowFlexibilityNotes {
     }
 
     static func isFlexible(_ notes: String?) -> Bool {
-        isSessionFlowOwned(notes) || hasExplicitFlexibleTag(notes)
+        if hasExplicitFixedTag(notes) { return false }
+        return isSessionFlowOwned(notes) || hasExplicitFlexibleTag(notes)
     }
 
     static func alignmentIsOptional(_ notes: String?) -> Bool {
@@ -40,8 +51,13 @@ enum FlowFlexibilityNotes {
 
     static func applyingFlexible(_ isFlexible: Bool, to notes: String?) -> String? {
         var result = strippingTags(from: notes) ?? ""
-        if isFlexible && !isSessionFlowOwned(result) {
-            result += (result.isEmpty ? "" : " ") + flexibleTag
+        let sessionFlowOwned = isSessionFlowOwned(result)
+        if isFlexible {
+            if !sessionFlowOwned {
+                result += (result.isEmpty ? "" : " ") + flexibleTag
+            }
+        } else if sessionFlowOwned {
+            result += (result.isEmpty ? "" : " ") + fixedTag
         }
         let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed

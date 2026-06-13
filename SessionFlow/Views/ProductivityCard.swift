@@ -11,6 +11,7 @@ struct ProductivityCard: View {
     @State private var showingMonthly = false
     @State private var showingHelp = false
     @State private var selectedSessionType: SessionType? = nil
+    @AppStorage("rightPanel.productivityExpanded") private var productivityExpanded = true
 
     private var isFiltering: Bool {
         selectedSessionType != nil
@@ -43,6 +44,7 @@ struct ProductivityCard: View {
         var ratingCounts: [SessionRating: Int] = [:]
         var alignmentCounts: [SessionAlignment: Int] = [:]
         var pastEvents = 0
+        var spentMinutes = 0
         var focusMinutes = 0
         var alignedFocusMinutes = 0
         var alignmentEligibleFocusMinutes = 0
@@ -71,6 +73,7 @@ struct ProductivityCard: View {
             var focusTotal: Double = 0
             var alignedTotal: Double = 0
             var alignmentEligibleTotal: Double = 0
+            var spentTotal: Double = 0
             var directTotal: Double = 0
             var lowAlignmentTotal: Double = 0
             let now = Date()
@@ -85,7 +88,10 @@ struct ProductivityCard: View {
 
                 let minutes = slot.endTime.timeIntervalSince(slot.startTime) / 60
                 let focus = minutes * focusWeights.multiplier(for: rating)
+                let spent = rating == .skipped ? 0 : minutes
+                spentTotal += spent
                 focusTotal += focus
+                let alignmentEligible = rating == .procrastinated ? minutes : max(0, focus)
 
                 let alignment = SessionAlignment.fromNotes(slot.notes)
                 let countsTowardAlignment = FlowFlexibilityNotes.countsTowardAlignmentScore(
@@ -93,7 +99,7 @@ struct ProductivityCard: View {
                     alignment: alignment
                 )
                 if countsTowardAlignment {
-                    alignmentEligibleTotal += focus
+                    alignmentEligibleTotal += alignmentEligible
                 }
 
                 guard let alignment else {
@@ -107,14 +113,15 @@ struct ProductivityCard: View {
                 let aligned = focus * alignmentWeights.multiplier(for: alignment)
                 alignedTotal += aligned
 
-                if alignment == .direct {
+                if alignment == .direct && focus > 0 {
                     directTotal += focus
                 }
-                if alignmentWeights.multiplier(for: alignment) <= alignmentWeights.multiplier(for: .maintenance) {
+                if focus > 0 && alignmentWeights.multiplier(for: alignment) <= alignmentWeights.multiplier(for: .maintenance) {
                     lowAlignmentTotal += focus
                 }
             }
 
+            spentMinutes = Int(spentTotal)
             focusMinutes = Int(focusTotal)
             alignedFocusMinutes = Int(alignedTotal)
             alignmentEligibleFocusMinutes = Int(alignmentEligibleTotal)
@@ -318,179 +325,199 @@ struct ProductivityCard: View {
 
                 Spacer()
 
-                Button {
-                    showingHelp.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(colors.textMuted)
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.3)
-                .popover(isPresented: $showingHelp) {
-                    let w = sessionAwarenessService.config.focusWeights
-                    let aw = sessionAwarenessService.config.alignmentWeights
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Your daily focus and alignment summary")
-                            .font(.system(size: 13, weight: .semibold))
-
-                        Text("Rate ended sessions on two axes: Focus measures execution quality; Alignment measures whether the work moved your current goal.")
+                HStack(spacing: 3) {
+                    Button {
+                        showingHelp.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
+                            .foregroundColor(colors.textMuted)
+                            .frame(width: 18, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
+                    .popover(isPresented: $showingHelp) {
+                        let w = sessionAwarenessService.config.focusWeights
+                        let aw = sessionAwarenessService.config.alignmentWeights
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Your daily focus and alignment summary")
+                                .font(.system(size: 13, weight: .semibold))
 
-                        Divider()
+                            Text("Rate ended sessions on two axes: Focus measures execution quality; Alignment measures whether the work moved your current goal.")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
 
-                        Text("How Focus Time works")
-                            .font(.system(size: 12, weight: .semibold))
+                            Divider()
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
-                                .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
-                            Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
-                                .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
-                            Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
-                                .foregroundColor(colors.isDark ? .yellow : Color(hex: "D97706"))
-                            Label("Skipped — counts \(w.skippedPercent)%", systemImage: "xmark.circle.fill")
-                                .foregroundColor(.red)
-                        }
-                        .font(.system(size: 12))
+                            Text("How Focus Time works")
+                                .font(.system(size: 12, weight: .semibold))
 
-            Text("For example, a 1-hour event rated Done adds \(w.completedPercent * 60 / 100) min of focus time.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Divider()
-
-                        Text("How Alignment works")
-                            .font(.system(size: 12, weight: .semibold))
-
-                        VStack(alignment: .leading, spacing: 4) {
-                            ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
-                                Label("\(alignment.label) — counts \(aw.percent(for: alignment))% of Focus Time", systemImage: alignment.icon)
-                                    .foregroundColor(alignmentColor(alignment))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
+                                    .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
+                                Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
+                                    .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
+                                Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
+                                    .foregroundColor(colors.isDark ? .yellow : Color(hex: "D97706"))
+                                Label("Procrastinated — counts \(w.procrastinatedPercent)% Focus, but still counts as spent time", systemImage: "iphone")
+                                    .foregroundColor(.red)
+                                Label("Skipped — counts \(w.skippedPercent)%", systemImage: "xmark.circle.fill")
+                                    .foregroundColor(colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"))
                             }
-                        }
-                        .font(.system(size: 12))
-
-                        Text("Aligned Focus = eligible Focus Time × Alignment weight. External calendar events without Alignment are ignored for Alignment %.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                            .italic()
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Divider()
-
-                        Label("Use the calendar button to see your monthly overview with per-day breakdowns.", systemImage: "calendar")
                             .font(.system(size: 12))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
 
-                        Divider()
+                            Text("For example, a 1-hour event rated Done adds \(w.completedPercent * 60 / 100) min of focus time.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .fixedSize(horizontal: false, vertical: true)
 
-                        HStack {
-                            Spacer()
-                            Button {
-                                showingHelp = false
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                                    openSettings()
-                                    NotificationCenter.default.post(name: AppSettingsView.switchToAwarenessTab, object: nil)
+                            Divider()
+
+                            Text("How Alignment works")
+                                .font(.system(size: 12, weight: .semibold))
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                                    Label("\(alignment.label) — counts \(aw.percent(for: alignment))% of Focus Time", systemImage: alignment.icon)
+                                        .foregroundColor(alignmentColor(alignment))
                                 }
-                            } label: {
-                                Label("Adjust in Settings", systemImage: "gearshape")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(.secondary)
                             }
-                            .buttonStyle(.plain)
-                            .hoverEffect(brightness: 0.3)
-                            .focusable(false)
-                            Spacer()
-                        }
-                    }
-                    .padding(14)
-                    .frame(width: 340)
-                }
+                            .font(.system(size: 12))
 
-                // Session type filter
-                Menu {
-                    Button("All Types") { selectedSessionType = nil }
-                    Divider()
-                    ForEach(SessionType.filterableTypes, id: \.self) { type in
-                        Button(action: { selectedSessionType = type }) {
-                            Label(type.rawValue, systemImage: type.icon)
+                            Text("Alignment uses Focus Time as its denominator, except Procrastinated uses the full spent duration. External calendar events without Alignment are ignored for Alignment %.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                                .italic()
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Divider()
+
+                            Label("Use the calendar button to see your monthly overview with per-day breakdowns.", systemImage: "calendar")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Divider()
+
+                            HStack {
+                                Spacer()
+                                Button {
+                                    showingHelp = false
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        openSettings()
+                                        NotificationCenter.default.post(name: AppSettingsView.switchToAwarenessTab, object: nil)
+                                    }
+                                } label: {
+                                    Label("Adjust in Settings", systemImage: "gearshape")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                                .hoverEffect(brightness: 0.3)
+                                .focusable(false)
+                                Spacer()
+                            }
                         }
+                        .padding(14)
+                        .frame(width: 340)
                     }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "line.3.horizontal.decrease")
-                            .font(.system(size: 13))
-                        if let type = selectedSessionType {
+                    .help("Focus & Alignment help")
+
+                    // Session type filter
+                    Menu {
+                        Button("All Types") { selectedSessionType = nil }
+                        Divider()
+                        ForEach(SessionType.filterableTypes, id: \.self) { type in
+                            Button(action: { selectedSessionType = type }) {
+                                Label(type.rawValue, systemImage: type.icon)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "line.3.horizontal.decrease")
+                                .font(.system(size: 12))
+                            if let type = selectedSessionType {
+                                Image(systemName: type.icon)
+                                    .font(.system(size: 9))
+                                    .foregroundColor(type.color)
+                            }
+                        }
+                        .foregroundColor(isFiltering ? .accentColor : colors.textMuted)
+                        .frame(width: isFiltering ? 24 : 18, height: 20)
+                        .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .hoverEffect(brightness: 0.3)
+                    .help("Filter by session type")
+
+                    Button {
+                        showingMonthly = true
+                    } label: {
+                        Image(systemName: "calendar")
+                            .font(.system(size: 12))
+                            .foregroundColor(colors.textMuted)
+                            .frame(width: 18, height: 20)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(brightness: 0.3)
+                    .help("Monthly overview")
+
+                    RightPanelCollapseButton(
+                        isExpanded: $productivityExpanded,
+                        expandedHelp: "Collapse Focus & Alignment",
+                        collapsedHelp: "Expand Focus & Alignment"
+                    )
+                }
+            }
+
+            if productivityExpanded {
+                VStack(alignment: .leading, spacing: 12) {
+                    // Active filter indicator
+                    if let type = selectedSessionType {
+                        HStack(spacing: 6) {
                             Image(systemName: type.icon)
                                 .font(.system(size: 10))
                                 .foregroundColor(type.color)
+                            Text(type.rawValue)
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(type.color)
+                            Button {
+                                selectedSessionType = nil
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 10))
+                                    .foregroundColor(colors.textMuted)
+                            }
+                            .buttonStyle(.plain)
+                            .focusable(false)
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(type.color.opacity(0.15))
+                        )
                     }
-                    .foregroundColor(isFiltering ? .accentColor : colors.textMuted)
-                    .frame(height: 24)
-                    .contentShape(Rectangle())
-                }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Filter by session type")
 
-                Button {
-                    showingMonthly = true
-                } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 13))
-                        .foregroundColor(colors.textMuted)
-                        .frame(width: 24, height: 24)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.2)
-                .help("Monthly overview")
-            }
-
-            // Active filter indicator
-            if let type = selectedSessionType {
-                HStack(spacing: 6) {
-                    Image(systemName: type.icon)
-                        .font(.system(size: 10))
-                        .foregroundColor(type.color)
-                    Text(type.rawValue)
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(type.color)
-                    Button {
-                        selectedSessionType = nil
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 10))
-                            .foregroundColor(colors.textMuted)
+                    if sessionAwarenessService.config.dailyPhraseEnabled {
+                        dailyPhraseCard
                     }
-                    .buttonStyle(.plain)
-                    .focusable(false)
+
+                    // Today's stats
+                    todayStats
+                    alignmentStats
+
+                    if reviewMetrics.spentMinutes > 0 || reviewMetrics.focusMinutes != 0 || reviewMetrics.alignmentEligibleFocusMinutes > 0 || isFiltering {
+                        focusSummary
+                    }
                 }
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(type.color.opacity(0.15))
-                )
-            }
-
-            if sessionAwarenessService.config.dailyPhraseEnabled {
-                dailyPhraseCard
-            }
-
-            // Today's stats
-            todayStats
-            alignmentStats
-
-            if reviewMetrics.focusMinutes > 0 || isFiltering {
-                focusSummary
+                .transition(.opacity)
             }
         }
         .padding(16)
@@ -502,6 +529,7 @@ struct ProductivityCard: View {
                         .stroke(colors.divider, lineWidth: 1)
                 )
         )
+        .animation(.easeOut(duration: 0.14), value: productivityExpanded)
         .sheet(isPresented: $showingMonthly) {
             MonthlyStatsView(selectedSessionType: $selectedSessionType)
                 .environmentObject(calendarService)
@@ -567,12 +595,21 @@ struct ProductivityCard: View {
         let alignmentColor = hasAlignmentEligibleFocus
             ? alignmentPercentColor(alignmentPercent)
             : colors.textMuted
+        let focusColor = metrics.focusMinutes < 0
+            ? .red
+            : (colors.isDark ? .green : Color(hex: "15803D"))
         return VStack(spacing: 8) {
+            metricRow(
+                icon: "clock",
+                label: "Spent Time",
+                value: formatMinutes(metrics.spentMinutes),
+                color: colors.textSecondary
+            )
             metricRow(
                 icon: "timer",
                 label: "Focus Time",
                 value: formatMinutes(metrics.focusMinutes),
-                color: colors.isDark ? .green : Color(hex: "15803D")
+                color: focusColor
             )
             metricRow(
                 icon: "target",
@@ -650,21 +687,18 @@ struct ProductivityCard: View {
     }
 
     private func formatMinutes(_ minutes: Int) -> String {
-        let hours = minutes / 60
-        let mins = minutes % 60
+        let sign = minutes < 0 ? "-" : ""
+        let absoluteMinutes = abs(minutes)
+        let hours = absoluteMinutes / 60
+        let mins = absoluteMinutes % 60
         if hours > 0 {
-            return "\(hours)h \(mins)m"
+            return "\(sign)\(hours)h \(mins)m"
         }
-        return "\(mins)m"
+        return "\(sign)\(mins)m"
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {
-        switch rating {
-        case .rocket: return .orange
-        case .completed: return .green
-        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
-        case .skipped: return .red
-        }
+        awarenessRatingColor(rating, isDark: colors.isDark)
     }
 
     private func alignmentColor(_ alignment: SessionAlignment) -> Color {
@@ -724,6 +758,7 @@ struct MonthlyStatsView: View {
 
     private struct MonthStat {
         var totalEvents: Int
+        var spentMinutes: Int
         var focusMinutes: Int
         var alignedFocusMinutes: Int
         var alignmentEligibleFocusMinutes: Int
@@ -753,15 +788,25 @@ struct MonthlyStatsView: View {
         return (wd + 5) % 7
     }
 
-    private var monthTotals: (counts: [SessionRating: Int], alignmentCounts: [SessionAlignment: Int], totalEvents: Int, focusMinutes: Int, alignedFocusMinutes: Int, alignmentEligibleFocusMinutes: Int) {
+    private var monthTotals: (
+        counts: [SessionRating: Int],
+        alignmentCounts: [SessionAlignment: Int],
+        totalEvents: Int,
+        spentMinutes: Int,
+        focusMinutes: Int,
+        alignedFocusMinutes: Int,
+        alignmentEligibleFocusMinutes: Int
+    ) {
         var counts: [SessionRating: Int] = [:]
         var alignmentCounts: [SessionAlignment: Int] = [:]
         var total = 0
+        var spent: Double = 0
         var focus: Double = 0
         var alignedFocus: Double = 0
         var alignmentEligibleFocus: Double = 0
         for (_, stats) in dayStats {
             total += stats.totalEvents
+            spent += stats.spentMinutes
             focus += stats.focusMinutes
             alignedFocus += stats.alignedFocusMinutes
             alignmentEligibleFocus += stats.alignmentEligibleFocusMinutes
@@ -776,6 +821,7 @@ struct MonthlyStatsView: View {
             counts: counts,
             alignmentCounts: alignmentCounts,
             totalEvents: total,
+            spentMinutes: Int(spent),
             focusMinutes: Int(focus),
             alignedFocusMinutes: Int(alignedFocus),
             alignmentEligibleFocusMinutes: Int(alignmentEligibleFocus)
@@ -794,8 +840,17 @@ struct MonthlyStatsView: View {
         dayStats.values.map(\.focusMinutes).max() ?? 0
     }
 
-    private var yearTotals: (totalEvents: Int, focusMinutes: Int, alignedFocusMinutes: Int, alignmentEligibleFocusMinutes: Int, counts: [SessionRating: Int], alignmentCounts: [SessionAlignment: Int]) {
+    private var yearTotals: (
+        totalEvents: Int,
+        spentMinutes: Int,
+        focusMinutes: Int,
+        alignedFocusMinutes: Int,
+        alignmentEligibleFocusMinutes: Int,
+        counts: [SessionRating: Int],
+        alignmentCounts: [SessionAlignment: Int]
+    ) {
         var totalEvents = 0
+        var spentMinutes = 0
         var focusMinutes = 0
         var alignedFocusMinutes = 0
         var alignmentEligibleFocusMinutes = 0
@@ -803,6 +858,7 @@ struct MonthlyStatsView: View {
         var alignmentCounts: [SessionAlignment: Int] = [:]
         for (_, stat) in yearMonthStats {
             totalEvents += stat.totalEvents
+            spentMinutes += stat.spentMinutes
             focusMinutes += stat.focusMinutes
             alignedFocusMinutes += stat.alignedFocusMinutes
             alignmentEligibleFocusMinutes += stat.alignmentEligibleFocusMinutes
@@ -815,6 +871,7 @@ struct MonthlyStatsView: View {
         }
         return (
             totalEvents: totalEvents,
+            spentMinutes: spentMinutes,
             focusMinutes: focusMinutes,
             alignedFocusMinutes: alignedFocusMinutes,
             alignmentEligibleFocusMinutes: alignmentEligibleFocusMinutes,
@@ -865,6 +922,7 @@ struct MonthlyStatsView: View {
                     counts: yearTotals.counts,
                     alignmentCounts: yearTotals.alignmentCounts,
                     totalEvents: yearTotals.totalEvents,
+                    spentMinutes: yearTotals.spentMinutes,
                     focusMinutes: yearTotals.focusMinutes,
                     alignedFocusMinutes: yearTotals.alignedFocusMinutes,
                     alignmentEligibleFocusMinutes: yearTotals.alignmentEligibleFocusMinutes
@@ -873,7 +931,7 @@ struct MonthlyStatsView: View {
                 .padding(.vertical, 12)
             }
         }
-        .frame(width: 400)
+        .frame(width: 520)
         .onAppear { loadData() }
         .onChange(of: selectedSessionType) { _, _ in
             selectedDay = nil
@@ -893,7 +951,7 @@ struct MonthlyStatsView: View {
     // MARK: - Header
 
     private var headerRow: some View {
-        HStack {
+        HStack(spacing: 10) {
             Text("Focus & Alignment")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.primary)
@@ -903,77 +961,66 @@ struct MonthlyStatsView: View {
 
             Spacer()
 
-            Menu {
-                Button("All Types") { selectedSessionType = nil }
-                Divider()
-                ForEach(SessionType.filterableTypes, id: \.self) { type in
-                    let count = typeCounts[type] ?? 0
-                    Button(action: { selectedSessionType = type }) {
-                        Label("\(type.rawValue) (\(count))", systemImage: type.icon)
+            HStack(spacing: 4) {
+                Menu {
+                    Button("All Types") { selectedSessionType = nil }
+                    Divider()
+                    ForEach(SessionType.filterableTypes, id: \.self) { type in
+                        let count = typeCounts[type] ?? 0
+                        Button(action: { selectedSessionType = type }) {
+                            Label("\(type.rawValue) (\(count))", systemImage: type.icon)
+                        }
                     }
-                }
-            } label: {
-                HStack(spacing: 5) {
-                    Image(systemName: "line.3.horizontal.decrease")
-                        .font(.system(size: 11))
-                    if let type = selectedSessionType {
-                        HStack(spacing: 3) {
-                            Image(systemName: type.icon)
-                                .font(.system(size: 10))
-                                .foregroundColor(type.color)
-                            Text(type.rawValue)
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 11))
+                        if let type = selectedSessionType {
+                            HStack(spacing: 3) {
+                                Image(systemName: type.icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(type.color)
+                                Text(type.rawValue)
+                                    .font(.system(size: 12, weight: .medium))
+                            }
+                        } else {
+                            Text("All Types")
                                 .font(.system(size: 12, weight: .medium))
                         }
-                    } else {
-                        Text("All Types")
-                            .font(.system(size: 12, weight: .medium))
                     }
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .semibold))
-                }
-                .foregroundColor(.primary.opacity(0.7))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.primary.opacity(0.06))
-                )
-                .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .focusable(false)
-
-            if viewMode == .month {
-                dayCellMetricToggle
-            }
-
-            Button {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    viewMode = viewMode == .month ? .year : .month
-                }
-                if viewMode == .year { loadYearData() }
-            } label: {
-                Image(systemName: viewMode == .month ? "list.bullet" : "calendar")
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    .frame(width: 24, height: 24)
+                    .foregroundColor(.primary.opacity(0.7))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.primary.opacity(0.06))
+                    )
                     .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .hoverEffect(brightness: 0.2)
-            .focusable(false)
-            .help(viewMode == .month ? "Year overview" : "Month view")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .focusable(false)
+                .hoverEffect(brightness: 0.2)
+                .help("Filter by session type")
 
-            Button { dismiss() } label: {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(.secondary)
-                    .contentShape(Rectangle())
+                if viewMode == .month {
+                    dayCellMetricToggle
+                }
+
+                monthYearModeSelector
+
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.secondary)
+                        .frame(width: 22, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
+                .focusable(false)
             }
-            .buttonStyle(.plain)
-            .hoverEffect(brightness: 0.2)
-            .focusable(false)
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -989,7 +1036,7 @@ struct MonthlyStatsView: View {
                     Image(systemName: mode.icon)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(dayCellMetricMode == mode ? .accentColor : .secondary)
-                        .frame(width: 24, height: 20)
+                        .frame(width: 23, height: 20)
                         .background(
                             RoundedRectangle(cornerRadius: 5)
                                 .fill(dayCellMetricMode == mode ? Color.accentColor.opacity(0.14) : Color.clear)
@@ -997,6 +1044,7 @@ struct MonthlyStatsView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(brightness: 0.2)
                 .focusable(false)
                 .help(mode.help)
             }
@@ -1012,6 +1060,53 @@ struct MonthlyStatsView: View {
         )
     }
 
+    private var monthYearModeSelector: some View {
+        HStack(spacing: 1) {
+            modeButton(mode: .month, icon: "calendar", help: "Month view")
+            modeButton(mode: .year, icon: "list.bullet", help: "Year overview")
+        }
+        .padding(2)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(Color.primary.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(Color.primary.opacity(0.07), lineWidth: 0.5)
+        )
+    }
+
+    private func modeButton(mode: ViewMode, icon: String, help: String) -> some View {
+        Button {
+            setViewMode(mode)
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(viewMode == mode ? .accentColor : .secondary)
+                .frame(width: 23, height: 20)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(viewMode == mode ? Color.accentColor.opacity(0.14) : Color.clear)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.2)
+        .focusable(false)
+        .help(help)
+    }
+
+    private func setViewMode(_ mode: ViewMode) {
+        guard viewMode != mode else { return }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            viewMode = mode
+        }
+        if mode == .year {
+            loadYearData()
+        } else {
+            loadData()
+        }
+    }
     // MARK: - Navigation rows
 
     private var monthNavigationRow: some View {
@@ -1137,9 +1232,9 @@ struct MonthlyStatsView: View {
         let totalCells = firstWeekday + daysInMonth
         let rows = (totalCells + 6) / 7
 
-        return VStack(spacing: 2) {
+        return VStack(spacing: 4) {
             ForEach(0..<rows, id: \.self) { row in
-                HStack(spacing: 2) {
+                HStack(spacing: 4) {
                     ForEach(0..<7, id: \.self) { col in
                         let cellIndex = row * 7 + col
                         let day = cellIndex - firstWeekday + 1
@@ -1148,7 +1243,7 @@ struct MonthlyStatsView: View {
                             dayCellView(day: day)
                         } else {
                             Color.clear
-                                .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62)
+                                .frame(maxWidth: .infinity, minHeight: 70, maxHeight: 70)
                         }
                     }
                 }
@@ -1168,7 +1263,7 @@ struct MonthlyStatsView: View {
         return Button {
             selectedDay = day
         } label: {
-            VStack(spacing: 2) {
+            VStack(spacing: 3) {
                 Text("\(day)")
                     .font(.system(size: 12, weight: isToday ? .bold : .regular))
                     .foregroundColor(isFuture ? .secondary.opacity(0.3) : (isToday ? .primary : .primary.opacity(0.7)))
@@ -1183,7 +1278,7 @@ struct MonthlyStatsView: View {
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(metric.color)
             }
-            .frame(maxWidth: .infinity, minHeight: 62, maxHeight: 62)
+            .frame(maxWidth: .infinity, minHeight: 70, maxHeight: 70)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isToday ? Color.accentColor.opacity(0.12) : Color.primary.opacity(0.04))
@@ -1195,6 +1290,8 @@ struct MonthlyStatsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: isFuture && stats == nil ? 0 : 0.1)
+        .help(dayCellHelp(date: cellDate, stats: stats, isFuture: isFuture))
         .disabled(isFuture && stats == nil)
         .popover(isPresented: Binding(
             get: { selectedDay == day },
@@ -1255,6 +1352,17 @@ struct MonthlyStatsView: View {
             }
             return ("\(percent)%", alignmentPercentColor(percent))
         }
+    }
+
+    private func dayCellHelp(date: Date, stats: CalendarService.DayFeedbackStats?, isFuture: Bool) -> String {
+        let title = dayDateTitle(date)
+        guard let stats else {
+            return isFuture ? title : "\(title): no sessions found"
+        }
+
+        let reviewed = stats.sessionReviews.count
+        let alignmentText = dayAlignmentPercent(stats).map { ", \($0)% alignment" } ?? ""
+        return "\(title): \(reviewed)/\(stats.totalEvents) reviewed, \(formatFocusTime(Int(stats.focusMinutes.rounded()))) focus\(alignmentText)"
     }
 
     private func focusColor(_ minutes: Double) -> Color {
@@ -1325,10 +1433,16 @@ struct MonthlyStatsView: View {
 
             VStack(spacing: 7) {
                 dayMetricRow(
+                    icon: "clock",
+                    label: "Spent Time",
+                    value: hasReviews ? formatFocusTime(Int(stats.spentMinutes.rounded())) : "—",
+                    color: .secondary
+                )
+                dayMetricRow(
                     icon: "timer",
                     label: "Focus Time",
                     value: hasReviews ? formatFocusTime(Int(stats.focusMinutes.rounded())) : "—",
-                    color: colors.isDark ? .green : Color(hex: "15803D")
+                    color: stats.focusMinutes < 0 ? .red : (colors.isDark ? .green : Color(hex: "15803D"))
                 )
                 dayMetricRow(
                     icon: "target",
@@ -1441,7 +1555,7 @@ struct MonthlyStatsView: View {
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.primary.opacity(0.82))
                             .lineLimit(1)
-                        Text("\(timeRange(review.startDate, review.endDate)) · \(formatFocusTime(review.focusMinutes)) focus · \(alignmentText)")
+                        Text("\(timeRange(review.startDate, review.endDate)) · \(formatFocusTime(review.durationMinutes)) spent · \(formatFocusTime(review.focusMinutes)) focus · \(alignmentText)")
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
@@ -1626,15 +1740,21 @@ struct MonthlyStatsView: View {
 
                     Spacer()
 
-                    if let focusMin = stat?.focusMinutes, focusMin > 0 {
+                    if let stat, stat.spentMinutes > 0 || stat.focusMinutes != 0 || stat.alignmentEligibleFocusMinutes > 0 {
                         VStack(alignment: .trailing, spacing: 1) {
                             HStack(spacing: 3) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: 9))
+                                    .foregroundColor(.secondary.opacity(0.8))
+                                Text(formatFocusTime(stat.spentMinutes))
+                                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                    .foregroundColor(.secondary)
                                 Image(systemName: "timer")
                                     .font(.system(size: 10))
-                                    .foregroundColor(colors.isDark ? .green.opacity(0.8) : Color(hex: "15803D"))
-                                Text(formatFocusTime(focusMin))
+                                    .foregroundColor(stat.focusMinutes > 0 ? (colors.isDark ? .green.opacity(0.8) : Color(hex: "15803D")) : .secondary.opacity(0.5))
+                                Text(formatFocusTime(stat.focusMinutes))
                                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                                    .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
+                                    .foregroundColor(stat.focusMinutes > 0 ? (colors.isDark ? .green : Color(hex: "15803D")) : .secondary)
                             }
                             if let alignmentPercent {
                                 HStack(spacing: 3) {
@@ -1667,6 +1787,18 @@ struct MonthlyStatsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .hoverEffect(brightness: isFuture ? 0 : 0.08)
+        .help(yearMonthHelp(month: m, stat: stat, isFuture: isFuture))
+    }
+
+    private func yearMonthHelp(month m: Int, stat: MonthStat?, isFuture: Bool) -> String {
+        let monthTitle = fullMonthName(for: m)
+        guard let stat else {
+            return isFuture ? monthTitle : "\(monthTitle): no sessions found"
+        }
+
+        let alignmentText = monthAlignmentPercent(stat).map { ", \($0)% alignment" } ?? ""
+        return "\(monthTitle): \(stat.rated)/\(stat.totalEvents) reviewed, \(formatFocusTime(stat.focusMinutes)) focus\(alignmentText)"
     }
 
     // MARK: - Totals rows
@@ -1677,13 +1809,22 @@ struct MonthlyStatsView: View {
             counts: totals.counts,
             alignmentCounts: totals.alignmentCounts,
             totalEvents: totals.totalEvents,
+            spentMinutes: totals.spentMinutes,
             focusMinutes: totals.focusMinutes,
             alignedFocusMinutes: totals.alignedFocusMinutes,
             alignmentEligibleFocusMinutes: totals.alignmentEligibleFocusMinutes
         ))
     }
 
-    private func aggregateTotalsRow(totals: (counts: [SessionRating: Int], alignmentCounts: [SessionAlignment: Int], totalEvents: Int, focusMinutes: Int, alignedFocusMinutes: Int, alignmentEligibleFocusMinutes: Int)) -> some View {
+    private func aggregateTotalsRow(totals: (
+        counts: [SessionRating: Int],
+        alignmentCounts: [SessionAlignment: Int],
+        totalEvents: Int,
+        spentMinutes: Int,
+        focusMinutes: Int,
+        alignedFocusMinutes: Int,
+        alignmentEligibleFocusMinutes: Int
+    )) -> some View {
         let rated = totals.counts.values.reduce(0, +)
         let unrated = totals.totalEvents - rated
         let alignmentPercent = totals.alignmentEligibleFocusMinutes > 0
@@ -1736,8 +1877,20 @@ struct MonthlyStatsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            if totals.focusMinutes > 0 {
+            if totals.spentMinutes > 0 || totals.focusMinutes != 0 || totals.alignmentEligibleFocusMinutes > 0 {
                 HStack(spacing: 12) {
+                    HStack(spacing: 3) {
+                        Image(systemName: "clock")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                        Text("Spent")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                        Text(formatFocusTime(totals.spentMinutes))
+                            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+
                     HStack(spacing: 3) {
                         Image(systemName: "timer")
                             .font(.system(size: 12))
@@ -1837,6 +1990,7 @@ struct MonthlyStatsView: View {
                 sessionType: selectedSessionType
             )
             var totalEvents = 0
+            var spentMinutes: Double = 0
             var focusMinutes: Double = 0
             var alignedFocusMinutes: Double = 0
             var alignmentEligibleFocusMinutes: Double = 0
@@ -1844,6 +1998,7 @@ struct MonthlyStatsView: View {
             var alignmentCounts: [SessionAlignment: Int] = [:]
             for (_, dayStat) in dayData {
                 totalEvents += dayStat.totalEvents
+                spentMinutes += dayStat.spentMinutes
                 focusMinutes += dayStat.focusMinutes
                 alignedFocusMinutes += dayStat.alignedFocusMinutes
                 alignmentEligibleFocusMinutes += dayStat.alignmentEligibleFocusMinutes
@@ -1856,6 +2011,7 @@ struct MonthlyStatsView: View {
             }
             stats[m] = MonthStat(
                 totalEvents: totalEvents,
+                spentMinutes: Int(spentMinutes),
                 focusMinutes: Int(focusMinutes),
                 alignedFocusMinutes: Int(alignedFocusMinutes),
                 alignmentEligibleFocusMinutes: Int(alignmentEligibleFocusMinutes),
@@ -1867,21 +2023,18 @@ struct MonthlyStatsView: View {
     }
 
     private func formatFocusTime(_ minutes: Int) -> String {
-        let hours = minutes / 60
-        let mins = minutes % 60
+        let sign = minutes < 0 ? "-" : ""
+        let absoluteMinutes = abs(minutes)
+        let hours = absoluteMinutes / 60
+        let mins = absoluteMinutes % 60
         if hours > 0 {
-            return "\(hours)h \(mins)m"
+            return "\(sign)\(hours)h \(mins)m"
         }
-        return "\(mins)m"
+        return "\(sign)\(mins)m"
     }
 
     private func ratingColor(_ rating: SessionRating) -> Color {
-        switch rating {
-        case .rocket: return .orange
-        case .completed: return .green
-        case .partial: return colors.isDark ? .yellow : Color(hex: "92400E")
-        case .skipped: return .red
-        }
+        awarenessRatingColor(rating, isDark: colors.isDark)
     }
 
     private func alignmentColor(_ alignment: SessionAlignment) -> Color {

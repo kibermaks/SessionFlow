@@ -71,14 +71,18 @@ struct DeepSessionConfig: Codable, Equatable {
     // Support decoding presets saved before andThenGap existed
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        enabled = try container.decode(Bool.self, forKey: .enabled)
-        sessionCount = try container.decode(Int.self, forKey: .sessionCount)
-        injectAfterEvery = try container.decode(Int.self, forKey: .injectAfterEvery)
-        name = try container.decode(String.self, forKey: .name)
-        duration = try container.decode(Int.self, forKey: .duration)
-        calendarName = try container.decode(String.self, forKey: .calendarName)
+        func decode<T: Decodable>(_ type: T.Type, forKey key: CodingKeys, default defaultValue: T) -> T {
+            (try? container.decodeIfPresent(type, forKey: key)) ?? defaultValue
+        }
+
+        enabled = decode(Bool.self, forKey: .enabled, default: false)
+        sessionCount = decode(Int.self, forKey: .sessionCount, default: 1)
+        injectAfterEvery = decode(Int.self, forKey: .injectAfterEvery, default: 3)
+        name = decode(String.self, forKey: .name, default: "Deep Session")
+        duration = decode(Int.self, forKey: .duration, default: 100)
+        calendarName = decode(String.self, forKey: .calendarName, default: "Work")
         calendarIdentifier = try container.decodeIfPresent(String.self, forKey: .calendarIdentifier)
-        andThenGap = try container.decodeIfPresent(Int.self, forKey: .andThenGap) ?? 2
+        andThenGap = decode(Int.self, forKey: .andThenGap, default: 2)
     }
 
     static let `default` = DeepSessionConfig()
@@ -273,31 +277,35 @@ struct Preset: Identifiable, Codable, Equatable {
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(UUID.self, forKey: .id)
-        name = try container.decode(String.self, forKey: .name)
-        icon = try container.decode(String.self, forKey: .icon)
-        workSessionCount = try container.decode(Int.self, forKey: .workSessionCount)
-        sideSessionCount = try container.decode(Int.self, forKey: .sideSessionCount)
-        workSessionName = try container.decode(String.self, forKey: .workSessionName)
-        sideSessionName = try container.decode(String.self, forKey: .sideSessionName)
-        workSessionDuration = try container.decode(Int.self, forKey: .workSessionDuration)
-        sideSessionDuration = try container.decode(Int.self, forKey: .sideSessionDuration)
-        planningDuration = try container.decode(Int.self, forKey: .planningDuration)
-        restDuration = try container.decode(Int.self, forKey: .restDuration)
+        func decode<T: Decodable>(_ type: T.Type, forKey key: CodingKeys, default defaultValue: T) -> T {
+            (try? container.decodeIfPresent(type, forKey: key)) ?? defaultValue
+        }
+
+        id = decode(UUID.self, forKey: .id, default: UUID())
+        name = decode(String.self, forKey: .name, default: "Recovered Preset")
+        icon = decode(String.self, forKey: .icon, default: "calendar")
+        workSessionCount = decode(Int.self, forKey: .workSessionCount, default: 5)
+        sideSessionCount = decode(Int.self, forKey: .sideSessionCount, default: 2)
+        workSessionName = decode(String.self, forKey: .workSessionName, default: "Work Session")
+        sideSessionName = decode(String.self, forKey: .sideSessionName, default: "Side Session")
+        workSessionDuration = decode(Int.self, forKey: .workSessionDuration, default: 40)
+        sideSessionDuration = decode(Int.self, forKey: .sideSessionDuration, default: Self.calculateSideDuration(from: workSessionDuration))
+        planningDuration = decode(Int.self, forKey: .planningDuration, default: 10)
+        restDuration = decode(Int.self, forKey: .restDuration, default: 10)
         let decodedRestDuration = restDuration
-        sideRestDuration = try container.decodeIfPresent(Int.self, forKey: .sideRestDuration) ?? Self.calculateSideRest(from: decodedRestDuration)
-        deepRestDuration = try container.decodeIfPresent(Int.self, forKey: .deepRestDuration) ?? restDuration
-        schedulePlanning = try container.decode(Bool.self, forKey: .schedulePlanning)
-        pattern = try container.decode(SchedulePattern.self, forKey: .pattern)
-        workSessionsPerCycle = try container.decode(Int.self, forKey: .workSessionsPerCycle)
-        sideSessionsPerCycle = try container.decodeIfPresent(Int.self, forKey: .sideSessionsPerCycle) ?? 1
-        sideFirst = try container.decodeIfPresent(Bool.self, forKey: .sideFirst) ?? false
-        deepSessionConfig = try container.decode(DeepSessionConfig.self, forKey: .deepSessionConfig)
-        flexibleSideScheduling = try container.decodeIfPresent(Bool.self, forKey: .flexibleSideScheduling) ?? true
-        bigRestConfig = try container.decodeIfPresent(BigRestConfig.self, forKey: .bigRestConfig) ?? .default
-        calendarMapping = try container.decodeIfPresent(CalendarMapping.self, forKey: .calendarMapping) ?? .default
+        sideRestDuration = decode(Int.self, forKey: .sideRestDuration, default: Self.calculateSideRest(from: decodedRestDuration))
+        deepRestDuration = decode(Int.self, forKey: .deepRestDuration, default: Self.calculateDeepRest(from: decodedRestDuration))
+        schedulePlanning = decode(Bool.self, forKey: .schedulePlanning, default: true)
+        pattern = decode(SchedulePattern.self, forKey: .pattern, default: .alternating)
+        workSessionsPerCycle = decode(Int.self, forKey: .workSessionsPerCycle, default: 2)
+        sideSessionsPerCycle = decode(Int.self, forKey: .sideSessionsPerCycle, default: 1)
+        sideFirst = decode(Bool.self, forKey: .sideFirst, default: false)
+        deepSessionConfig = decode(DeepSessionConfig.self, forKey: .deepSessionConfig, default: .default)
+        flexibleSideScheduling = decode(Bool.self, forKey: .flexibleSideScheduling, default: true)
+        bigRestConfig = decode(BigRestConfig.self, forKey: .bigRestConfig, default: .default)
+        calendarMapping = decode(CalendarMapping.self, forKey: .calendarMapping, default: .default)
         // If version is missing, assume v1 (old preset)
-        schemaVersion = try container.decodeIfPresent(PresetSchemaVersion.self, forKey: .schemaVersion) ?? .v1
+        schemaVersion = decode(PresetSchemaVersion.self, forKey: .schemaVersion, default: .v1)
     }
     
     // MARK: - Default Presets
@@ -600,42 +608,41 @@ class PresetStorage {
     static let shared = PresetStorage()
     private let presetsKey = "SessionFlow.Presets"
     private let lastActivePresetKey = "SessionFlow.LastActivePresetID"
+    private let savedStateKey = "SessionFlow.SavedState"
+    private let setupCompleteKey = "SessionFlow.HasCompletedSetup"
+    private let legacySetupCompleteKey = "hasCompletedSetup"
+    private let legacyPresetKeys = ["TaskScheduler.Presets"]
+    private let legacyLastActivePresetKeys = [
+        "SessionFlow.CurrentPresetId",
+        "TaskScheduler.LastActivePresetID",
+        "TaskScheduler.CurrentPresetId"
+    ]
     
     private init() {}
     
     func loadPresets() -> [Preset] {
-        if let data = UserDefaults.standard.data(forKey: presetsKey),
-           var presets = try? JSONDecoder().decode([Preset].self, from: data),
-           !presets.isEmpty {
-            // Migrate presets to current version if needed
-            var needsSave = false
-            for index in presets.indices {
-                let oldVersion = presets[index].schemaVersion
-                presets[index].migrateToCurrentVersion()
-                if presets[index].schemaVersion != oldVersion {
-                    needsSave = true
-                }
+        if let source = storedPresetData(),
+           var decoded = decodePresets(from: source.data) {
+            let migrated = migrateToCurrentVersion(&decoded.presets)
+            if source.isLegacy || decoded.needsSave || migrated {
+                savePresets(decoded.presets)
             }
-            
-            // Save migrated presets if any were updated
-            if needsSave {
-                savePresets(presets)
-            }
-            
-            return presets
+
+            return decoded.presets
         }
+
+        if let recovered = recoveredPresetsAfterSetup() {
+            savePresets(recovered)
+            return recovered
+        }
+
         // Return empty - presets should be created after calendar setup
         return []
     }
     
     /// Check if presets have been initialized (saved to storage)
     func hasInitializedPresets() -> Bool {
-        if let data = UserDefaults.standard.data(forKey: presetsKey),
-           let presets = try? JSONDecoder().decode([Preset].self, from: data),
-           !presets.isEmpty {
-            return true
-        }
-        return false
+        !loadPresets().isEmpty
     }
     
     /// Initialize presets with calendar names from setup
@@ -673,6 +680,9 @@ class PresetStorage {
         
         guard let data = try? JSONEncoder().encode(presetsToSave) else { return }
         UserDefaults.standard.set(data, forKey: presetsKey)
+        for key in legacyPresetKeys {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
     }
     
     func addPreset(_ preset: Preset) {
@@ -738,8 +748,18 @@ class PresetStorage {
     }
     
     func loadLastActivePresetId() -> UUID? {
-        guard let str = UserDefaults.standard.string(forKey: lastActivePresetKey) else { return nil }
-        return UUID(uuidString: str)
+        if let id = uuid(forKey: lastActivePresetKey) {
+            return id
+        }
+
+        for key in legacyLastActivePresetKeys {
+            if let id = uuid(forKey: key) {
+                saveLastActivePresetId(id)
+                return id
+            }
+        }
+
+        return nil
     }
 
     // MARK: - File Export / Import
@@ -757,11 +777,104 @@ class PresetStorage {
     /// Returns the number of presets restored.
     @discardableResult
     func importPresets(from data: Data) throws -> Int {
-        var imported = try JSONDecoder().decode([Preset].self, from: data)
-        for index in imported.indices {
-            imported[index].migrateToCurrentVersion()
+        guard var decoded = decodePresets(from: data) else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: [],
+                    debugDescription: "No valid presets found in the selected file."
+                )
+            )
         }
-        savePresets(imported)
-        return imported.count
+
+        _ = migrateToCurrentVersion(&decoded.presets)
+        savePresets(decoded.presets)
+        return decoded.presets.count
+    }
+}
+
+private extension PresetStorage {
+    struct PresetDecodeResult {
+        var presets: [Preset]
+        var needsSave: Bool
+    }
+
+    struct LossyPresetArray: Decodable {
+        var presets: [Preset] = []
+
+        init(from decoder: Decoder) throws {
+            var container = try decoder.unkeyedContainer()
+            while !container.isAtEnd {
+                if let preset = try? container.decode(Preset.self) {
+                    presets.append(preset)
+                } else {
+                    _ = try container.decode(DiscardedPreset.self)
+                }
+            }
+        }
+    }
+
+    struct DiscardedPreset: Decodable {}
+
+    func storedPresetData() -> (data: Data, isLegacy: Bool)? {
+        if let data = UserDefaults.standard.data(forKey: presetsKey) {
+            return (data, false)
+        }
+
+        for key in legacyPresetKeys {
+            if let data = UserDefaults.standard.data(forKey: key) {
+                return (data, true)
+            }
+        }
+
+        return nil
+    }
+
+    func decodePresets(from data: Data) -> PresetDecodeResult? {
+        if let presets = try? JSONDecoder().decode([Preset].self, from: data) {
+            return PresetDecodeResult(presets: presets, needsSave: false)
+        }
+
+        if let lossy = try? JSONDecoder().decode(LossyPresetArray.self, from: data),
+           !lossy.presets.isEmpty {
+            return PresetDecodeResult(presets: lossy.presets, needsSave: true)
+        }
+
+        return nil
+    }
+
+    func migrateToCurrentVersion(_ presets: inout [Preset]) -> Bool {
+        var needsSave = false
+        for index in presets.indices {
+            let oldVersion = presets[index].schemaVersion
+            presets[index].migrateToCurrentVersion()
+            if presets[index].schemaVersion != oldVersion {
+                needsSave = true
+            }
+        }
+        return needsSave
+    }
+
+    func recoveredPresetsAfterSetup() -> [Preset]? {
+        guard setupCompleted else { return nil }
+
+        if let data = UserDefaults.standard.data(forKey: savedStateKey),
+           var state = try? JSONDecoder().decode(Preset.self, from: data) {
+            state.migrateToCurrentVersion()
+            state.name = "Recovered Current Settings"
+            state.icon = "arrow.clockwise"
+            return [state]
+        }
+
+        return Preset.initialPresets
+    }
+
+    var setupCompleted: Bool {
+        UserDefaults.standard.bool(forKey: setupCompleteKey) ||
+            UserDefaults.standard.bool(forKey: legacySetupCompleteKey)
+    }
+
+    func uuid(forKey key: String) -> UUID? {
+        guard let str = UserDefaults.standard.string(forKey: key) else { return nil }
+        return UUID(uuidString: str)
     }
 }

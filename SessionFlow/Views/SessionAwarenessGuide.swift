@@ -283,10 +283,11 @@ struct SessionAwarenessGuide: View {
 
     private var feedbackButtonsView: some View {
         VStack(spacing: 12) {
-            HStack(spacing: 12) {
+            HStack(spacing: 8) {
                 feedbackButton(label: "Done", icon: "checkmark.circle.fill", color: Color(hex: "10B981"))
                 feedbackButton(label: "Partly", icon: "circle.lefthalf.filled", color: Color(hex: "F59E0B"))
-                feedbackButton(label: "Skipped", icon: "xmark.circle.fill", color: Color(hex: "EF4444"))
+                feedbackButton(label: "Procrast.", icon: "iphone", color: Color(hex: "EF4444"))
+                feedbackButton(label: "Skipped", icon: "xmark.circle.fill", color: colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"))
             }
 
             // Badge preview
@@ -322,9 +323,11 @@ struct SessionAwarenessGuide: View {
                     .font(.system(size: 22))
                 Text(label)
                     .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.78)
             }
             .foregroundColor(selectedFeedback == label ? color : colors.textSecondary)
-            .frame(width: 80, height: 60)
+            .frame(width: 72, height: 60)
             .background(
                 RoundedRectangle(cornerRadius: 10)
                     .fill(selectedFeedback == label ? color.opacity(0.15) : colors.subtleBackground)
@@ -342,6 +345,7 @@ struct SessionAwarenessGuide: View {
         switch feedback {
         case "Done": return "checkmark.circle.fill"
         case "Partly": return "circle.lefthalf.filled"
+        case "Procrast.": return "iphone"
         default: return "xmark.circle.fill"
         }
     }
@@ -350,7 +354,8 @@ struct SessionAwarenessGuide: View {
         switch feedback {
         case "Done": return Color(hex: "10B981")
         case "Partly": return Color(hex: "F59E0B")
-        default: return Color(hex: "EF4444")
+        case "Procrast.": return Color(hex: "EF4444")
+        default: return colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B")
         }
     }
 }

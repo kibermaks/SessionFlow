@@ -514,6 +514,7 @@ struct CalendarSetupView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             // Mark setup as complete
             UserDefaults.standard.set(true, forKey: "SessionFlow.HasCompletedSetup")
+            UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
             
             // Trigger refresh notification
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {

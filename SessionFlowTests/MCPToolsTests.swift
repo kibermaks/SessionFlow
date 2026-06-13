@@ -179,6 +179,102 @@ extension MCPFeatureTests {
         await server.stop()
     }
 
+    @Test func presetDecoderAcceptsOlderPresetWithoutNewerFields() throws {
+        let json = """
+        [{
+            "id": "11111111-1111-1111-1111-111111111111",
+            "name": "Old Preset",
+            "icon": "calendar",
+            "workSessionCount": 4,
+            "sideSessionCount": 2,
+            "workSessionName": "Work",
+            "sideSessionName": "Side",
+            "workSessionDuration": 45,
+            "sideSessionDuration": 30,
+            "planningDuration": 10,
+            "restDuration": 15,
+            "schedulePlanning": true,
+            "pattern": "Alternating",
+            "workSessionsPerCycle": 2
+        }]
+        """.data(using: .utf8)!
+
+        let presets = try JSONDecoder().decode([Preset].self, from: json)
+
+        #expect(presets.count == 1)
+        #expect(presets[0].name == "Old Preset")
+        #expect(presets[0].sideRestDuration == Preset.calculateSideRest(from: 15))
+        #expect(presets[0].deepSessionConfig == .default)
+        #expect(presets[0].calendarMapping == .default)
+    }
+
+    @Test func presetStorageMigratesLegacyTaskSchedulerPresetsKey() {
+        let legacy = Preset(name: "Legacy Preset", workSessionCount: 3)
+        let data = try! JSONEncoder().encode([legacy])
+        UserDefaults.standard.set(data, forKey: "TaskScheduler.Presets")
+        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+
+        let presets = PresetStorage.shared.loadPresets()
+
+        #expect(presets.map(\.name) == ["Legacy Preset"])
+        #expect(UserDefaults.standard.data(forKey: "SessionFlow.Presets") != nil)
+        #expect(UserDefaults.standard.data(forKey: "TaskScheduler.Presets") == nil)
+    }
+
+    @Test func presetStorageRecoversSavedStateWhenPresetKeyMissingAfterSetup() {
+        let state = Preset(
+            name: "Current State",
+            icon: "gear",
+            workSessionCount: 7,
+            calendarMapping: CalendarMapping(workCalendarName: "Focused", sideCalendarName: "Admin")
+        )
+        let data = try! JSONEncoder().encode(state)
+        UserDefaults.standard.set(true, forKey: "SessionFlow.HasCompletedSetup")
+        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+
+        let presets = PresetStorage.shared.loadPresets()
+
+        #expect(presets.count == 1)
+        #expect(presets[0].name == "Recovered Current Settings")
+        #expect(presets[0].workSessionCount == 7)
+        #expect(presets[0].calendarMapping.workCalendarName == "Focused")
+    }
+
+    @Test func presetStorageRecoversSavedStateWhenOnlyLegacySetupFlagIsSet() {
+        let state = Preset(
+            name: "Current State",
+            icon: "gear",
+            workSessionCount: 8,
+            calendarMapping: CalendarMapping(workCalendarName: "Legacy Work", sideCalendarName: "Legacy Side")
+        )
+        let data = try! JSONEncoder().encode(state)
+        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
+        UserDefaults.standard.set(true, forKey: "hasCompletedSetup")
+        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
+
+        let presets = PresetStorage.shared.loadPresets()
+
+        #expect(presets.count == 1)
+        #expect(presets[0].name == "Recovered Current Settings")
+        #expect(presets[0].workSessionCount == 8)
+        #expect(presets[0].calendarMapping.sideCalendarName == "Legacy Side")
+    }
+
+    @Test func presetStoragePreservesIntentionallyEmptyPresetListAfterSetup() {
+        let state = Preset(name: "Current State", workSessionCount: 9)
+        let data = try! JSONEncoder().encode(state)
+        UserDefaults.standard.set(true, forKey: "SessionFlow.HasCompletedSetup")
+        UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+        PresetStorage.shared.savePresets([])
+
+        let presets = PresetStorage.shared.loadPresets()
+
+        #expect(presets.isEmpty)
+        #expect(UserDefaults.standard.data(forKey: "SessionFlow.Presets") != nil)
+    }
+
     @Test func getDayReturnsAvailability() async throws {
         let server = try await MCPTestServer.start()
         let json = try await server.callJSON("get_day", ["date": .string("2026-05-28")])
@@ -233,6 +329,20 @@ extension MCPFeatureTests {
         #expect(HarshModeSessionNotes.goals(from: rated) == ["Ship fresh mode"])
     }
 
+    @Test func harshModeGoalsStripSessionFlowMetadataTags() {
+        let notes = """
+        #side
+
+        #flowgoal:
+        Rospower #flow✅ #flowalign2
+        #flow✅
+        #flowalign2
+        """
+
+        #expect(HarshModeSessionNotes.goals(from: notes) == ["Rospower"])
+        #expect(HarshModeSessionNotes.goalLines(from: "- Rospower #flow✅ #flowalign2") == ["Rospower"])
+    }
+
     @Test func sessionAlignmentTagsRoundTripAndStrip() {
         let aligned = SessionAlignment.direct.applyTo(notes: "Client delivery #flowalign1")
 
@@ -241,6 +351,16 @@ extension MCPFeatureTests {
         #expect(!aligned.contains(SessionAlignment.maintenance.tag))
         #expect(SessionAlignment.stripAlignmentTags(aligned) == "Client delivery")
         #expect(SessionAwarenessService.strippedNotes("#work \(aligned)") == "Client delivery")
+    }
+
+    @Test func procrastinatedFocusRatingRoundTripsAndScoresZeroFocus() {
+        let notes = SessionRating.procrastinated.applyTo(notes: "#work Review inbox")
+
+        #expect(SessionRating.fromNotes(notes) == .procrastinated)
+        #expect(notes.contains(SessionRating.procrastinated.tag))
+        #expect(SessionRating.stripFeedbackTags(notes) == "#work Review inbox")
+        #expect(SessionRating.procrastinated.focusMultiplier == 0)
+        #expect(FocusWeights().multiplier(for: .procrastinated) == 0)
     }
 
     @Test func externalCalendarEventsDoNotRequireAlignment() {
@@ -253,6 +373,25 @@ extension MCPFeatureTests {
 
         #expect(!FlowFlexibilityNotes.alignmentIsOptional(sessionFlowNotes))
         #expect(FlowFlexibilityNotes.countsTowardAlignmentScore(sessionFlowNotes, alignment: nil))
+    }
+
+    @Test func flowFixedTagOverridesSessionFlowFlexibility() {
+        let fixedWorkNotes = "#work Client delivery #flowfixed"
+
+        #expect(FlowFlexibilityNotes.hasExplicitFixedTag(fixedWorkNotes))
+        #expect(!FlowFlexibilityNotes.isFlexible(fixedWorkNotes))
+        #expect(FlowFlexibilityNotes.isSessionFlowOwned(fixedWorkNotes))
+        #expect(FlowFlexibilityNotes.strippingTags(from: fixedWorkNotes) == "#work Client delivery")
+        #expect(FlowFlexibilityNotes.applyingFlexible(false, to: "#work Client delivery") == "#work Client delivery #flowfixed")
+        #expect(FlowFlexibilityNotes.applyingFlexible(true, to: fixedWorkNotes) == "#work Client delivery")
+    }
+
+    @Test func flowFlexibleAliasesMarkExternalEventsFlexible() {
+        #expect(FlowFlexibilityNotes.isFlexible("Doctor #flowflexible"))
+        #expect(FlowFlexibilityNotes.isFlexible("Doctor #flow-flexible"))
+        #expect(!FlowFlexibilityNotes.isFlexible("#work #flowflexible #flowfixed"))
+        #expect(FlowFlexibilityNotes.applyingFlexible(true, to: "Doctor") == "Doctor #flowflexible")
+        #expect(FlowFlexibilityNotes.strippingTags(from: "Doctor #flow-flexible #flowfixed") == "Doctor")
     }
 
     @Test func harshModeReviewPreservesAlignmentTag() {

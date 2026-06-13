@@ -115,6 +115,7 @@ Focus uses the quick end-of-session ratings:
 | Fire | Excellent session | 100% |
 | Done | Completed with solid focus | 80% |
 | Partly | Some focus, some drift | 50% |
+| Procrastinated | You were present, but lost the block to distraction | 0% |
 | Skipped | Did not meaningfully happen | 0% |
 
 Alignment uses a separate five-level scale:
@@ -130,12 +131,15 @@ Alignment uses a separate five-level scale:
 The core stats are time-weighted:
 
 ```text
+Spent Time = duration of reviewed sessions that actually happened
 Focus Time = session duration × Focus weight
-Aligned Focus = alignment-eligible Focus Time × Alignment weight
-Alignment % = Aligned Focus / alignment-eligible Focus Time
+Aligned Focus = Focus Time × Alignment weight
+Alignment % = Aligned Focus / alignment-eligible spent time
 ```
 
 For example, a 2-hour session rated **Done** and **Support** gives 96 minutes of Focus Time and 48 minutes of Aligned Focus. That means the work was real, but only half of that focused effort served the current goal.
+
+For **Fire**, **Done**, and **Partly**, alignment-eligible spent time is the focus-weighted duration. A session rated **Procrastinated** adds 0 minutes of Focus Time, but its full duration counts in Alignment %. **Skipped** stays neutral because the session effectively did not happen.
 
 External calendar events without an Alignment tag are not included in the Alignment % denominator, so personal or non-work commitments can still be reviewed without lowering the directional score.
 

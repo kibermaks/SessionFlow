@@ -46,7 +46,8 @@ func awarenessRatingColor(_ rating: SessionRating, isDark: Bool = true) -> Color
     case .rocket: return .orange
     case .completed: return .green
     case .partial: return isDark ? .yellow : Color(hex: "92400E")
-    case .skipped: return .red
+    case .procrastinated: return .red
+    case .skipped: return isDark ? Color(hex: "94A3B8") : Color(hex: "64748B")
     }
 }
 

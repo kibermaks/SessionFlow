@@ -14,8 +14,12 @@ struct NumericInputField: View {
 
     /// Width sized to fit the widest possible value
     private var fieldWidth: CGFloat {
-        let maxDigits = "\(range.upperBound)".count
+        let maxDigits = max("\(range.lowerBound)".count, "\(range.upperBound)".count)
         return CGFloat(max(maxDigits, 2)) * 12 + 6
+    }
+
+    private var allowsNegative: Bool {
+        range.lowerBound < 0
     }
 
     var body: some View {
@@ -62,7 +66,7 @@ struct NumericInputField: View {
                         )
                 )
             .onChange(of: textValue) { _, newValue in
-                if let intValue = Int(newValue.filter { "0123456789".contains($0) }) {
+                if let intValue = parsedInt(from: newValue) {
                     if range.contains(intValue) {
                         value = intValue
                     }
@@ -109,12 +113,20 @@ struct NumericInputField: View {
     }
     
     private func validateAndSet() {
-        if let intValue = Int(textValue.filter { "0123456789".contains($0) }) {
+        if let intValue = parsedInt(from: textValue) {
             let clamped = min(max(intValue, range.lowerBound), range.upperBound)
             value = clamped
             textValue = "\(clamped)"
         } else {
             textValue = "\(value)"
         }
+    }
+
+    private func parsedInt(from text: String) -> Int? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let digits = trimmed.filter { "0123456789".contains($0) }
+        guard !digits.isEmpty else { return nil }
+        let sign = allowsNegative && trimmed.first == "-" ? "-" : ""
+        return Int(sign + digits)
     }
 }

@@ -6,6 +6,7 @@ enum SessionRating: String, Codable, CaseIterable {
     case rocket = "rocket"          // Amazing session, nailed it
     case completed = "completed"    // Stayed focused the whole time
     case partial = "partial"        // Was there some of the time
+    case procrastinated = "procrastinated" // Was present, but lost to distraction
     case skipped = "skipped"        // Was AFK / didn't do it
 
     /// Emoji hashtag written to calendar event notes (e.g. "#flow✅")
@@ -14,6 +15,7 @@ enum SessionRating: String, Codable, CaseIterable {
         case .rocket: return "#flow🚀"
         case .completed: return "#flow✅"
         case .partial: return "#flow🌗"
+        case .procrastinated: return "#flow📱"
         case .skipped: return "#flow❌"
         }
     }
@@ -28,6 +30,7 @@ enum SessionRating: String, Codable, CaseIterable {
         case .rocket: return "flame.fill"
         case .completed: return "checkmark.circle.fill"
         case .partial: return "circle.lefthalf.filled"
+        case .procrastinated: return "iphone"
         case .skipped: return "xmark.circle.fill"
         }
     }
@@ -37,6 +40,17 @@ enum SessionRating: String, Codable, CaseIterable {
         case .rocket: return "Fire"
         case .completed: return "Done"
         case .partial: return "Partly"
+        case .procrastinated: return "Procrastinated"
+        case .skipped: return "Skipped"
+        }
+    }
+
+    var shortLabel: String {
+        switch self {
+        case .rocket: return "Fire"
+        case .completed: return "Done"
+        case .partial: return "Partly"
+        case .procrastinated: return "Procrast."
         case .skipped: return "Skipped"
         }
     }
@@ -46,6 +60,7 @@ enum SessionRating: String, Codable, CaseIterable {
         case .rocket: return 1.0
         case .completed: return 0.8
         case .partial: return 0.5
+        case .procrastinated: return 0.0
         case .skipped: return 0.0
         }
     }
@@ -248,13 +263,7 @@ enum HarshModeSessionNotes {
     static func goalLines(from rawText: String) -> [String] {
         rawText
             .components(separatedBy: .newlines)
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .map { line in
-                if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                    return String(line.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                return line
-            }
+            .map(cleanedGoalLine)
             .filter { !$0.isEmpty }
     }
 
@@ -265,13 +274,7 @@ enum HarshModeSessionNotes {
             legacyEndMarker: legacyGoalsEnd,
             in: notes
         )
-            .map { line in
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                if trimmed.hasPrefix("- ") || trimmed.hasPrefix("* ") {
-                    return String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                return trimmed
-            }
+            .map(cleanedGoalLine)
             .filter { !$0.isEmpty }
     }
 
@@ -375,6 +378,20 @@ enum HarshModeSessionNotes {
         }
 
         return []
+    }
+
+    private static func cleanedGoalLine(_ line: String) -> String {
+        var result = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if result.hasPrefix("- ") || result.hasPrefix("* ") {
+            result = String(result.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
+        for tag in FlowFlexibilityNotes.sessionFlowTags + FlowFlexibilityNotes.allTags + SessionRating.allTags + SessionAlignment.allTags {
+            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
+        }
+
+        result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private static func removingSection(

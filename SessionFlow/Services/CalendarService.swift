@@ -719,6 +719,37 @@ class CalendarService: ObservableObject {
         return counts
     }
 
+    func hasProductivityFeedback(inLastDays days: Int, endingAt referenceDate: Date = Date()) -> Bool {
+        let calendar = Calendar.current
+        let dayCount = max(1, days)
+        let end = calendar.date(
+            byAdding: .day,
+            value: 1,
+            to: calendar.startOfDay(for: referenceDate)
+        ) ?? referenceDate
+        let start = calendar.date(
+            byAdding: .day,
+            value: -(dayCount - 1),
+            to: calendar.startOfDay(for: referenceDate)
+        ) ?? referenceDate
+
+        return hasProductivityFeedback(from: start, to: end)
+    }
+
+    func hasProductivityFeedback(from startDate: Date, to endDate: Date) -> Bool {
+        let calendars = includedEventCalendars()
+        guard !calendars.isEmpty else { return false }
+
+        let predicate = eventStore.predicateForEvents(withStart: startDate, end: endDate, calendars: calendars)
+        let nearAlldayThreshold: TimeInterval = 23 * 60 * 60
+        return eventStore.events(matching: predicate).contains { event in
+            guard !event.isAllDay, event.endDate.timeIntervalSince(event.startDate) < nearAlldayThreshold else {
+                return false
+            }
+            return SessionRating.fromNotes(event.notes) != nil || SessionAlignment.fromNotes(event.notes) != nil
+        }
+    }
+
     struct DaySessionReview: Identifiable {
         let id: String
         let title: String
@@ -737,6 +768,7 @@ class CalendarService: ObservableObject {
         var alignmentCounts: [SessionAlignment: Int] = [:]
         var sessionReviews: [DaySessionReview] = []
         var totalEvents: Int = 0
+        var spentMinutes: Double = 0
         var focusMinutes: Double = 0
         var alignedFocusMinutes: Double = 0
         var alignmentEligibleFocusMinutes: Double = 0
@@ -789,14 +821,17 @@ class CalendarService: ObservableObject {
                 result[day, default: DayFeedbackStats()].counts[rating, default: 0] += 1
                 let minutes = event.endDate.timeIntervalSince(event.startDate) / 60
                 let focusMinutes = minutes * weights.multiplier(for: rating)
+                let spentMinutes = rating == .skipped ? 0 : minutes
+                let alignmentEligibleMinutes = rating == .procrastinated ? minutes : max(0, focusMinutes)
                 let alignment = SessionAlignment.fromNotes(event.notes)
                 let countsTowardAlignment = FlowFlexibilityNotes.countsTowardAlignmentScore(
                     event.notes,
                     alignment: alignment
                 )
+                result[day, default: DayFeedbackStats()].spentMinutes += spentMinutes
                 result[day, default: DayFeedbackStats()].focusMinutes += focusMinutes
                 if countsTowardAlignment {
-                    result[day, default: DayFeedbackStats()].alignmentEligibleFocusMinutes += focusMinutes
+                    result[day, default: DayFeedbackStats()].alignmentEligibleFocusMinutes += alignmentEligibleMinutes
                     result[day, default: DayFeedbackStats()].alignmentEligibleRated += 1
                 }
                 result[day, default: DayFeedbackStats()].sessionReviews.append(DaySessionReview(

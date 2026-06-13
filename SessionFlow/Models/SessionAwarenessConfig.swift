@@ -269,15 +269,23 @@ struct ShortcutsConfig: Codable, Equatable {
 // MARK: - Focus weights (percentage each rating contributes to focus time)
 
 struct FocusWeights: Codable, Equatable {
-    var rocketPercent: Int = 100   // Fire
-    var completedPercent: Int = 80 // Done
-    var partialPercent: Int = 50   // Partly
-    var skippedPercent: Int = 0    // Skipped
+    var rocketPercent: Int = 100          // Fire
+    var completedPercent: Int = 80        // Done
+    var partialPercent: Int = 50          // Partly
+    var procrastinatedPercent: Int = 0    // Procrastinated
+    var skippedPercent: Int = 0           // Skipped
 
-    init(rocketPercent: Int = 100, completedPercent: Int = 80, partialPercent: Int = 50, skippedPercent: Int = 0) {
+    init(
+        rocketPercent: Int = 100,
+        completedPercent: Int = 80,
+        partialPercent: Int = 50,
+        procrastinatedPercent: Int = 0,
+        skippedPercent: Int = 0
+    ) {
         self.rocketPercent = rocketPercent
         self.completedPercent = completedPercent
         self.partialPercent = partialPercent
+        self.procrastinatedPercent = procrastinatedPercent
         self.skippedPercent = skippedPercent
     }
 
@@ -286,6 +294,7 @@ struct FocusWeights: Codable, Equatable {
         rocketPercent = try c.decodeIfPresent(Int.self, forKey: .rocketPercent) ?? 100
         completedPercent = try c.decodeIfPresent(Int.self, forKey: .completedPercent) ?? 80
         partialPercent = try c.decodeIfPresent(Int.self, forKey: .partialPercent) ?? 50
+        procrastinatedPercent = try c.decodeIfPresent(Int.self, forKey: .procrastinatedPercent) ?? 0
         skippedPercent = try c.decodeIfPresent(Int.self, forKey: .skippedPercent) ?? 0
     }
 
@@ -294,6 +303,7 @@ struct FocusWeights: Codable, Equatable {
         case .rocket: return Double(rocketPercent) / 100.0
         case .completed: return Double(completedPercent) / 100.0
         case .partial: return Double(partialPercent) / 100.0
+        case .procrastinated: return Double(procrastinatedPercent) / 100.0
         case .skipped: return Double(skippedPercent) / 100.0
         }
     }
@@ -506,8 +516,12 @@ struct SessionAwarenessConfig: Codable, Equatable {
 
     static func load() -> SessionAwarenessConfig {
         guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let config = try? JSONDecoder().decode(SessionAwarenessConfig.self, from: data) else {
+              var config = try? JSONDecoder().decode(SessionAwarenessConfig.self, from: data) else {
             return .default
+        }
+        if config.focusWeights.procrastinatedPercent < 0 {
+            config.focusWeights.procrastinatedPercent = 0
+            config.save()
         }
         return config
     }

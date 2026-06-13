@@ -75,7 +75,7 @@ struct ContentView: View {
     @AppStorage("hasSeenPatternsGuide") private var hasSeenPatternsGuide = false
     @AppStorage("hasSeenTasksGuide") private var hasSeenTasksGuide = false
     @AppStorage("hasSeenHarshModeGuide") private var hasSeenHarshModeGuide = false
-    @AppStorage("hasCompletedSetup") private var hasCompletedSetup = false
+    @AppStorage("SessionFlow.HasCompletedSetup") private var hasCompletedSetup = false
     @State private var showingWelcome = false
     @State private var showingPatternsGuide = false
     @State private var showingTasksGuide = false
@@ -109,7 +109,7 @@ struct ContentView: View {
             } else if calendarService.authorizationStatus != .fullAccess {
                 // Second: Show permission screen if not authorized
                 CalendarPermissionView()
-            } else if !hasCompletedSetup {
+            } else if shouldShowCalendarSetup {
                 // Third: Show setup screen after permission is granted
                 CalendarSetupView()
             } else {
@@ -139,13 +139,15 @@ struct ContentView: View {
         }
         .onAppear {
             calendarService.checkAuthorizationStatus()
+            reconcileSetupCompletion()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             // Check permission status when app becomes active
             calendarService.checkAuthorizationStatus()
             
             // Check if setup was completed
-            hasCompletedSetup = UserDefaults.standard.bool(forKey: "SessionFlow.HasCompletedSetup")
+            hasCompletedSetup = persistedSetupCompleted
+            reconcileSetupCompletion()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("SetupCompleted"))) { _ in
             // Update setup completion status
@@ -201,6 +203,21 @@ struct ContentView: View {
             checkForWhatsNew()
         }
         .focusEffectDisabled()
+    }
+
+    private var shouldShowCalendarSetup: Bool {
+        !persistedSetupCompleted && !PresetStorage.shared.hasInitializedPresets()
+    }
+
+    private func reconcileSetupCompletion() {
+        if !hasCompletedSetup && (persistedSetupCompleted || PresetStorage.shared.hasInitializedPresets()) {
+            hasCompletedSetup = true
+        }
+    }
+
+    private var persistedSetupCompleted: Bool {
+        UserDefaults.standard.bool(forKey: "SessionFlow.HasCompletedSetup") ||
+            UserDefaults.standard.bool(forKey: "hasCompletedSetup")
     }
 
     private func checkForWhatsNew() {
@@ -1541,6 +1558,10 @@ struct RightPanel: View {
     @State private var showingAvailabilityHelp = false
     @State private var showingProjectionHelp = false
     @State private var didYouKnowIndex = 0
+    @State private var hasRecentProductivityFeedback = false
+
+    @AppStorage("rightPanel.availabilityExpanded") private var availabilityExpanded = true
+    @AppStorage("rightPanel.projectedSessionsExpanded") private var projectedSessionsExpanded = true
     
     private let availabilityHelpBase = "Shows calculated free time gaps in your calendar. 'Possible' counts indicate how many sessions of each type could fit into these gaps based on your duration settings."
     private let projectionHelp = "A live preview of how many sessions will be placed in your calendar and when you might be done for the day."
@@ -1605,7 +1626,7 @@ struct RightPanel: View {
                 VStack(spacing: 20) {
                     availabilityCard
                     sessionsSummaryCard
-                    if sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled && calendarService.busySlotsForFetchedDate(selectedDate).contains(where: { SessionRating.fromNotes($0.notes) != nil || SessionAlignment.fromNotes($0.notes) != nil }) {
+                    if shouldShowProductivityCard {
                         ProductivityCard(selectedDate: selectedDate)
                     }
                     if schedulingEngine.showDidYouKnowCard, let fact = currentDidYouKnowFact {
@@ -1627,6 +1648,20 @@ struct RightPanel: View {
         }
         .frame(width: 280)
         .padding()
+        .onAppear(perform: refreshRecentProductivityFeedback)
+        .onChange(of: calendarService.lastRefresh) { _, _ in
+            refreshRecentProductivityFeedback()
+        }
+    }
+
+    private var shouldShowProductivityCard: Bool {
+        sessionAwarenessService.config.enabled
+            && sessionAwarenessService.config.productivityEnabled
+            && hasRecentProductivityFeedback
+    }
+
+    private func refreshRecentProductivityFeedback() {
+        hasRecentProductivityFeedback = calendarService.hasProductivityFeedback(inLastDays: 7)
     }
     
     private var availabilityCard: some View {
@@ -1638,41 +1673,54 @@ struct RightPanel: View {
 
                 Spacer()
 
-                Button {
-                    showingAvailabilityHelp.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
-                        .foregroundColor(colors.textMuted)
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.3)
-                .popover(isPresented: $showingAvailabilityHelp) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(availabilityHelpBase)
-                        if schedulingEngine.scheduleEndHour > 24 {
-                            Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
-                                .font(.system(size: 12))
-                                .foregroundColor(colors.isDark ? .orange.opacity(0.9) : Color(hex: "C2410C"))
-                                .italic()
-                        }
+                availabilityHelpButton
+                RightPanelCollapseButton(
+                    isExpanded: $availabilityExpanded,
+                    expandedHelp: "Collapse Availability",
+                    collapsedHelp: "Expand Availability"
+                )
+            }
+            if availabilityExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    row("Available Time:", "\(avail.availableMinutes / 60)h \(avail.availableMinutes % 60)m")
+                    row("Possible Work:", "\(avail.possibleWorkSessions) sessions", Color(hex: "8B5CF6"))
+                    row("Possible Side:", "\(avail.possibleSideSessions) sessions", Color(hex: "3B82F6"))
+                    if schedulingEngine.deepSessionConfig.enabled {
+                        row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
                     }
-                    .font(.system(size: 13))
-                    .padding()
-                    .frame(width: 250)
                 }
+                .font(.system(size: 13)).foregroundColor(colors.textSecondary)
+                .transition(.opacity)
             }
-            VStack(alignment: .leading, spacing: 8) {
-                row("Available Time:", "\(avail.availableMinutes / 60)h \(avail.availableMinutes % 60)m")
-                row("Possible Work:", "\(avail.possibleWorkSessions) sessions", Color(hex: "8B5CF6"))
-                row("Possible Side:", "\(avail.possibleSideSessions) sessions", Color(hex: "3B82F6"))
-                if schedulingEngine.deepSessionConfig.enabled {
-                    row("Possible Deep:", "\(avail.possibleDeepSessions) sessions", Color(hex: "10B981"))
-                }
-            }
-            .font(.system(size: 13)).foregroundColor(colors.textSecondary)
         }
         .padding().background(colors.subtleBackground).cornerRadius(12)
+        .animation(.easeOut(duration: 0.14), value: availabilityExpanded)
+    }
+
+    private var availabilityHelpButton: some View {
+        Button {
+            showingAvailabilityHelp.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 13))
+                .foregroundColor(colors.textMuted)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.3)
+        .popover(isPresented: $showingAvailabilityHelp) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(availabilityHelpBase)
+                if schedulingEngine.scheduleEndHour > 24 {
+                    Text("Includes +1d hours until \(formattedHourForCard(schedulingEngine.scheduleEndHour))")
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.isDark ? .orange.opacity(0.9) : Color(hex: "C2410C"))
+                        .italic()
+                }
+            }
+            .font(.system(size: 13))
+            .padding()
+            .frame(width: 250)
+        }
     }
     
     private func row(_ label: String, _ val: String, _ color: Color? = nil) -> some View {
@@ -1718,56 +1766,54 @@ struct RightPanel: View {
 
                 Spacer()
 
-                Button {
-                    showingProjectionHelp.toggle()
-                } label: {
-                    Image(systemName: "info.circle")
-                        .font(.system(size: 13))
+                projectedSessionsHelpButton
+                RightPanelCollapseButton(
+                    isExpanded: $projectedSessionsExpanded,
+                    expandedHelp: "Collapse Projected Sessions",
+                    collapsedHelp: "Expand Projected Sessions"
+                )
+            }
+
+            if projectedSessionsExpanded {
+                VStack(alignment: .leading, spacing: 12) {
+                    if sessions.isEmpty {
+                        if schedulingEngine.hasNoSessionTargets {
+                            Text("No sessions configured")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textSecondary)
+                                .padding(.vertical, 8)
+                        } else if schedulingEngine.quotasSatisfied {
+                            quotaSatisfiedStats
+                                .padding(.vertical, 8)
+                        } else if !schedulingEngine.schedulingMessage.isEmpty {
+                            Text("No additional sessions projected")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textSecondary)
+                                .padding(.vertical, 8)
+                        } else {
+                            Text("Scheduling preview will appear here")
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textSecondary)
+                                .padding(.vertical, 8)
+                        }
+                    } else {
+                        sessionStats(sessions)
+                    }
+
+                    if !schedulingEngine.schedulingMessage.isEmpty {
+                        Text(schedulingEngine.schedulingMessage).font(.system(size: 11)).foregroundColor(colors.isDark ? .yellow.opacity(0.8) : Color(hex: "92400E"))
+                    }
+
+                    if schedulingEngine.awareExistingTasks {
+                        HStack(spacing: 4) {
+                            Image(systemName: "brain.head.profile").font(.system(size: 10))
+                            Text("Accounting for existing sessions from calendar").font(.system(size: 10)).italic()
+                        }
                         .foregroundColor(colors.textMuted)
+                        .padding(.top, -4)
+                    }
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(brightness: 0.3)
-                .popover(isPresented: $showingProjectionHelp) {
-                    Text(projectionHelp)
-                        .font(.system(size: 13))
-                        .padding()
-                        .frame(width: 250)
-                }
-            }
-            if sessions.isEmpty {
-                if schedulingEngine.hasNoSessionTargets {
-                    Text("No sessions configured")
-                        .font(.system(size: 12))
-                        .foregroundColor(colors.textSecondary)
-                        .padding(.vertical, 8)
-                } else if schedulingEngine.quotasSatisfied {
-                    quotaSatisfiedStats
-                        .padding(.vertical, 8)
-                } else if !schedulingEngine.schedulingMessage.isEmpty {
-                    Text("No additional sessions projected")
-                        .font(.system(size: 12))
-                        .foregroundColor(colors.textSecondary)
-                        .padding(.vertical, 8)
-                } else {
-                    Text("Scheduling preview will appear here")
-                        .font(.system(size: 12))
-                        .foregroundColor(colors.textSecondary)
-                        .padding(.vertical, 8)
-                }
-            } else {
-                sessionStats(sessions)
-            }
-            if !schedulingEngine.schedulingMessage.isEmpty {
-                Text(schedulingEngine.schedulingMessage).font(.system(size: 11)).foregroundColor(colors.isDark ? .yellow.opacity(0.8) : Color(hex: "92400E"))
-            }
-            
-            if schedulingEngine.awareExistingTasks {
-                HStack(spacing: 4) {
-                    Image(systemName: "brain.head.profile").font(.system(size: 10))
-                    Text("Accounting for existing sessions from calendar").font(.system(size: 10)).italic()
-                }
-                .foregroundColor(colors.textMuted)
-                .padding(.top, -4)
+                .transition(.opacity)
             }
         }
         .padding()
@@ -1778,6 +1824,25 @@ struct RightPanel: View {
                 .stroke(style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 .foregroundColor(colors.border)
         )
+        .animation(.easeOut(duration: 0.14), value: projectedSessionsExpanded)
+    }
+
+    private var projectedSessionsHelpButton: some View {
+        Button {
+            showingProjectionHelp.toggle()
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 13))
+                .foregroundColor(colors.textMuted)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.3)
+        .popover(isPresented: $showingProjectionHelp) {
+            Text(projectionHelp)
+                .font(.system(size: 13))
+                .padding()
+                .frame(width: 250)
+        }
     }
     
     private func sessionStats(_ sessions: [ScheduledSession]) -> some View {
@@ -2041,6 +2106,36 @@ private struct DidYouKnowFact: Identifiable, Equatable {
     let message: String
 }
 
+struct RightPanelCollapseButton: View {
+    @Binding var isExpanded: Bool
+    let expandedHelp: String
+    let collapsedHelp: String
+
+    @Environment(\.colorScheme) var colorScheme
+    var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
+
+    var body: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.14)) {
+                isExpanded.toggle()
+            }
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(colors.textMuted)
+                .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                .frame(width: 10, height: 18)
+                .contentShape(Rectangle())
+                .animation(.easeOut(duration: 0.14), value: isExpanded)
+        }
+        .buttonStyle(.plain)
+        .hoverEffect(brightness: 0.3)
+        .focusable(false)
+        .help(isExpanded ? expandedHelp : collapsedHelp)
+        .accessibilityLabel(isExpanded ? expandedHelp : collapsedHelp)
+    }
+}
+
 private struct DidYouKnowCard: View {
     @Environment(\.colorScheme) var colorScheme
     var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
@@ -2053,6 +2148,7 @@ private struct DidYouKnowCard: View {
     let onClose: () -> Void
 
     @State private var rotationTimer: Timer?
+    @AppStorage("rightPanel.didYouKnowExpanded") private var didYouKnowExpanded = true
     private let rotationInterval: TimeInterval = 12
     
     var body: some View {
@@ -2074,24 +2170,35 @@ private struct DidYouKnowCard: View {
                         .foregroundColor(colors.textPrimary)
                 }
                 Spacer()
+                RightPanelCollapseButton(
+                    isExpanded: $didYouKnowExpanded,
+                    expandedHelp: "Collapse tip",
+                    collapsedHelp: "Expand tip"
+                )
                 controlButtons
             }
-            Text(fact.message)
-                .font(.system(size: 12))
-                .foregroundColor(colors.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.trailing, 8)
 
-            if totalFacts > 1 {
-                HStack(spacing: 4) {
-                    ForEach(0..<totalFacts, id: \.self) { idx in
-                        Capsule()
-                            .fill(idx == factIndex ? colors.textPrimary : colors.textDisabled)
-                            .frame(width: idx == factIndex ? 16 : 8, height: 3)
+            if didYouKnowExpanded {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(fact.message)
+                        .font(.system(size: 12))
+                        .foregroundColor(colors.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.trailing, 8)
+
+                    if totalFacts > 1 {
+                        HStack(spacing: 4) {
+                            ForEach(0..<totalFacts, id: \.self) { idx in
+                                Capsule()
+                                    .fill(idx == factIndex ? colors.textPrimary : colors.textDisabled)
+                                    .frame(width: idx == factIndex ? 16 : 8, height: 3)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.top, 2)
                     }
-                    Spacer(minLength: 0)
                 }
-                .padding(.top, 2)
+                .transition(.opacity)
             }
         }
         .padding(14)
@@ -2105,6 +2212,10 @@ private struct DidYouKnowCard: View {
         .onDisappear(perform: stopTimer)
         .onChange(of: fact.id) { _, _ in restartTimer() }
         .onChange(of: totalFacts) { _, _ in restartTimer() }
+        .onChange(of: didYouKnowExpanded) { _, expanded in
+            expanded ? restartTimer() : stopTimer()
+        }
+        .animation(.easeOut(duration: 0.14), value: didYouKnowExpanded)
     }
     
     private var controlButtons: some View {
@@ -2140,7 +2251,7 @@ private struct DidYouKnowCard: View {
     }
     
     private func startTimer() {
-        guard rotationTimer == nil && totalFacts > 1 else { return }
+        guard rotationTimer == nil && totalFacts > 1 && didYouKnowExpanded else { return }
         rotationTimer = Timer.scheduledTimer(withTimeInterval: rotationInterval, repeats: true) { _ in
             onNext()
         }
