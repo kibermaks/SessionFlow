@@ -65,4 +65,20 @@ struct SessionFlowEventSemanticsTests {
         #expect(SessionFlowEventSemantics.strippingOwnershipTags(from: nil) == nil)
         #expect(SessionFlowEventSemantics.strippingOwnershipTags(from: "") == nil)
     }
+
+    @Test func exactTagStrippingPreservesLongerUserHashtags() {
+        let notes = "Cardio #workout roadmap #planned #work #flowalign10 #flowalign1 #flow✅"
+
+        #expect(SessionFlowEventSemantics.strippingOwnershipTags(from: notes) == "Cardio #workout roadmap #planned #flowalign10 #flowalign1 #flow✅")
+        #expect(SessionAlignment.fromNotes("#flowalign10") == nil)
+        #expect(SessionAlignment.stripAlignmentTags("#flowalign10 #flowalign1") == "#flowalign10")
+        #expect(SessionRating.fromNotes("#flow✅soon") == nil)
+        #expect(SessionRating.stripFeedbackTags("#flow✅soon #flow✅") == "#flow✅soon")
+    }
+
+    @Test func strippingSessionFlowMetadataKeepsUserHashtagNotes() {
+        let notes = "#side Client #workout #planned #flowflexible #flow✅ #flowalign2"
+
+        #expect(SessionFlowEventSemantics.strippingSessionFlowMetadata(from: notes) == "Client #workout #planned")
+    }
 }

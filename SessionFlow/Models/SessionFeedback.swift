@@ -67,32 +67,22 @@ enum SessionRating: String, Codable, CaseIterable {
 
     /// Parse a rating from calendar event notes by looking for emoji hashtags
     static func fromNotes(_ notes: String?) -> SessionRating? {
-        guard let notes = notes else { return nil }
         for rating in allCases {
-            if notes.contains(rating.tag) { return rating }
+            if SessionFlowEventSemantics.containsExactTag(rating.tag, in: notes, caseInsensitive: false) {
+                return rating
+            }
         }
         return nil
     }
 
     /// Strips only feedback tags from notes, preserving session type tags
     static func stripFeedbackTags(_ notes: String?) -> String? {
-        guard let notes = notes, !notes.isEmpty else { return nil }
-        var result = notes
-        for tag in allTags {
-            result = result.replacingOccurrences(of: tag, with: "")
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? nil : result
+        SessionFlowEventSemantics.strippingExactTags(allTags, from: notes, caseInsensitive: false)
     }
 
     /// Applies this rating tag to notes, removing any existing feedback tag first
     func applyTo(notes: String?) -> String {
-        var result = notes ?? ""
-        // Remove existing feedback tags
-        for existingTag in Self.allTags {
-            result = result.replacingOccurrences(of: existingTag, with: "")
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        var result = Self.stripFeedbackTags(notes) ?? ""
         // Append new tag
         result += (result.isEmpty ? "" : " ") + tag
         return result
@@ -177,29 +167,20 @@ enum SessionAlignment: String, Codable, CaseIterable {
     }
 
     static func fromNotes(_ notes: String?) -> SessionAlignment? {
-        guard let notes = notes else { return nil }
         for alignment in allCases {
-            if notes.localizedCaseInsensitiveContains(alignment.tag) { return alignment }
+            if SessionFlowEventSemantics.containsExactTag(alignment.tag, in: notes) {
+                return alignment
+            }
         }
         return nil
     }
 
     static func stripAlignmentTags(_ notes: String?) -> String? {
-        guard let notes = notes, !notes.isEmpty else { return nil }
-        var result = notes
-        for tag in allTags {
-            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? nil : result
+        SessionFlowEventSemantics.strippingExactTags(allTags, from: notes)
     }
 
     func applyTo(notes: String?) -> String {
-        var result = notes ?? ""
-        for existingTag in Self.allTags {
-            result = result.replacingOccurrences(of: existingTag, with: "", options: .caseInsensitive)
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        var result = Self.stripAlignmentTags(notes) ?? ""
         result += (result.isEmpty ? "" : " ") + tag
         return result
     }
@@ -386,9 +367,7 @@ enum HarshModeSessionNotes {
             result = String(result.dropFirst(2)).trimmingCharacters(in: .whitespacesAndNewlines)
         }
 
-        for tag in FlowFlexibilityNotes.sessionFlowTags + FlowFlexibilityNotes.allTags + SessionRating.allTags + SessionAlignment.allTags {
-            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
+        result = SessionFlowEventSemantics.strippingSessionFlowMetadata(from: result) ?? ""
 
         result = result.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -475,19 +454,11 @@ enum HarshModeSessionNotes {
     }
 
     private static func removingFeedbackTags(from notes: String) -> String {
-        var result = notes
-        for tag in SessionRating.allTags {
-            result = result.replacingOccurrences(of: tag, with: "")
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+        SessionRating.stripFeedbackTags(notes) ?? ""
     }
 
     private static func removingAlignmentTags(from notes: String) -> String {
-        var result = notes
-        for tag in SessionAlignment.allTags {
-            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+        SessionAlignment.stripAlignmentTags(notes) ?? ""
     }
 
     private static func splittingBeforeFirstManagedSection(_ notes: String) -> (prefix: String, suffix: String) {

@@ -56,12 +56,21 @@ enum SessionFlowEventSemantics {
     }
 
     static func strippingOwnershipTags(from notes: String?) -> String? {
+        strippingExactTags(recognizedOwnershipTags, from: notes)
+    }
+
+    static func containsExactTag(_ tag: String, in notes: String?, caseInsensitive: Bool = true) -> Bool {
+        guard let notes, !notes.isEmpty else { return false }
+        return !exactTagRanges(in: notes, tags: [tag], caseInsensitive: caseInsensitive).isEmpty
+    }
+
+    static func strippingExactTags(
+        _ tags: [String],
+        from notes: String?,
+        caseInsensitive: Bool = true
+    ) -> String? {
         guard let notes, !notes.isEmpty else { return nil }
-
-        let ranges = parsedHashtags(in: notes)
-            .filter { OwnershipTag(rawValue: $0.normalized) != nil }
-            .map(\.range)
-
+        let ranges = exactTagRanges(in: notes, tags: tags, caseInsensitive: caseInsensitive)
         guard !ranges.isEmpty else { return normalizedStrippedNotes(notes) }
 
         var result = notes
@@ -69,6 +78,66 @@ enum SessionFlowEventSemantics {
             result.removeSubrange(range)
         }
         return normalizedStrippedNotes(result)
+    }
+
+    static func strippingSessionFlowMetadata(from notes: String?) -> String? {
+        guard let notes, !notes.isEmpty else { return nil }
+        let withoutOwnership = strippingOwnershipTags(from: notes) ?? ""
+        let withoutFlexibility = FlowFlexibilityNotes.strippingTags(from: withoutOwnership) ?? ""
+        let withoutFeedback = SessionRating.stripFeedbackTags(withoutFlexibility) ?? ""
+        return SessionAlignment.stripAlignmentTags(withoutFeedback)
+    }
+
+    private static func exactTagRanges(
+        in notes: String,
+        tags: [String],
+        caseInsensitive: Bool
+    ) -> [Range<String.Index>] {
+        let sortedTags = tags
+            .filter { !$0.isEmpty }
+            .sorted { $0.count > $1.count }
+        guard !sortedTags.isEmpty else { return [] }
+
+        var ranges: [Range<String.Index>] = []
+        var index = notes.startIndex
+
+        while index < notes.endIndex {
+            guard notes[index] == "#", isHashtagStart(at: index, in: notes) else {
+                index = notes.index(after: index)
+                continue
+            }
+
+            if let matchedRange = sortedTags.compactMap({ tag -> Range<String.Index>? in
+                guard let end = notes.index(index, offsetBy: tag.count, limitedBy: notes.endIndex) else {
+                    return nil
+                }
+                let range = index..<end
+                guard tagMatches(String(notes[range]), tag, caseInsensitive: caseInsensitive),
+                      isExactTagEnd(at: end, in: notes) else {
+                    return nil
+                }
+                return range
+            }).first {
+                ranges.append(matchedRange)
+                index = matchedRange.upperBound
+            } else {
+                index = notes.index(after: index)
+            }
+        }
+
+        return ranges
+    }
+
+    private static func tagMatches(_ candidate: String, _ tag: String, caseInsensitive: Bool) -> Bool {
+        if caseInsensitive {
+            return candidate.localizedCaseInsensitiveCompare(tag) == .orderedSame
+        }
+        return candidate == tag
+    }
+
+    private static func isExactTagEnd(at index: String.Index, in notes: String) -> Bool {
+        guard index < notes.endIndex else { return true }
+        return !isHashtagContinuation(notes[index])
     }
 
     private static func parsedHashtags(in notes: String) -> [(normalized: String, range: Range<String.Index>)] {

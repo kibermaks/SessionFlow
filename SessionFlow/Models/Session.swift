@@ -12,13 +12,11 @@ enum FlowFlexibilityNotes {
     static let sessionFlowTags = SessionFlowEventSemantics.recognizedOwnershipTags
 
     static func hasExplicitFlexibleTag(_ notes: String?) -> Bool {
-        guard let notes = notes?.lowercased() else { return false }
-        return flexibleTags.contains { notes.contains($0) }
+        flexibleTags.contains { SessionFlowEventSemantics.containsExactTag($0, in: notes) }
     }
 
     static func hasExplicitFixedTag(_ notes: String?) -> Bool {
-        guard let notes = notes?.lowercased() else { return false }
-        return fixedTags.contains { notes.contains($0) }
+        fixedTags.contains { SessionFlowEventSemantics.containsExactTag($0, in: notes) }
     }
 
     static func isSessionFlowOwned(_ notes: String?) -> Bool {
@@ -39,13 +37,7 @@ enum FlowFlexibilityNotes {
     }
 
     static func strippingTags(from notes: String?) -> String? {
-        guard let notes, !notes.isEmpty else { return nil }
-        var result = notes
-        for tag in allTags {
-            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? nil : result
+        SessionFlowEventSemantics.strippingExactTags(allTags, from: notes)
     }
 
     static func applyingFlexible(_ isFlexible: Bool, to notes: String?) -> String? {

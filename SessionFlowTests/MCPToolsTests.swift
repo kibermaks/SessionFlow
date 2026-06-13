@@ -353,6 +353,13 @@ extension MCPFeatureTests {
         #expect(SessionAwarenessService.strippedNotes("#work \(aligned)") == "Client delivery")
     }
 
+    @Test func strippedDisplayNotesPreserveLongerUserHashtags() {
+        let notes = "#work Cardio #workout roadmap #planned #flow✅ #flowalign1"
+
+        #expect(SessionAwarenessService.strippedNotes(notes) == "Cardio #workout roadmap #planned")
+        #expect(HarshModeSessionNotes.goalLines(from: "- Cardio #workout #flowalign10 #flowalign1") == ["Cardio #workout #flowalign10"])
+    }
+
     @Test func procrastinatedFocusRatingRoundTripsAndScoresZeroFocus() {
         let notes = SessionRating.procrastinated.applyTo(notes: "#work Review inbox")
 

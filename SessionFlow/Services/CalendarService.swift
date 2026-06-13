@@ -443,11 +443,9 @@ class CalendarService: ObservableObject {
         }
         let newEnd = newStart.addingTimeInterval(duration)
 
-        var notes = source.notes ?? ""
-        for tag in SessionRating.allTags + SessionAlignment.allTags {
-            notes = notes.replacingOccurrences(of: tag, with: "")
-        }
-        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = SessionAlignment.stripAlignmentTags(
+            SessionRating.stripFeedbackTags(source.notes)
+        ) ?? ""
 
         let copy = EKEvent(eventStore: eventStore)
         copy.title = source.title
@@ -480,11 +478,9 @@ class CalendarService: ObservableObject {
         let newStart = sourceStart
         let newEnd = sourceEnd
 
-        var notes = source.notes ?? ""
-        for tag in SessionRating.allTags + SessionAlignment.allTags {
-            notes = notes.replacingOccurrences(of: tag, with: "")
-        }
-        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = SessionAlignment.stripAlignmentTags(
+            SessionRating.stripFeedbackTags(source.notes)
+        ) ?? ""
 
         let copy = EKEvent(eventStore: eventStore)
         copy.title = source.title
@@ -662,11 +658,7 @@ class CalendarService: ObservableObject {
     @discardableResult
     func clearFeedbackTag(eventId: String) -> Bool {
         guard let event = eventStore.event(withIdentifier: eventId) else { return false }
-        var notes = event.notes ?? ""
-        for tag in SessionRating.allTags {
-            notes = notes.replacingOccurrences(of: tag, with: "")
-        }
-        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = SessionRating.stripFeedbackTags(event.notes) ?? ""
         event.notes = notes.isEmpty ? nil : notes
         do {
             try eventStore.save(event, span: .thisEvent)
@@ -680,11 +672,7 @@ class CalendarService: ObservableObject {
     @discardableResult
     func clearAlignmentTag(eventId: String) -> Bool {
         guard let event = eventStore.event(withIdentifier: eventId) else { return false }
-        var notes = event.notes ?? ""
-        for tag in SessionAlignment.allTags {
-            notes = notes.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = SessionAlignment.stripAlignmentTags(event.notes) ?? ""
         event.notes = notes.isEmpty ? nil : notes
         do {
             try eventStore.save(event, span: .thisEvent)
