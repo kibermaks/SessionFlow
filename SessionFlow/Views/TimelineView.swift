@@ -3643,226 +3643,73 @@ extension TimelineView {
         let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.undo() else { return }
         dismissTransientInteractionState()
-        switch change {
-        case .time(let tc):
-            if tc.sessionId != nil {
-                if let snapshot = tc.sessionsSnapshot {
-                    schedulingEngine.projectedSessions = snapshot
-                } else if let sessionId = tc.sessionId,
-                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
-                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
-                }
-                if schedulingEngine.sessionsFrozen && !eventUndoManager.hasSessionChanges {
-                    schedulingEngine.sessionsFrozen = false
-                }
-            } else {
-                let success = calendarService.updateEventTime(
-                    eventId: tc.eventId,
-                    newStart: tc.newStartTime,
-                    newEnd: tc.newEndTime
-                )
-                if success {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: operationDate) }
-                }
-            }
-        case .timeBatch(let items):
-            for tc in items {
-                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                }
-            }
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .delete(let snap):
-            if let newId = calendarService.restoreEvent(snap) {
-                eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .deleteBatch(let snaps):
-            var newIds: [String] = []
-            for snap in snaps {
-                if let newId = calendarService.restoreEvent(snap) {
-                    newIds.append(newId)
-                }
-            }
-            if !newIds.isEmpty {
-                let restoredSnaps = Array(snaps.prefix(newIds.count))
-                eventUndoManager.pushRedoForRestoredDeleteBatch(originals: restoredSnaps, newEventIds: newIds)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .schedule(let snap):
-            // Undo: delete created events, restore projected sessions.
-            // Freeze before the fetch so the subsequent regeneration can't
-            // overwrite the restored snapshot with fresh UUIDs, which would
-            // leave the undo stack pointing at sessions that no longer exist.
-            for eventId in snap.eventIds {
-                _ = calendarService.deleteEvent(identifier: eventId)
-            }
-            schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
-            schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
-            schedulingEngine.sessionsFrozen = true
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .create(let snap):
-            // Undo create = delete the event
-            if calendarService.deleteEvent(identifier: snap.eventId) {
-                eventUndoManager.pushRedoForUndoneCreate(snap)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .feedback(let fc):
-            if let rating = fc.newRating {
-                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
-            } else {
-                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
-                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .alignment(let ac):
-            if let alignment = ac.newAlignment {
-                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
-            } else {
-                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
-                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .content(let cc):
-            applyContentChange(cc)
-        }
+        applyUndoRedoChange(
+            change,
+            direction: .undo(hasRemainingSessionChanges: eventUndoManager.hasSessionChanges),
+            operationDate: operationDate
+        )
     }
 
     private func performRedo() {
         let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.redo() else { return }
         dismissTransientInteractionState()
-        switch change {
-        case .time(let tc):
-            if tc.sessionId != nil {
-                if !schedulingEngine.sessionsFrozen {
-                    schedulingEngine.sessionsFrozen = true
-                }
-                if let postSnapshot = tc.postSnapshot {
-                    schedulingEngine.projectedSessions = postSnapshot
-                } else if let sessionId = tc.sessionId,
-                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
-                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
-                }
-            } else {
-                let success = calendarService.updateEventTime(
-                    eventId: tc.eventId,
-                    newStart: tc.newStartTime,
-                    newEnd: tc.newEndTime
-                )
-                if success {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: operationDate) }
-                }
+        applyUndoRedoChange(change, direction: .redo, operationDate: operationDate)
+    }
+
+    private func applyUndoRedoChange(
+        _ change: EventUndoManager.UndoableChange,
+        direction: TimelineUndoRedoApplier.Direction,
+        operationDate: Date
+    ) {
+        var scheduleState = TimelineUndoRedoApplier.ScheduleState(
+            projectedSessions: schedulingEngine.projectedSessions,
+            sessionsFrozen: schedulingEngine.sessionsFrozen
+        )
+        let result = TimelineUndoRedoApplier.apply(
+            change,
+            direction: direction,
+            calendar: calendarService,
+            schedule: &scheduleState
+        )
+
+        if schedulingEngine.projectedSessions != scheduleState.projectedSessions {
+            schedulingEngine.projectedSessions = scheduleState.projectedSessions
+        }
+        if schedulingEngine.sessionsFrozen != scheduleState.sessionsFrozen {
+            schedulingEngine.sessionsFrozen = scheduleState.sessionsFrozen
+        }
+
+        for followUp in result.undoManagerFollowUps {
+            applyUndoManagerFollowUp(followUp)
+        }
+        for update in result.optimisticTimeUpdates {
+            optimisticallyUpdateSlot(id: update.eventId, newStart: update.newStart, newEnd: update.newEnd)
+        }
+
+        guard result.shouldFetchEvents else { return }
+        Task {
+            await calendarService.fetchEvents(for: operationDate)
+            if let id = result.selectedSlotRefreshId,
+               let updated = calendarService.busySlots.first(where: { $0.id == id }),
+               selectedBusySlot?.id == id {
+                selectedBusySlot = updated
             }
-        case .timeBatch(let items):
-            for tc in items {
-                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                }
-            }
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .delete(let snap):
-            if calendarService.deleteEvent(identifier: snap.eventId) {
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .deleteBatch(let snaps):
-            var anyDeleted = false
-            for snap in snaps {
-                if calendarService.deleteEvent(identifier: snap.eventId) { anyDeleted = true }
-            }
-            if anyDeleted { Task { await calendarService.fetchEvents(for: operationDate) } }
-        case .schedule(let snap):
-            // Redo: re-create the sessions and remove them from projected
-            let result = calendarService.createSessions(snap.sessions)
-            if result.success > 0 {
-                let scheduledIds = Set(snap.sessions.map { $0.id })
-                schedulingEngine.projectedSessions.removeAll { scheduledIds.contains($0.id) }
-                eventUndoManager.pushRedoForScheduleUndo(EventUndoManager.ScheduleSnapshot(
-                    eventIds: result.eventIds,
-                    sessions: snap.sessions
-                ))
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .feedback(let fc):
-            if let rating = fc.newRating {
-                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
-            } else {
-                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
-                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .alignment(let ac):
-            if let alignment = ac.newAlignment {
-                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
-            } else {
-                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
-                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .create(let snap):
-            // Redo create = restore the event
-            if let newId = calendarService.restoreEvent(snap) {
-                // Update the undo stack entry with the new event ID
-                let updatedSnap = EventDeleteSnapshot(
-                    eventId: newId,
-                    title: snap.title,
-                    notes: snap.notes,
-                    url: snap.url,
-                    startDate: snap.startDate,
-                    endDate: snap.endDate,
-                    calendarIdentifier: snap.calendarIdentifier,
-                    calendarName: snap.calendarName
-                )
-                // Replace the top of the undo stack with updated ID
-                eventUndoManager.updateTopUndoCreateId(updatedSnap)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .content(let cc):
-            applyContentChange(cc)
         }
     }
 
-    /// Applies a content (title/notes/URL) change to the underlying calendar event.
-    /// Used by both undo (inverted change) and redo (original change).
-    private func applyContentChange(_ cc: EventUndoManager.EventContentChange) {
-        let success: Bool
-        switch cc.change {
-        case .title(_, let new):
-            success = calendarService.updateEvent(eventId: cc.eventId, title: new, notes: nil, url: nil)
-        case .notes(_, let new):
-            // updateEvent skips nil notes — pass empty string to clear.
-            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: new ?? "", url: nil)
-        case .url(_, let new):
-            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: nil, url: new, updateURL: true)
-        }
-        guard success else { return }
-        let operationDate = actionContext.selectedDate
-        Task {
-            await calendarService.fetchEvents(for: operationDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == cc.eventId }),
-               selectedBusySlot?.id == cc.eventId {
-                selectedBusySlot = updated
-            }
+    private func applyUndoManagerFollowUp(_ followUp: TimelineUndoRedoApplier.UndoManagerFollowUp) {
+        switch followUp {
+        case .pushRedoForRestoredDelete(let original, let newEventId):
+            eventUndoManager.pushRedoForRestoredDelete(original: original, newEventId: newEventId)
+        case .pushRedoForRestoredDeleteBatch(let originals, let newEventIds):
+            eventUndoManager.pushRedoForRestoredDeleteBatch(originals: originals, newEventIds: newEventIds)
+        case .pushRedoForUndoneCreate(let snapshot):
+            eventUndoManager.pushRedoForUndoneCreate(snapshot)
+        case .updateTopUndoCreate(let snapshot):
+            eventUndoManager.updateTopUndoCreateId(snapshot)
+        case .updateTopUndoSchedule(let snapshot):
+            eventUndoManager.updateTopUndoSchedule(snapshot)
         }
     }
 
