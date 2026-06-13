@@ -139,8 +139,7 @@ struct TimelineView: View {
     // Throttle for real-time recalculation during drag
     @State private var lastDragRecalcTime: Date = .distantPast
     private let dragRecalcInterval: TimeInterval = 0.15 // 150ms throttle
-    // Snapshot of sessions before displacement began (for clean displacement each frame)
-    @State private var preDisplacementSessions: [ScheduledSession]? = nil
+    @State private var projectedSessionDrag = TimelineProjectedSessionDrag()
     // Prevents drag re-initialization after Esc while mouse button is still held
     @State private var dragCancelled: Bool = false
     // Auto-scroll during drag
@@ -2065,8 +2064,7 @@ extension TimelineView {
                         if !schedulingEngine.sessionsFrozen {
                             schedulingEngine.sessionsFrozen = true
                         }
-                        // Snapshot sessions before displacement
-                        preDisplacementSessions = schedulingEngine.projectedSessions
+                        projectedSessionDrag.begin(with: schedulingEngine.projectedSessions)
                     }
 
                     switch dragMode {
@@ -2107,8 +2105,7 @@ extension TimelineView {
                         let now = Date()
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
-                            // Restore from snapshot before each displacement pass
-                            if let snapshot = preDisplacementSessions {
+                            if let snapshot = projectedSessionDrag.sessionsForDisplacementPass() {
                                 schedulingEngine.projectedSessions = snapshot
                             }
                             schedulingEngine.displaceProjectedSessions(
@@ -3553,7 +3550,7 @@ extension TimelineView {
         dragSessionId = nil
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
-        preDisplacementSessions = nil
+        projectedSessionDrag.reset()
         elasticEditor.clearPreDragSnapshot()
         groupDrag.reset()
     }
@@ -3561,7 +3558,7 @@ extension TimelineView {
     /// Cancel drag and revert all changes (called on Escape).
     private func cancelDrag() {
         // Revert displaced projected sessions
-        if let snapshot = preDisplacementSessions {
+        if let snapshot = projectedSessionDrag.sessionsForDisplacementPass() {
             schedulingEngine.projectedSessions = snapshot
         }
         if isElasticEditing, let snapshot = elasticEditor.restorePreDragSnapshot() {
@@ -3635,56 +3632,40 @@ extension TimelineView {
     }
 
     private func commitSessionDrag(for session: ScheduledSession) {
-        guard let newStart = dragPreviewStartTime,
-              let newEnd = dragPreviewEndTime else {
-            // Restore original positions if drag was a no-op
-            if let snapshot = preDisplacementSessions {
-                schedulingEngine.projectedSessions = snapshot
-            }
-            resetDragState()
-            return
-        }
-        guard newStart != session.startTime || newEnd != session.endTime else {
-            // Restore original positions if nothing changed
-            if let snapshot = preDisplacementSessions {
-                schedulingEngine.projectedSessions = snapshot
-            }
-            resetDragState()
-            return
-        }
-
-        // Restore from snapshot, commit dragged session, then do final displacement
-        if let snapshot = preDisplacementSessions {
-            schedulingEngine.projectedSessions = snapshot
-        }
-        if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == session.id }) {
-            schedulingEngine.projectedSessions[idx].startTime = newStart
-            schedulingEngine.projectedSessions[idx].endTime = newEnd
-        }
-
-        // Final displacement pass
-        schedulingEngine.displaceProjectedSessions(
-            draggedSessionId: session.id,
-            draggedStart: newStart,
-            draggedEnd: newEnd,
-            busySlots: timelineBusySlots(for: actionContext.selectedDate),
-            earliestTime: elasticAwareEarliestTime
+        let decision = projectedSessionDrag.prepareCommit(
+            for: session,
+            previewStart: dragPreviewStartTime,
+            previewEnd: dragPreviewEndTime,
+            currentSessions: schedulingEngine.projectedSessions
         )
 
-        // Record undo with pre-drag snapshot and post-displacement snapshot
-        let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
-        eventUndoManager.record(EventUndoManager.EventTimeChange(
-            sessionId: session.id,
-            oldStartTime: session.startTime,
-            oldEndTime: session.endTime,
-            newStartTime: newStart,
-            newEndTime: newEnd,
-            description: description,
-            sessionsSnapshot: preDisplacementSessions,
-            postSnapshot: schedulingEngine.projectedSessions
-        ))
+        switch decision {
+        case .restore(let snapshot):
+            if let snapshot {
+                schedulingEngine.projectedSessions = snapshot
+            }
+            resetDragState()
+            return
 
-        resetDragState()
+        case .commit(let plan):
+            schedulingEngine.projectedSessions = plan.sessions
+
+            schedulingEngine.displaceProjectedSessions(
+                draggedSessionId: plan.sessionId,
+                draggedStart: plan.draggedStart,
+                draggedEnd: plan.draggedEnd,
+                busySlots: timelineBusySlots(for: actionContext.selectedDate),
+                earliestTime: elasticAwareEarliestTime
+            )
+
+            let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
+            eventUndoManager.record(plan.undoChange(
+                description: description,
+                postSnapshot: schedulingEngine.projectedSessions
+            ))
+
+            resetDragState()
+        }
     }
 
     private func sessionDragPreviewBlock(
