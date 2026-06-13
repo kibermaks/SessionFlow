@@ -216,8 +216,7 @@ struct ContentView: View {
     }
 
     private var persistedSetupCompleted: Bool {
-        SessionFlowDefaults.store.bool(forKey: "SessionFlow.HasCompletedSetup") ||
-            SessionFlowDefaults.store.bool(forKey: "hasCompletedSetup")
+        PresetStorage.shared.hasCompletedSetup
     }
 
     private func checkForWhatsNew() {

@@ -284,6 +284,20 @@ extension MCPFeatureTests {
         #expect(SessionFlowDefaults.store.data(forKey: "SessionFlow.Presets") != nil)
     }
 
+    @Test func presetStorageMarksBothSetupCompletionFlagsTogether() {
+        PresetStorage.shared.markSetupCompleted()
+
+        #expect(PresetStorage.shared.hasCompletedSetup)
+        #expect(SessionFlowDefaults.store.bool(forKey: "SessionFlow.HasCompletedSetup"))
+        #expect(SessionFlowDefaults.store.bool(forKey: "hasCompletedSetup"))
+
+        PresetStorage.shared.markSetupIncomplete()
+
+        #expect(!PresetStorage.shared.hasCompletedSetup)
+        #expect(!SessionFlowDefaults.store.bool(forKey: "SessionFlow.HasCompletedSetup"))
+        #expect(!SessionFlowDefaults.store.bool(forKey: "hasCompletedSetup"))
+    }
+
     @Test func getDayReturnsAvailability() async throws {
         let server = try await MCPTestServer.start()
         let json = try await server.callJSON("get_day", ["date": .string("2026-05-28")])

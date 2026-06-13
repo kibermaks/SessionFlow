@@ -510,18 +510,9 @@ struct CalendarSetupView: View {
         deepConfig.calendarIdentifier = selectedDeepCalendarId
         schedulingEngine.deepSessionConfig = deepConfig
         
-        // Give a moment for all saves to complete, then mark setup as complete
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            // Mark setup as complete
-            SessionFlowDefaults.store.set(true, forKey: "SessionFlow.HasCompletedSetup")
-            SessionFlowDefaults.store.set(true, forKey: "hasCompletedSetup")
-            
-            // Trigger refresh notification
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                NotificationCenter.default.post(name: Notification.Name("SetupCompleted"), object: nil)
-                isCompleting = false
-            }
-        }
+        PresetStorage.shared.markSetupCompleted()
+        NotificationCenter.default.post(name: Notification.Name("SetupCompleted"), object: nil)
+        isCompleting = false
     }
 }
 

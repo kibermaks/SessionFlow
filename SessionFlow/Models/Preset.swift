@@ -644,6 +644,20 @@ class PresetStorage {
     func hasInitializedPresets() -> Bool {
         !loadPresets().isEmpty
     }
+
+    var hasCompletedSetup: Bool {
+        setupCompleted
+    }
+
+    func markSetupCompleted() {
+        SessionFlowDefaults.store.set(true, forKey: setupCompleteKey)
+        SessionFlowDefaults.store.set(true, forKey: legacySetupCompleteKey)
+    }
+
+    func markSetupIncomplete() {
+        SessionFlowDefaults.store.set(false, forKey: setupCompleteKey)
+        SessionFlowDefaults.store.set(false, forKey: legacySetupCompleteKey)
+    }
     
     /// Initialize presets with calendar names from setup
     func initializePresets(
