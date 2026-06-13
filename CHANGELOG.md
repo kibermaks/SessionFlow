@@ -7,6 +7,24 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.6.13] - 2026-06-13
+
+### Added
+
+- Focus and Alignment reviews with a Procrastinated rating, spent time, weighted focus time, alignment scoring, daily diagnosis, and monthly and yearly breakdowns.
+- Right-panel cards can be collapsed subtly and remember their expanded state between launches.
+- Timeline elastic editing controls now support pinned SessionFlow events and clearer flexible-event indicators.
+
+### Changed
+
+- Focus and Alignment appears when productivity feedback exists in the last 7 days, and its calendar overview has wider day cells, hover hints, tighter controls, and separate month and year selectors.
+- Preset loading now recovers older and partially missing preset data more gracefully.
+
+### Fixed
+
+- Preset storage now preserves an intentionally empty preset list instead of recreating recovered or default presets.
+- Commit Mode goal text no longer shows SessionFlow metadata tags.
+
 ## [2026.6.11] - 2026-06-11
 
 ### Added
