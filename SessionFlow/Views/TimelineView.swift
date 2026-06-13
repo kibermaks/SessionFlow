@@ -90,24 +90,8 @@ struct TimelineView: View {
     @State private var selectedBusySlot: BusyTimeSlot?
     
     // Inline Editing State (only for BusyTimeSlot)
-    @State private var isEditingTitle = false
-    @State private var isEditingNotes = false
-    @State private var isEditingURL = false
-    @State private var editingTitle: String = ""
-    @State private var editingNotes: String = ""
-    @State private var editingURL: String = ""
-    @State private var originalTitle: String = ""
-    @State private var originalNotes: String = ""
-    @State private var originalURL: String = ""
-    @State private var isCanceling = false
-    @State private var autoFocusField: EditField? = nil
-    @FocusState private var focusedField: EditField?
-    
-    enum EditField {
-        case title
-        case notes
-        case url
-    }
+    @State private var inlineEditor = TimelineInlineEditor()
+    @FocusState private var focusedField: TimelineInlineEditField?
     
     // Width tracking for adaptive UI - default to 0 to start compact
     @State private var containerWidth: CGFloat = 0
@@ -1962,7 +1946,7 @@ extension TimelineView {
         .onTapGesture(count: 2) {
             selectedSession = nil
             selectedBusySlot = slot
-            autoFocusField = nil
+            inlineEditor.autoFocusField = nil
         }
         .onTapGesture(count: 1) {
             if isCommandHeld || NSEvent.modifierFlags.contains(.command) {
@@ -2459,8 +2443,8 @@ extension TimelineView {
                         .padding(.top, 2)
                 
                 // Inline editable title
-                if isEditingTitle {
-                    TextField("Event title", text: $editingTitle)
+                if inlineEditor.title.isEditing {
+                    TextField("Event title", text: $inlineEditor.title.draft)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(colors.textPrimary)
@@ -2479,9 +2463,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalTitle = slot.title
-                            editingTitle = slot.title
-                            isEditingTitle = true
+                            inlineEditor.begin(.title, original: slot.title)
                             focusedField = .title
                         }
                 }
@@ -2531,12 +2513,12 @@ extension TimelineView {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
                     
-                    if isEditingNotes {
+                    if inlineEditor.notes.isEditing {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(colors.textSecondary)
-                            TextEditor(text: $editingNotes)
+                            TextEditor(text: $inlineEditor.notes.draft)
                                 .font(.system(size: 12))
                                 .foregroundColor(colors.textPrimary)
                                 .scrollContentBackground(.hidden)
@@ -2573,9 +2555,7 @@ extension TimelineView {
                         .contentShape(Rectangle())
                         .onTapGesture {
                             let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
-                            originalNotes = stripped
-                            editingNotes = stripped
-                            isEditingNotes = true
+                            inlineEditor.begin(.notes, original: stripped)
                             focusedField = .notes
                         }
                     } else {
@@ -2589,9 +2569,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalNotes = ""
-                            editingNotes = ""
-                            isEditingNotes = true
+                            inlineEditor.begin(.notes, original: "")
                             focusedField = .notes
                         }
                     }
@@ -2616,12 +2594,12 @@ extension TimelineView {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
 
-                    if isEditingURL {
+                    if inlineEditor.url.isEditing {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("URL:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(colors.textSecondary)
-                            TextField("https://example.com", text: $editingURL)
+                            TextField("https://example.com", text: $inlineEditor.url.draft)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 11))
                                 .foregroundColor(colors.textSecondary)
@@ -2649,9 +2627,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalURL = url.absoluteString
-                            editingURL = url.absoluteString
-                            isEditingURL = true
+                            inlineEditor.begin(.url, original: url.absoluteString)
                             focusedField = .url
                         }
                     } else {
@@ -2665,9 +2641,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalURL = ""
-                            editingURL = ""
-                            isEditingURL = true
+                            inlineEditor.begin(.url, original: "")
                             focusedField = .url
                         }
                     }
@@ -2678,42 +2652,36 @@ extension TimelineView {
         }
         .onChange(of: focusedField) { oldValue, newValue in
             // Don't auto-save if we're canceling
-            guard !isCanceling else { return }
+            guard !inlineEditor.isCanceling else { return }
             
             // Auto-save when focus leaves a field
-            if oldValue == .title && newValue != .title && isEditingTitle {
+            if oldValue == .title && newValue != .title && inlineEditor.title.isEditing {
                 saveTitle(for: slot)
             }
-            if oldValue == .notes && newValue != .notes && isEditingNotes {
+            if oldValue == .notes && newValue != .notes && inlineEditor.notes.isEditing {
                 saveNotes(for: slot)
             }
-            if oldValue == .url && newValue != .url && isEditingURL {
+            if oldValue == .url && newValue != .url && inlineEditor.url.isEditing {
                 saveURL(for: slot)
             }
         }
         .onAppear {
             // Auto-focus on field when detail view opens
-            if let field = autoFocusField {
+            if let field = inlineEditor.autoFocusField {
                 switch field {
                 case .title:
-                    originalTitle = slot.title
-                    editingTitle = slot.title
-                    isEditingTitle = true
+                    inlineEditor.begin(.title, original: slot.title)
                     focusedField = .title
                 case .notes:
                     let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
-                    originalNotes = stripped
-                    editingNotes = stripped
-                    isEditingNotes = true
+                    inlineEditor.begin(.notes, original: stripped)
                     focusedField = .notes
                 case .url:
-                    originalURL = slot.url?.absoluteString ?? ""
-                    editingURL = slot.url?.absoluteString ?? ""
-                    isEditingURL = true
+                    inlineEditor.begin(.url, original: slot.url?.absoluteString ?? "")
                     focusedField = .url
                 }
                 // Clear auto-focus after applying it
-                autoFocusField = nil
+                inlineEditor.autoFocusField = nil
             }
         }
     }
@@ -3392,155 +3360,75 @@ extension TimelineView {
     }
 
     // MARK: - Inline Editing Helpers
-    
-    private func saveTitle(for slot: BusyTimeSlot) {
-        // Validate title is not empty
-        guard !editingTitle.isEmpty else {
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-            return
-        }
-        
-        // Only save if actually changed
-        guard editingTitle != originalTitle else {
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-            return
-        }
-        
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: editingTitle,
-            notes: nil,
-            url: nil
-        )
 
-        if success {
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .title(old: originalTitle, new: editingTitle),
-                description: "Rename Event"
-            ))
-            Task {
-                await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingTitle = false
-                editingTitle = ""
-                originalTitle = ""
-            }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-        }
+    private func saveTitle(for slot: BusyTimeSlot) {
+        saveInlineEdit(.title, for: slot)
     }
 
     private func saveNotes(for slot: BusyTimeSlot) {
-        guard let update = TimelineEventContent.notesUpdate(
-            editedText: editingNotes,
-            originalText: originalNotes,
+        saveInlineEdit(.notes, for: slot)
+    }
+
+    private func saveURL(for slot: BusyTimeSlot) {
+        saveInlineEdit(.url, for: slot)
+    }
+
+    private func saveInlineEdit(_ field: TimelineInlineEditField, for slot: BusyTimeSlot) {
+        guard let commit = inlineEditor.commitPlan(
+            for: field,
             existingNotes: slot.notes,
             isFlowFlexible: slot.isFlowFlexible
         ) else {
-            isEditingNotes = false
-            editingNotes = ""
-            originalNotes = ""
+            inlineEditor.reset(field)
             return
         }
 
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: nil,
-            notes: update.notesToSave,
-            url: nil
-        )
+        let success = applyInlineEditCommit(commit, for: slot)
+        inlineEditor.reset(field)
 
         if success {
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .notes(old: update.oldNotesForUndo, new: update.notesToSave),
-                description: "Edit Notes"
-            ))
             Task {
                 await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingNotes = false
-                editingNotes = ""
-                originalNotes = ""
+                refreshSelectedBusySlot(slot.id)
             }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingNotes = false
-            editingNotes = ""
-            originalNotes = ""
         }
     }
-    
-    private func saveURL(for slot: BusyTimeSlot) {
-        guard let update = TimelineEventContent.urlUpdate(
-            editedText: editingURL,
-            originalText: originalURL
-        ) else {
-            isEditingURL = false
-            editingURL = ""
-            originalURL = ""
-            return
-        }
-        
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: nil,
-            notes: nil,
-            url: update.urlToSave,
-            updateURL: true
-        )
 
-        if success {
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .url(old: update.oldURLForUndo, new: update.urlToSave),
-                description: "Edit URL"
-            ))
-            Task {
-                await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingURL = false
-                editingURL = ""
-                originalURL = ""
-            }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingURL = false
-            editingURL = ""
-            originalURL = ""
+    private func applyInlineEditCommit(_ commit: TimelineInlineEditCommit, for slot: BusyTimeSlot) -> Bool {
+        let success: Bool
+        let undoChange: EventUndoManager.EventContentChange.FieldChange
+
+        switch commit.change {
+        case .title(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: new, notes: nil, url: nil)
+            undoChange = .title(old: old, new: new)
+        case .notes(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: nil, notes: new, url: nil)
+            undoChange = .notes(old: old, new: new)
+        case .url(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: new, updateURL: true)
+            undoChange = .url(old: old, new: new)
+        }
+
+        guard success else { return false }
+
+        eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+            eventId: slot.id,
+            change: undoChange,
+            description: commit.description
+        ))
+        return true
+    }
+
+    private func refreshSelectedBusySlot(_ slotId: String) {
+        if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slotId }) {
+            selectedBusySlot = updatedSlot
         }
     }
     
     private func resetEditingState() {
-        isEditingTitle = false
-        isEditingNotes = false
-        isEditingURL = false
-        editingTitle = ""
-        editingNotes = ""
-        editingURL = ""
-        originalTitle = ""
-        originalNotes = ""
-        originalURL = ""
-        isCanceling = false
+        inlineEditor.resetAll()
         focusedField = nil
-        autoFocusField = nil
     }
 
     private func dismissTransientInteractionState() {
@@ -3574,50 +3462,13 @@ extension TimelineView {
         }
 
         // Suppress focus-loss onChange auto-save; we're saving synchronously here.
-        isCanceling = true
-        var didChange = false
-
-        // Title
-        if isEditingTitle, !editingTitle.isEmpty, editingTitle != originalTitle {
-            if calendarService.updateEvent(eventId: slot.id, title: editingTitle, notes: nil, url: nil) {
-                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                    eventId: slot.id,
-                    change: .title(old: originalTitle, new: editingTitle),
-                    description: "Rename Event"
-                ))
-                didChange = true
-            }
-        }
-
-        // Notes
-        if isEditingNotes,
-           let update = TimelineEventContent.notesUpdate(
-                editedText: editingNotes,
-                originalText: originalNotes,
-                existingNotes: slot.notes,
-                isFlowFlexible: slot.isFlowFlexible
-           ) {
-            if calendarService.updateEvent(eventId: slot.id, title: nil, notes: update.notesToSave, url: nil) {
-                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                    eventId: slot.id,
-                    change: .notes(old: update.oldNotesForUndo, new: update.notesToSave),
-                    description: "Edit Notes"
-                ))
-                didChange = true
-            }
-        }
-
-        // URL
-        if isEditingURL,
-           let update = TimelineEventContent.urlUpdate(editedText: editingURL, originalText: originalURL) {
-            if calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: update.urlToSave, updateURL: true) {
-                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                    eventId: slot.id,
-                    change: .url(old: update.oldURLForUndo, new: update.urlToSave),
-                    description: "Edit URL"
-                ))
-                didChange = true
-            }
+        inlineEditor.isCanceling = true
+        let commits = inlineEditor.dirtyCommitPlans(
+            existingNotes: slot.notes,
+            isFlowFlexible: slot.isFlowFlexible
+        )
+        let didChange = commits.reduce(false) { changed, commit in
+            applyInlineEditCommit(commit, for: slot) || changed
         }
 
         selectedSession = nil
@@ -3630,32 +3481,23 @@ extension TimelineView {
     }
     
     private func cancelTitleEdit() {
-        isCanceling = true
-        isEditingTitle = false
-        editingTitle = ""
-        originalTitle = ""
+        inlineEditor.cancel(.title)
         focusedField = nil
         // onChange(of: focusedField) fires on the next runloop; clear the guard
         // after it has had a chance to run.
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     private func cancelNotesEdit() {
-        isCanceling = true
-        isEditingNotes = false
-        editingNotes = ""
-        originalNotes = ""
+        inlineEditor.cancel(.notes)
         focusedField = nil
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     private func cancelURLEdit() {
-        isCanceling = true
-        isEditingURL = false
-        editingURL = ""
-        originalURL = ""
+        inlineEditor.cancel(.url)
         focusedField = nil
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     // MARK: - Drag Commit
