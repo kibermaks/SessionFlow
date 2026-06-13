@@ -1744,7 +1744,11 @@ extension TimelineView {
                         .strokeBorder(slot.calendarColor.opacity(borderOpacity), lineWidth: borderWidth)
                 )
 
-            let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
+            let showsFeedbackBadge = TimelineEventContent.showsFeedbackBadge(
+                eventEnd: slot.endTime,
+                awarenessEnabled: sessionAwarenessService.config.enabled,
+                productivityEnabled: sessionAwarenessService.config.productivityEnabled
+            )
             let goals = HarshModeSessionNotes.goals(from: slot.notes)
             let showsGoalReminder = !goals.isEmpty
             let urlMinimumHeight: CGFloat = showsGoalReminder ? 76 : 35
@@ -1798,7 +1802,7 @@ extension TimelineView {
                         .truncationMode(.middle)
                 }
 
-                if let notes = editableNotes(from: SessionAwarenessService.strippedNotes(slot.notes)), height > notesMinimumHeight {
+                if let notes = TimelineEventContent.blockDisplayNotes(from: slot.notes), height > notesMinimumHeight {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(colors.textSecondary)
@@ -2049,12 +2053,7 @@ extension TimelineView {
     }
 
     private func busySlotGoalReminderText(_ goals: [String]) -> String {
-        switch sessionAwarenessService.config.harshModeReminderStyle {
-        case .compact:
-            return goals.first ?? ""
-        case .prominent:
-            return goals.prefix(2).joined(separator: " / ")
-        }
+        TimelineEventContent.goalReminderText(goals, style: sessionAwarenessService.config.harshModeReminderStyle)
     }
 
     private var busySlotGoalColor: Color {
@@ -2562,7 +2561,7 @@ extension TimelineView {
                                     return .ignored
                                 }
                         }
-                    } else if let displayNotes = editableNotes(from: slot.notes), !displayNotes.isEmpty {
+                    } else if let displayNotes = TimelineEventContent.detailEditableNotes(from: slot.notes), !displayNotes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
@@ -2573,7 +2572,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let stripped = editableNotes(from: slot.notes) ?? ""
+                            let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
                             originalNotes = stripped
                             editingNotes = stripped
                             isEditingNotes = true
@@ -2599,7 +2598,11 @@ extension TimelineView {
                 }
                 
                 // Feedback rating picker
-                if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
+                if TimelineEventContent.showsFeedbackBadge(
+                    eventEnd: slot.endTime,
+                    awarenessEnabled: sessionAwarenessService.config.enabled,
+                    productivityEnabled: sessionAwarenessService.config.productivityEnabled
+                ) {
                     VStack(alignment: .leading, spacing: 4) {
                         Divider().background(colors.divider)
                         feedbackPicker(for: slot)
@@ -2698,7 +2701,7 @@ extension TimelineView {
                     isEditingTitle = true
                     focusedField = .title
                 case .notes:
-                    let stripped = editableNotes(from: slot.notes) ?? ""
+                    let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
                     originalNotes = stripped
                     editingNotes = stripped
                     isEditingNotes = true
@@ -2713,21 +2716,6 @@ extension TimelineView {
                 autoFocusField = nil
             }
         }
-    }
-
-    private func editableNotes(from notes: String?) -> String? {
-        FlowFlexibilityNotes.strippingTags(from: SessionAlignment.stripAlignmentTags(SessionRating.stripFeedbackTags(notes)))
-    }
-
-    private func reviewTags(from notes: String?) -> String {
-        var tags: [String] = []
-        if let rating = SessionRating.fromNotes(notes) {
-            tags.append(rating.tag)
-        }
-        if let alignment = SessionAlignment.fromNotes(notes) {
-            tags.append(alignment.tag)
-        }
-        return tags.isEmpty ? "" : " " + tags.joined(separator: " ")
     }
 
     private func setBusySlotFlexible(_ slot: BusyTimeSlot, isFlexible: Bool) {
@@ -3324,10 +3312,7 @@ extension TimelineView {
     }
 
     private func shouldShowAlignmentPicker(for slot: BusyTimeSlot) -> Bool {
-        FlowFlexibilityNotes.countsTowardAlignmentScore(
-            slot.notes,
-            alignment: SessionAlignment.fromNotes(slot.notes)
-        )
+        TimelineEventContent.shouldShowAlignmentPicker(for: slot.notes)
     }
 
     private func alignmentPicker(for slot: BusyTimeSlot) -> some View {
@@ -3457,35 +3442,29 @@ extension TimelineView {
     }
 
     private func saveNotes(for slot: BusyTimeSlot) {
-        // Normalize empty strings to nil for comparison
-        let normalizedNew = editingNotes.isEmpty ? nil : editingNotes
-        let normalizedOriginal = originalNotes.isEmpty ? nil : originalNotes
-
-        // Only save if actually changed
-        guard normalizedNew != normalizedOriginal else {
+        guard let update = TimelineEventContent.notesUpdate(
+            editedText: editingNotes,
+            originalText: originalNotes,
+            existingNotes: slot.notes,
+            isFlowFlexible: slot.isFlowFlexible
+        ) else {
             isEditingNotes = false
             editingNotes = ""
             originalNotes = ""
             return
         }
 
-        // Preserve review tags from the original notes (session type tags are user-editable).
-        let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
-        let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
-        let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
-
         let success = calendarService.updateEvent(
             eventId: slot.id,
             title: nil,
-            notes: notesToSave,
+            notes: update.notesToSave,
             url: nil
         )
 
         if success {
-            let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
             eventUndoManager.recordContent(EventUndoManager.EventContentChange(
                 eventId: slot.id,
-                change: .notes(old: oldNotesForUndo, new: notesToSave),
+                change: .notes(old: update.oldNotesForUndo, new: update.notesToSave),
                 description: "Edit Notes"
             ))
             Task {
@@ -3507,29 +3486,10 @@ extension TimelineView {
     }
     
     private func saveURL(for slot: BusyTimeSlot) {
-        // Normalize and prepare URL
-        let urlToSave: URL?
-        if editingURL.isEmpty {
-            urlToSave = nil
-        } else {
-            // Try to create URL, add https:// if no scheme
-            var urlString = editingURL.trimmingCharacters(in: .whitespaces)
-            if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
-                urlString = "https://" + urlString
-            }
-            // URL encode the string to handle spaces and special characters
-            if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                urlToSave = URL(string: encoded)
-            } else {
-                urlToSave = URL(string: urlString)
-            }
-        }
-        
-        // Only save if actually changed
-        let originalURLString = originalURL.isEmpty ? nil : originalURL
-        let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
-        
-        guard newURLString != originalURLString else {
+        guard let update = TimelineEventContent.urlUpdate(
+            editedText: editingURL,
+            originalText: originalURL
+        ) else {
             isEditingURL = false
             editingURL = ""
             originalURL = ""
@@ -3540,15 +3500,14 @@ extension TimelineView {
             eventId: slot.id,
             title: nil,
             notes: nil,
-            url: urlToSave,
+            url: update.urlToSave,
             updateURL: true
         )
 
         if success {
-            let oldURL: URL? = originalURL.isEmpty ? nil : URL(string: originalURL)
             eventUndoManager.recordContent(EventUndoManager.EventContentChange(
                 eventId: slot.id,
-                change: .url(old: oldURL, new: urlToSave),
+                change: .url(old: update.oldURLForUndo, new: update.urlToSave),
                 description: "Edit URL"
             ))
             Task {
@@ -3631,53 +3590,33 @@ extension TimelineView {
         }
 
         // Notes
-        if isEditingNotes {
-            let normalizedNew: String? = editingNotes.isEmpty ? nil : editingNotes
-            let normalizedOriginal: String? = originalNotes.isEmpty ? nil : originalNotes
-            if normalizedNew != normalizedOriginal {
-                let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
-                let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
-                let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
-                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: notesToSave, url: nil) {
-                    let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
-                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                        eventId: slot.id,
-                        change: .notes(old: oldNotesForUndo, new: notesToSave),
-                        description: "Edit Notes"
-                    ))
-                    didChange = true
-                }
+        if isEditingNotes,
+           let update = TimelineEventContent.notesUpdate(
+                editedText: editingNotes,
+                originalText: originalNotes,
+                existingNotes: slot.notes,
+                isFlowFlexible: slot.isFlowFlexible
+           ) {
+            if calendarService.updateEvent(eventId: slot.id, title: nil, notes: update.notesToSave, url: nil) {
+                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                    eventId: slot.id,
+                    change: .notes(old: update.oldNotesForUndo, new: update.notesToSave),
+                    description: "Edit Notes"
+                ))
+                didChange = true
             }
         }
 
         // URL
-        if isEditingURL {
-            let originalURLString = originalURL.isEmpty ? nil : originalURL
-            let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
-            if newURLString != originalURLString {
-                let urlToSave: URL?
-                if editingURL.isEmpty {
-                    urlToSave = nil
-                } else {
-                    var urlString = editingURL.trimmingCharacters(in: .whitespaces)
-                    if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
-                        urlString = "https://" + urlString
-                    }
-                    if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        urlToSave = URL(string: encoded)
-                    } else {
-                        urlToSave = URL(string: urlString)
-                    }
-                }
-                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: urlToSave, updateURL: true) {
-                    let oldURL: URL? = originalURLString.flatMap { URL(string: $0) }
-                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                        eventId: slot.id,
-                        change: .url(old: oldURL, new: urlToSave),
-                        description: "Edit URL"
-                    ))
-                    didChange = true
-                }
+        if isEditingURL,
+           let update = TimelineEventContent.urlUpdate(editedText: editingURL, originalText: originalURL) {
+            if calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: update.urlToSave, updateURL: true) {
+                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+                    eventId: slot.id,
+                    change: .url(old: update.oldURLForUndo, new: update.urlToSave),
+                    description: "Edit URL"
+                ))
+                didChange = true
             }
         }
 
