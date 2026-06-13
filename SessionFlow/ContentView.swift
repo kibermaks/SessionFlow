@@ -321,6 +321,10 @@ struct ContentViewBody: View {
     /// Last date selected while in Custom mode. Restored when switching back to Custom.
     @State private var lastCustomDate: Date?
 
+    private var scheduleCoordinator: ScheduleCoordinator {
+        ScheduleCoordinator(engine: schedulingEngine, calendar: calendarService)
+    }
+
     var body: some View {
         ZStack {
             backgroundGradient
@@ -764,58 +768,47 @@ struct ContentViewBody: View {
     }
     
     private func syncRestDurationsToAwareness() {
-        sessionAwarenessService.restDurations = [
-            .work: schedulingEngine.restDuration,
-            .side: schedulingEngine.sideRestDuration,
-            .deep: schedulingEngine.deepRestDuration,
-            .planning: schedulingEngine.restDuration,
-        ]
+        sessionAwarenessService.restDurations = schedulingEngine.restDurationsBySessionType
     }
 
     func updateProjectedSchedule() {
+        let date = selectedDate
+        let start = effectiveStartTime
+        let coordinator = scheduleCoordinator
+
         if let fetchedDate = calendarService.fetchedDate,
-           !Calendar.current.isDate(fetchedDate, inSameDayAs: selectedDate) {
-            Task { await calendarService.fetchEvents(for: selectedDate) }
+           !Calendar.current.isDate(fetchedDate, inSameDayAs: date) {
+            Task {
+                await calendarService.fetchEvents(for: date)
+                guard Calendar.current.isDate(selectedDate, inSameDayAs: date) else { return }
+                _ = coordinator.regeneratePreviewFromFetched(
+                    date: date,
+                    startTime: start,
+                    busySlots: busySlotsIncludingEventCreationDraft(for: date)
+                )
+            }
             return
         }
 
-        let planningExists = calendarService.hasPlanningSession(for: selectedDate)
-        
-        let existing = calendarService.countExistingSessions(
-            for: selectedDate,
-            workCalendar: CalendarDescriptor(
-                name: schedulingEngine.workCalendarName,
-                identifier: schedulingEngine.workCalendarIdentifier
-            ),
-            sideCalendar: CalendarDescriptor(
-                name: schedulingEngine.sideCalendarName,
-                identifier: schedulingEngine.sideCalendarIdentifier
-            ),
-            deepConfig: schedulingEngine.deepSessionConfig
-        )
-        
-        _ = schedulingEngine.generateSchedule(
-            startTime: effectiveStartTime,
-            baseDate: selectedDate,
-            busySlots: busySlotsIncludingEventCreationDraft(),
-            includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
-            existingTitles: existing.titles
+        _ = coordinator.regeneratePreviewFromFetched(
+            date: date,
+            startTime: start,
+            busySlots: busySlotsIncludingEventCreationDraft(for: date)
         )
     }
 
-    private func busySlotsIncludingEventCreationDraft() -> [BusyTimeSlot] {
+    private func busySlotsIncludingEventCreationDraft(for date: Date) -> [BusyTimeSlot] {
         guard let draftStart = eventCreationCoordinator.startTime,
-              Calendar.current.isDate(draftStart, inSameDayAs: selectedDate)
+              Calendar.current.isDate(draftStart, inSameDayAs: date)
         else {
-            return calendarService.busySlotsForFetchedDate(selectedDate)
+            return calendarService.busySlotsForFetchedDate(date)
         }
 
         let durationMinutes = max(5, eventCreationCoordinator.durationMinutes)
         let draftEnd = draftStart.addingTimeInterval(Double(durationMinutes) * 60)
         let title = eventCreationCoordinator.draftTitle.isEmpty ? "New Event" : eventCreationCoordinator.draftTitle
 
-        var slots = calendarService.busySlotsForFetchedDate(selectedDate)
+        var slots = calendarService.busySlotsForFetchedDate(date)
         slots.append(BusyTimeSlot(
             id: "sessionflow-event-creation-draft",
             title: title,
@@ -839,76 +832,21 @@ struct ContentViewBody: View {
     }
     
     private func scheduleAllSessions() {
-        let sessionsToSchedule = schedulingEngine.projectedSessions.filter { $0.type != .bigRest }
-        let result = calendarService.createSessions(sessionsToSchedule)
-        if result.failed == 0 {
-            schedulingEngine.schedulingMessage = "Successfully scheduled \(result.success) sessions!"
-        } else {
-            schedulingEngine.schedulingMessage = "Scheduled \(result.success), failed \(result.failed)"
-        }
-        schedulingEngine.sessionsFrozen = false
         Task {
-            await calendarService.fetchEvents(for: selectedDate)
-            schedulingEngine.projectedSessions = []
+            let result = await scheduleCoordinator.commit(date: selectedDate)
+            if result.failed == 0 {
+                schedulingEngine.schedulingMessage = "Successfully scheduled \(result.success) sessions!"
+            } else {
+                schedulingEngine.schedulingMessage = "Scheduled \(result.success), failed \(result.failed)"
+            }
         }
     }
     
     private func deleteScheduledSessions() {
-        // Collect all calendars to clear
-        var calendars: [CalendarDescriptor] = [
-            CalendarDescriptor(
-                name: schedulingEngine.workCalendarName,
-                identifier: schedulingEngine.workCalendarIdentifier
-            ),
-            CalendarDescriptor(
-                name: schedulingEngine.sideCalendarName,
-                identifier: schedulingEngine.sideCalendarIdentifier
-            )
-        ]
-        if schedulingEngine.deepSessionConfig.enabled {
-            calendars.append(
-                CalendarDescriptor(
-                    name: schedulingEngine.deepSessionConfig.calendarName,
-                    identifier: schedulingEngine.deepSessionConfig.calendarIdentifier
-                )
-            )
-        }
-        
-        // Remove duplicates if any calendars share the same identity
-        var uniqueCalendars: [CalendarDescriptor] = []
-        for descriptor in calendars {
-            if !uniqueCalendars.contains(where: { $0.identifier != nil && $0.identifier == descriptor.identifier }) &&
-                !uniqueCalendars.contains(where: { $0.identifier == nil && $0.name == descriptor.name }) {
-                uniqueCalendars.append(descriptor)
-            }
-        }
-        
-        // Passing nil for sessionNames means "delete all events on these calendars"
-        let result: (deleted: Int, failed: Int)
-        if deletePastSessions {
-            result = calendarService.deleteSessionEvents(
-                for: selectedDate,
-                sessionNames: nil,
-                fromCalendars: uniqueCalendars,
-                requireSessionTag: true
-            )
-        } else {
-            let cutoff = Calendar.current.isDateInToday(selectedDate)
-                ? Date()
-                : Calendar.current.startOfDay(for: selectedDate)
-            result = calendarService.deleteFutureSessionEvents(
-                for: selectedDate,
-                after: cutoff,
-                sessionNames: nil,
-                fromCalendars: uniqueCalendars,
-                requireSessionTag: true
-            )
-        }
-        
-        schedulingEngine.schedulingMessage = result.deleted > 0 ? "Deleted \(result.deleted) events" : "No events found to delete"
-        
         Task {
-            await calendarService.fetchEvents(for: selectedDate)
+            let scope: DeleteScope = deletePastSessions ? .all : .future
+            let result = await scheduleCoordinator.deleteSessions(date: selectedDate, scope: scope)
+            schedulingEngine.schedulingMessage = result.deleted > 0 ? "Deleted \(result.deleted) events" : "No events found to delete"
             if autoPreview { updateProjectedSchedule() }
         }
     }
@@ -997,12 +935,7 @@ struct SettingsChangeModifier: ViewModifier {
     }
 
     private func syncRestDurations() {
-        awarenessService.restDurations = [
-            .work: engine.restDuration,
-            .side: engine.sideRestDuration,
-            .deep: engine.deepRestDuration,
-            .planning: engine.restDuration,
-        ]
+        awarenessService.restDurations = engine.restDurationsBySessionType
     }
 }
 

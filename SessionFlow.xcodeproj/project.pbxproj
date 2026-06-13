@@ -10,6 +10,7 @@
 		001 /* SessionFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* SessionFlowApp.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		003 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Session.swift */; };
+		SFESEM002 /* SessionFlowEventSemantics.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFESEM001 /* SessionFlowEventSemantics.swift */; };
 		AT001 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AT002 /* AppTheme.swift */; };
 		004 /* SchedulePattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* SchedulePattern.swift */; };
 		005 /* Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* Preset.swift */; };
@@ -76,6 +77,7 @@
 		A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */; };
 		EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */; };
 		EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */; };
+		TEP001 /* TimelineEditPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEP002 /* TimelineEditPlanner.swift */; };
 		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
 		MCPBLD01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD01 /* MCP */; };
 		MCPS01 /* MCPHTTPListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF01 /* MCPHTTPListener.swift */; };
@@ -89,6 +91,8 @@
 		TB03 /* MCPListenerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF03 /* MCPListenerTests.swift */; };
 		TB04 /* ScheduleCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF04 /* ScheduleCoordinatorTests.swift */; };
 		TB05 /* AgentGuideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF05 /* AgentGuideTests.swift */; };
+		TEPTB01 /* TimelineEditPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEPTF01 /* TimelineEditPlannerTests.swift */; };
+		SFESEMTB02 /* SessionFlowEventSemanticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -97,6 +101,7 @@
 		101 /* SessionFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		SFESEM001 /* SessionFlowEventSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowEventSemantics.swift; sourceTree = "<group>"; };
 		AT002 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		104 /* SchedulePattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulePattern.swift; sourceTree = "<group>"; };
 		105 /* Preset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preset.swift; sourceTree = "<group>"; };
@@ -164,6 +169,7 @@
 		FF01CHANGELOG001 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = CHANGELOG.md; sourceTree = SOURCE_ROOT; };
 		EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentEventsStore.swift; sourceTree = "<group>"; };
 		EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreationPopover.swift; sourceTree = "<group>"; };
+		TEP002 /* TimelineEditPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEditPlanner.swift; sourceTree = "<group>"; };
 		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
 		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
 		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -179,6 +185,8 @@
 		TF03 /* MCPListenerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPListenerTests.swift; sourceTree = "<group>"; };
 		TF04 /* ScheduleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoordinatorTests.swift; sourceTree = "<group>"; };
 		TF05 /* AgentGuideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGuideTests.swift; sourceTree = "<group>"; };
+		TEPTF01 /* TimelineEditPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEditPlannerTests.swift; sourceTree = "<group>"; };
+		SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowEventSemanticsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -253,6 +261,8 @@
 				TF03 /* MCPListenerTests.swift */,
 				TF04 /* ScheduleCoordinatorTests.swift */,
 				TF05 /* AgentGuideTests.swift */,
+				TEPTF01 /* TimelineEditPlannerTests.swift */,
+				SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -261,6 +271,7 @@
 			isa = PBXGroup;
 			children = (
 				103 /* Session.swift */,
+				SFESEM001 /* SessionFlowEventSemantics.swift */,
 				AT002 /* AppTheme.swift */,
 				104 /* SchedulePattern.swift */,
 				105 /* Preset.swift */,
@@ -320,6 +331,7 @@
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */,
 				A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */,
 				EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */,
+				TEP002 /* TimelineEditPlanner.swift */,
 				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
 				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
 				MCPGRP /* MCP */,
@@ -522,6 +534,7 @@
 				001 /* SessionFlowApp.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Session.swift in Sources */,
+				SFESEM002 /* SessionFlowEventSemantics.swift in Sources */,
 				AT001 /* AppTheme.swift in Sources */,
 				004 /* SchedulePattern.swift in Sources */,
 				005 /* Preset.swift in Sources */,
@@ -568,6 +581,7 @@
 				A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */,
 				EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */,
 				EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */,
+				TEP001 /* TimelineEditPlanner.swift in Sources */,
 				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
 				MCPS01 /* MCPHTTPListener.swift in Sources */,
 				MCPS02 /* MCPServerController.swift in Sources */,
@@ -586,6 +600,8 @@
 				TB03 /* MCPListenerTests.swift in Sources */,
 				TB04 /* ScheduleCoordinatorTests.swift in Sources */,
 				TB05 /* AgentGuideTests.swift in Sources */,
+				TEPTB01 /* TimelineEditPlannerTests.swift in Sources */,
+				SFESEMTB02 /* SessionFlowEventSemanticsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -724,7 +740,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1054;
+				CURRENT_PROJECT_VERSION = 1056;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -762,7 +778,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1054;
+				CURRENT_PROJECT_VERSION = 1056;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

@@ -9,7 +9,7 @@ enum FlowFlexibilityNotes {
     static let flexibleTags = [flexibleTag, legacyFlexibleTag]
     static let fixedTags = [fixedTag, legacyFixedTag]
     static let allTags = flexibleTags + fixedTags
-    static let sessionFlowTags = ["#work", "#side", "#deep", "#plan", "#break"]
+    static let sessionFlowTags = SessionFlowEventSemantics.recognizedOwnershipTags
 
     static func hasExplicitFlexibleTag(_ notes: String?) -> Bool {
         guard let notes = notes?.lowercased() else { return false }
@@ -22,8 +22,7 @@ enum FlowFlexibilityNotes {
     }
 
     static func isSessionFlowOwned(_ notes: String?) -> Bool {
-        guard let notes = notes?.lowercased() else { return false }
-        return sessionFlowTags.contains { notes.contains($0) }
+        SessionFlowEventSemantics.isSessionFlowOwned(notes)
     }
 
     static func isFlexible(_ notes: String?) -> Bool {
@@ -149,13 +148,7 @@ struct ScheduledSession: Identifiable, Equatable {
     
     /// Returns the hashtag string (without #) for this session type
     func hashtag() -> String {
-        switch type {
-        case .work: return "work"
-        case .side: return "side"
-        case .deep: return "deep"
-        case .planning: return "plan"
-        case .bigRest: return "break"
-        }
+        String(SessionFlowEventSemantics.ownershipTag(for: type).rawValue.dropFirst())
     }
 }
 

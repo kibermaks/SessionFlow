@@ -15,17 +15,10 @@ class CalendarService: ObservableObject {
     private let eventStore = EKEventStore()
     private var notificationObserver: NSObjectProtocol?
     private var ekChangeTask: Task<Void, Never>?
-    private let recognizedSessionTags = ["#work", "#side", "#deep", "#plan", "#break"]
 
     /// Resolves a session tag in notes to its corresponding SessionType.
     static func sessionType(fromNotes notes: String?) -> SessionType? {
-        guard let notes = notes?.lowercased() else { return nil }
-        if notes.contains("#work") { return .work }
-        if notes.contains("#side") { return .side }
-        if notes.contains("#deep") { return .deep }
-        if notes.contains("#plan") { return .planning }
-        if notes.contains("#break") { return .bigRest }
-        return nil
+        SessionFlowEventSemantics.sessionType(fromNotes: notes)
     }
     
     @Published var authorizationStatus: EKAuthorizationStatus = .notDetermined
@@ -165,8 +158,7 @@ class CalendarService: ObservableObject {
     }
 
     private func eventContainsSessionTag(_ event: EKEvent) -> Bool {
-        guard let notes = event.notes?.lowercased() else { return false }
-        return recognizedSessionTags.contains(where: { notes.contains($0) })
+        SessionFlowEventSemantics.isSessionFlowOwned(event.notes)
     }
     
     struct CalendarInfo: Identifiable {
@@ -979,16 +971,19 @@ class CalendarService: ObservableObject {
                 titles.insert(eventTitle)
             }
             
-            let notes = (event.notes ?? "").lowercased()
-            
-            // Only count events that have explicit hashtags in their notes
-            // Events without tags are not counted as aware sessions
-            if notes.contains("#work") {
-                workCount += 1
-            } else if notes.contains("#side") {
-                sideCount += 1
-            } else if notes.contains("#deep") {
-                deepCount += 1
+            // Only count events that have explicit hashtags in their notes.
+            // Events without tags are not counted as aware sessions.
+            if let type = SessionFlowEventSemantics.sessionType(fromNotes: event.notes) {
+                switch type {
+                case .work:
+                    workCount += 1
+                case .side:
+                    sideCount += 1
+                case .deep:
+                    deepCount += 1
+                case .planning, .bigRest:
+                    break
+                }
             }
         }
         
@@ -1010,7 +1005,7 @@ class CalendarService: ObservableObject {
         
         return events.contains { 
             ($0.title ?? "") == planningEventName || 
-            ($0.notes ?? "").lowercased().contains("#plan")
+            SessionFlowEventSemantics.sessionType(fromNotes: $0.notes) == .planning
         }
     }
     

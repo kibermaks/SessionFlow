@@ -97,6 +97,44 @@ class SchedulingEngine: ObservableObject {
     var hasNoSessionTargets: Bool {
         workSessions == 0 && sideSessions == 0 && (!deepSessionConfig.enabled || deepSessionConfig.sessionCount == 0) && !schedulePlanning
     }
+
+    var restDurationsBySessionType: [SessionType: Int] {
+        [
+            .work: restDuration,
+            .side: sideRestDuration,
+            .deep: deepRestDuration,
+            .planning: restDuration,
+        ]
+    }
+
+    var workCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: workCalendarName, identifier: workCalendarIdentifier)
+    }
+
+    var sideCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: sideCalendarName, identifier: sideCalendarIdentifier)
+    }
+
+    var deepCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: deepSessionConfig.calendarName, identifier: deepSessionConfig.calendarIdentifier)
+    }
+
+    var sessionCalendarDescriptors: [CalendarDescriptor] {
+        var calendars = [workCalendarDescriptor, sideCalendarDescriptor]
+        if deepSessionConfig.enabled {
+            calendars.append(deepCalendarDescriptor)
+        }
+
+        var unique: [CalendarDescriptor] = []
+        for descriptor in calendars {
+            let duplicate = unique.contains {
+                ($0.identifier != nil && $0.identifier == descriptor.identifier) ||
+                ($0.identifier == nil && descriptor.identifier == nil && $0.name == descriptor.name)
+            }
+            if !duplicate { unique.append(descriptor) }
+        }
+        return unique
+    }
     
     // MARK: - Initialization
     

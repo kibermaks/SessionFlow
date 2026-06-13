@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import SwiftUI
 @testable import SessionFlow
 
 extension MCPFeatureTests {
@@ -23,6 +24,40 @@ extension MCPFeatureTests {
         #expect(!sessions.isEmpty)
         #expect(engine.projectedSessions.count == sessions.count)
         #expect(calendar.scheduleEndHour == 28)
+        #expect(calendar.fetchedDates.contains { Calendar.current.isDate($0, inSameDayAs: date) })
+    }
+
+    @Test func daySnapshotConcentratesCalendarDayFacts() async {
+        let (coordinator, engine, calendar) = makeCoordinator { engine in
+            engine.workSessions = 1
+            engine.sideSessions = 0
+            engine.schedulePlanning = true
+            engine.scheduleEndHour = 26
+        }
+        let date = Calendar.current.startOfDay(for: Date())
+        let start = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: date)!
+        let busyStart = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: date)!
+        calendar.busySlots = [
+            BusyTimeSlot(
+                id: "busy",
+                title: "Busy",
+                startTime: busyStart,
+                endTime: busyStart.addingTimeInterval(1800),
+                calendarName: "Work",
+                calendarColor: .blue
+            )
+        ]
+        calendar.planningExists = true
+        calendar.existingCounts = (work: 1, side: 0, deep: 0, titles: ["Busy"])
+
+        let snapshot = await coordinator.daySnapshot(date: date, startTime: start)
+
+        #expect(snapshot.planningExists)
+        #expect(snapshot.busySlots.map(\.id) == ["busy"])
+        #expect(snapshot.existingSessions.work == 1)
+        #expect(snapshot.existingSessions.titles == ["Busy"])
+        #expect(snapshot.availability.availableMinutes > 0)
+        #expect(calendar.scheduleEndHour == 26)
         #expect(calendar.fetchedDates.contains { Calendar.current.isDate($0, inSameDayAs: date) })
     }
 
