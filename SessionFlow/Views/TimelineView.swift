@@ -2876,46 +2876,30 @@ extension TimelineView {
 
     private func updatePopoverFeedback(for slot: BusyTimeSlot, rating: SessionRating) {
         let currentNotes = currentReviewNotes(for: slot)
-        let oldRating = SessionRating.fromNotes(currentNotes)
-        let newRating: SessionRating? = oldRating == rating ? nil : rating
-        let updatedNotes: String?
-
-        if let newRating {
-            guard calendarService.setFeedbackTag(eventId: slot.id, rating: newRating) else { return }
-            updatedNotes = newRating.applyTo(notes: currentNotes)
-        } else {
-            guard calendarService.clearFeedbackTag(eventId: slot.id) else { return }
-            updatedNotes = SessionRating.stripFeedbackTags(currentNotes)
-        }
-
-        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+        guard let result = TimelineReviewUpdate.setFeedback(
             eventId: slot.id,
-            oldRating: oldRating,
-            newRating: newRating
-        ))
-        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+            currentNotes: currentNotes,
+            rating: rating,
+            toggleWhenAlreadySelected: true,
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordFeedback(result.undoChange)
+        finishPopoverFeedbackUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func updatePopoverFeedback(for slot: BusyTimeSlot, alignment: SessionAlignment) {
         let currentNotes = currentReviewNotes(for: slot)
-        let oldAlignment = SessionAlignment.fromNotes(currentNotes)
-        let newAlignment: SessionAlignment? = oldAlignment == alignment ? nil : alignment
-        let updatedNotes: String?
-
-        if let newAlignment {
-            guard calendarService.setAlignmentTag(eventId: slot.id, alignment: newAlignment) else { return }
-            updatedNotes = newAlignment.applyTo(notes: currentNotes)
-        } else {
-            guard calendarService.clearAlignmentTag(eventId: slot.id) else { return }
-            updatedNotes = SessionAlignment.stripAlignmentTags(currentNotes)
-        }
-
-        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
+        guard let result = TimelineReviewUpdate.setAlignment(
             eventId: slot.id,
-            oldAlignment: oldAlignment,
-            newAlignment: newAlignment
-        ))
-        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+            currentNotes: currentNotes,
+            alignment: alignment,
+            toggleWhenAlreadySelected: true,
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordAlignment(result.undoChange)
+        finishPopoverFeedbackUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func currentReviewNotes(for slot: BusyTimeSlot) -> String? {
@@ -2927,9 +2911,7 @@ extension TimelineView {
     private func finishPopoverFeedbackUpdate(for slot: BusyTimeSlot, notes: String?) {
         optimisticallyUpdateSlotNotes(id: slot.id, notes: notes)
 
-        let rating = SessionRating.fromNotes(notes)
-        let alignment = SessionAlignment.fromNotes(notes)
-        feedbackPopoverEventId = rating != nil && alignment != nil ? nil : slot.id
+        feedbackPopoverEventId = TimelineReviewUpdate.shouldKeepPopoverOpen(afterNotes: notes) ? slot.id : nil
 
         Task {
             await calendarService.fetchEvents(for: actionContext.selectedDate)
@@ -2937,6 +2919,16 @@ extension TimelineView {
                selectedBusySlot?.id == slot.id {
                 selectedBusySlot = updated
             }
+        }
+    }
+
+    private func finishDetailReviewUpdate(for slot: BusyTimeSlot, notes: String?) {
+        optimisticallyUpdateSlotNotes(id: slot.id, notes: notes)
+        refreshSelectedBusySlot(slot.id)
+
+        Task {
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
+            refreshSelectedBusySlot(slot.id)
         }
     }
 
@@ -2984,15 +2976,14 @@ extension TimelineView {
 
             ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                 Button {
-                    let oldRating = currentRating
-                    calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
-                    eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-                        eventId: slot.id, oldRating: oldRating, newRating: rating))
-                    Task {
-                        await calendarService.fetchEvents(for: actionContext.selectedDate)
-                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                            selectedBusySlot = updated
-                        }
+                    if let result = TimelineReviewUpdate.setFeedback(
+                        eventId: slot.id,
+                        currentNotes: currentReviewNotes(for: slot),
+                        rating: rating,
+                        calendar: calendarService
+                    ) {
+                        eventUndoManager.recordFeedback(result.undoChange)
+                        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
                     }
                 } label: {
                     Image(systemName: rating.icon)
@@ -3015,16 +3006,14 @@ extension TimelineView {
     }
 
     private func clearFeedbackTag(for slot: BusyTimeSlot) {
-        let oldRating = SessionRating.fromNotes(slot.notes)
-        calendarService.clearFeedbackTag(eventId: slot.id)
-        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-            eventId: slot.id, oldRating: oldRating, newRating: nil))
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                selectedBusySlot = updated
-            }
-        }
+        guard let result = TimelineReviewUpdate.clearFeedback(
+            eventId: slot.id,
+            currentNotes: currentReviewNotes(for: slot),
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordFeedback(result.undoChange)
+        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func shouldShowAlignmentPicker(for slot: BusyTimeSlot) -> Bool {
@@ -3064,15 +3053,14 @@ extension TimelineView {
 
             ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
                 Button {
-                    let oldAlignment = currentAlignment
-                    calendarService.setAlignmentTag(eventId: slot.id, alignment: alignment)
-                    eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
-                        eventId: slot.id, oldAlignment: oldAlignment, newAlignment: alignment))
-                    Task {
-                        await calendarService.fetchEvents(for: actionContext.selectedDate)
-                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                            selectedBusySlot = updated
-                        }
+                    if let result = TimelineReviewUpdate.setAlignment(
+                        eventId: slot.id,
+                        currentNotes: currentReviewNotes(for: slot),
+                        alignment: alignment,
+                        calendar: calendarService
+                    ) {
+                        eventUndoManager.recordAlignment(result.undoChange)
+                        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
                     }
                 } label: {
                     Image(systemName: alignment.icon)
@@ -3095,16 +3083,14 @@ extension TimelineView {
     }
 
     private func clearAlignmentTag(for slot: BusyTimeSlot) {
-        let oldAlignment = SessionAlignment.fromNotes(slot.notes)
-        calendarService.clearAlignmentTag(eventId: slot.id)
-        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
-            eventId: slot.id, oldAlignment: oldAlignment, newAlignment: nil))
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                selectedBusySlot = updated
-            }
-        }
+        guard let result = TimelineReviewUpdate.clearAlignment(
+            eventId: slot.id,
+            currentNotes: currentReviewNotes(for: slot),
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordAlignment(result.undoChange)
+        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
     }
 
     // MARK: - Inline Editing Helpers
