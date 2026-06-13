@@ -83,6 +83,7 @@
 		TIE002 /* TimelineInlineEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TIE001 /* TimelineInlineEditor.swift */; };
 		TEA002 /* TimelineEventActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEA001 /* TimelineEventActions.swift */; };
 		TEE002 /* TimelineElasticEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEE001 /* TimelineElasticEditor.swift */; };
+		TGD002 /* TimelineGroupDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = TGD001 /* TimelineGroupDrag.swift */; };
 		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
 		MCPBLD01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD01 /* MCP */; };
 		MCPS01 /* MCPHTTPListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF01 /* MCPHTTPListener.swift */; };
@@ -102,6 +103,7 @@
 		TIETB01 /* TimelineInlineEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TIETF01 /* TimelineInlineEditorTests.swift */; };
 		TEATB01 /* TimelineEventActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEATF01 /* TimelineEventActionsTests.swift */; };
 		TEETB01 /* TimelineElasticEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEETF01 /* TimelineElasticEditorTests.swift */; };
+		TGDTB01 /* TimelineGroupDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TGDTF01 /* TimelineGroupDragTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -184,6 +186,7 @@
 		TIE001 /* TimelineInlineEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInlineEditor.swift; sourceTree = "<group>"; };
 		TEA001 /* TimelineEventActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventActions.swift; sourceTree = "<group>"; };
 		TEE001 /* TimelineElasticEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineElasticEditor.swift; sourceTree = "<group>"; };
+		TGD001 /* TimelineGroupDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineGroupDrag.swift; sourceTree = "<group>"; };
 		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
 		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
 		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -205,6 +208,7 @@
 		TIETF01 /* TimelineInlineEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInlineEditorTests.swift; sourceTree = "<group>"; };
 		TEATF01 /* TimelineEventActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventActionsTests.swift; sourceTree = "<group>"; };
 		TEETF01 /* TimelineElasticEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineElasticEditorTests.swift; sourceTree = "<group>"; };
+		TGDTF01 /* TimelineGroupDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineGroupDragTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -285,6 +289,7 @@
 				TIETF01 /* TimelineInlineEditorTests.swift */,
 				TEATF01 /* TimelineEventActionsTests.swift */,
 				TEETF01 /* TimelineElasticEditorTests.swift */,
+				TGDTF01 /* TimelineGroupDragTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -359,6 +364,7 @@
 				TIE001 /* TimelineInlineEditor.swift */,
 				TEA001 /* TimelineEventActions.swift */,
 				TEE001 /* TimelineElasticEditor.swift */,
+				TGD001 /* TimelineGroupDrag.swift */,
 				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
 				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
 				MCPGRP /* MCP */,
@@ -614,6 +620,7 @@
 				TIE002 /* TimelineInlineEditor.swift in Sources */,
 				TEA002 /* TimelineEventActions.swift in Sources */,
 				TEE002 /* TimelineElasticEditor.swift in Sources */,
+				TGD002 /* TimelineGroupDrag.swift in Sources */,
 				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
 				MCPS01 /* MCPHTTPListener.swift in Sources */,
 				MCPS02 /* MCPServerController.swift in Sources */,
@@ -638,6 +645,7 @@
 				TIETB01 /* TimelineInlineEditorTests.swift in Sources */,
 				TEATB01 /* TimelineEventActionsTests.swift in Sources */,
 				TEETB01 /* TimelineElasticEditorTests.swift in Sources */,
+				TGDTB01 /* TimelineGroupDragTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -776,7 +784,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1066;
+				CURRENT_PROJECT_VERSION = 1067;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -814,7 +822,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1066;
+				CURRENT_PROJECT_VERSION = 1067;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

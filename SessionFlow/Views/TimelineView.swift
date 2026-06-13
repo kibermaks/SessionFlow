@@ -118,9 +118,7 @@ struct TimelineView: View {
     @State private var isCommandHeld: Bool = false
     @State private var isOptionHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
-    // Group drag: original times of every selected slot at drag start, and live preview targets.
-    @State private var groupDragOriginalTimes: [String: (start: Date, end: Date)] = [:]
-    @State private var groupDragPreviewTimes: [String: (start: Date, end: Date)] = [:]
+    @State private var groupDrag = TimelineGroupDrag()
     @State private var keyDownMonitor: Any? = nil
     @State private var mouseDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
@@ -620,8 +618,8 @@ struct TimelineView: View {
 
                     // Group drag: render preview blocks for every other selected slot.
                     if dragMode == .move {
-                        ForEach(filteredBusySlots.filter { $0.id != slotId && groupDragPreviewTimes[$0.id] != nil }, id: \.id) { otherSlot in
-                            if let target = groupDragPreviewTimes[otherSlot.id] {
+                        ForEach(filteredBusySlots.filter { $0.id != slotId && groupDrag.preview(for: $0.id) != nil }, id: \.id) { otherSlot in
+                            if let target = groupDrag.preview(for: otherSlot.id) {
                                 dragPreviewBlock(
                                     slot: otherSlot,
                                     newStart: target.start,
@@ -1606,7 +1604,7 @@ extension TimelineView {
         let isGroupMemberDragging = dragMode == .move
             && dragSlotId != nil
             && dragSlotId != slot.id
-            && groupDragOriginalTimes[slot.id] != nil
+            && groupDrag.contains(slot.id)
         let isDragging = isAnchorDragging || isGroupMemberDragging
         let isSelected = selectedBusySlotIds.contains(slot.id)
         let yPos = calculateYPosition(for: slot.startTime)
@@ -1755,15 +1753,10 @@ extension TimelineView {
                             }
                             // Snapshot original times for every selected slot (for group drag).
                             if selectedBusySlotIds.count > 1 {
-                                let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
-                                var snapshot: [String: (start: Date, end: Date)] = [:]
-                                for id in selectedBusySlotIds {
-                                    if let s = slotsById[id] {
-                                        snapshot[id] = (s.startTime, s.endTime)
-                                    }
-                                }
-                                groupDragOriginalTimes = snapshot
-                                groupDragPreviewTimes = snapshot
+                                groupDrag.begin(
+                                    selectedIds: selectedBusySlotIds,
+                                    slots: timelineBusySlots(for: actionContext.selectedDate)
+                                )
                             }
                         }
                         if isElasticEditing, dragMode != .move {
@@ -1783,16 +1776,8 @@ extension TimelineView {
                         dragPreviewEndTime = newStart.addingTimeInterval(duration)
 
                         // Group drag: translate every other selected event by the same delta.
-                        if !groupDragOriginalTimes.isEmpty {
-                            let translation = newStart.timeIntervalSince(slot.startTime)
-                            var live: [String: (start: Date, end: Date)] = [:]
-                            for (id, orig) in groupDragOriginalTimes {
-                                live[id] = (
-                                    orig.start.addingTimeInterval(translation),
-                                    orig.end.addingTimeInterval(translation)
-                                )
-                            }
-                            groupDragPreviewTimes = live
+                        if groupDrag.isActive {
+                            groupDrag.updateTranslation(from: slot.startTime, to: newStart)
                         }
 
                     case .resizeTop:
@@ -1824,8 +1809,8 @@ extension TimelineView {
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
                             if isElasticEditing {
-                                let updates: [String: (start: Date, end: Date)] = !groupDragPreviewTimes.isEmpty
-                                    ? groupDragPreviewTimes
+                                let updates: [String: (start: Date, end: Date)] = groupDrag.isActive
+                                    ? groupDrag.previewTimes
                                     : [slot.id: (start: previewStart, end: previewEnd)]
                                 let baseSlots = elasticEditor.dragBaseSlots
                                 let displaced = displaceBusySlots(
@@ -1835,8 +1820,8 @@ extension TimelineView {
                                 )
                                 elasticEditor.stagedSlots = displaced
                                 recalculateProjectedSchedule(using: applyingTimeUpdates(to: displaced, updates: updates))
-                            } else if !groupDragOriginalTimes.isEmpty {
-                                recalculateWithDraggedSlots(groupDragPreviewTimes)
+                            } else if groupDrag.isActive {
+                                recalculateWithDraggedSlots(groupDrag.previewTimes)
                             } else {
                                 recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
                             }
@@ -3431,7 +3416,7 @@ extension TimelineView {
         }
 
         // Group drag commits every selected slot atomically.
-        if dragMode == .move && !groupDragOriginalTimes.isEmpty {
+        if dragMode == .move && groupDrag.isActive {
             commitGroupDrag()
             return
         }
@@ -3475,8 +3460,8 @@ extension TimelineView {
 
     private func commitElasticDrag(for slot: BusyTimeSlot, newStart: Date, newEnd: Date) {
         let updates: [String: (start: Date, end: Date)]
-        if dragMode == .move && !groupDragPreviewTimes.isEmpty {
-            updates = groupDragPreviewTimes
+        if dragMode == .move && groupDrag.isActive {
+            updates = groupDrag.previewTimes
         } else {
             updates = [slot.id: (start: newStart, end: newEnd)]
         }
@@ -3522,8 +3507,8 @@ extension TimelineView {
         var changes: [EventUndoManager.EventTimeChange] = []
         var committed: [(id: String, newStart: Date, newEnd: Date)] = []
 
-        for (id, target) in groupDragPreviewTimes {
-            guard let original = groupDragOriginalTimes[id],
+        for (id, target) in groupDrag.previewTimes {
+            guard let original = groupDrag.originalTimes[id],
                   let liveSlot = slotsById[id] else { continue }
             guard target.start != original.start || target.end != original.end else { continue }
 
@@ -3570,8 +3555,7 @@ extension TimelineView {
         dragPreviewEndTime = nil
         preDisplacementSessions = nil
         elasticEditor.clearPreDragSnapshot()
-        groupDragOriginalTimes.removeAll()
-        groupDragPreviewTimes.removeAll()
+        groupDrag.reset()
     }
 
     /// Cancel drag and revert all changes (called on Escape).
