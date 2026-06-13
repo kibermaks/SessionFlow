@@ -90,6 +90,7 @@
 		TURA002 /* TimelineUndoRedoApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = TURA001 /* TimelineUndoRedoApplier.swift */; };
 		TTS002 /* TimelineTimeScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTS001 /* TimelineTimeScale.swift */; };
 		TRU002 /* TimelineReviewUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRU001 /* TimelineReviewUpdate.swift */; };
+		TETC002 /* TimelineEventTimeCommitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETC001 /* TimelineEventTimeCommitter.swift */; };
 		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
 		MCPBLD01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD01 /* MCP */; };
 		MCPS01 /* MCPHTTPListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF01 /* MCPHTTPListener.swift */; };
@@ -117,6 +118,7 @@
 		TURATB01 /* TimelineUndoRedoApplierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TURATF01 /* TimelineUndoRedoApplierTests.swift */; };
 		TTSTB01 /* TimelineTimeScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTSTF01 /* TimelineTimeScaleTests.swift */; };
 		TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRUTF01 /* TimelineReviewUpdateTests.swift */; };
+		TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETCTF01 /* TimelineEventTimeCommitterTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -206,6 +208,7 @@
 		TURA001 /* TimelineUndoRedoApplier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineUndoRedoApplier.swift; sourceTree = "<group>"; };
 		TTS001 /* TimelineTimeScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimeScale.swift; sourceTree = "<group>"; };
 		TRU001 /* TimelineReviewUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdate.swift; sourceTree = "<group>"; };
+		TETC001 /* TimelineEventTimeCommitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitter.swift; sourceTree = "<group>"; };
 		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
 		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
 		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -235,6 +238,7 @@
 		TURATF01 /* TimelineUndoRedoApplierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineUndoRedoApplierTests.swift; sourceTree = "<group>"; };
 		TTSTF01 /* TimelineTimeScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimeScaleTests.swift; sourceTree = "<group>"; };
 		TRUTF01 /* TimelineReviewUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdateTests.swift; sourceTree = "<group>"; };
+		TETCTF01 /* TimelineEventTimeCommitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitterTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -323,6 +327,7 @@
 				TURATF01 /* TimelineUndoRedoApplierTests.swift */,
 				TTSTF01 /* TimelineTimeScaleTests.swift */,
 				TRUTF01 /* TimelineReviewUpdateTests.swift */,
+				TETCTF01 /* TimelineEventTimeCommitterTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -404,6 +409,7 @@
 				TURA001 /* TimelineUndoRedoApplier.swift */,
 				TTS001 /* TimelineTimeScale.swift */,
 				TRU001 /* TimelineReviewUpdate.swift */,
+				TETC001 /* TimelineEventTimeCommitter.swift */,
 				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
 				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
 				MCPGRP /* MCP */,
@@ -666,6 +672,7 @@
 				TURA002 /* TimelineUndoRedoApplier.swift in Sources */,
 				TTS002 /* TimelineTimeScale.swift in Sources */,
 				TRU002 /* TimelineReviewUpdate.swift in Sources */,
+				TETC002 /* TimelineEventTimeCommitter.swift in Sources */,
 				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
 				MCPS01 /* MCPHTTPListener.swift in Sources */,
 				MCPS02 /* MCPServerController.swift in Sources */,
@@ -698,6 +705,7 @@
 				TURATB01 /* TimelineUndoRedoApplierTests.swift in Sources */,
 				TTSTB01 /* TimelineTimeScaleTests.swift in Sources */,
 				TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */,
+				TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -836,7 +844,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1076;
+				CURRENT_PROJECT_VERSION = 1077;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -874,7 +882,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1076;
+				CURRENT_PROJECT_VERSION = 1077;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

@@ -3261,31 +3261,23 @@ extension TimelineView {
         }
 
         let description = dragMode == .move ? "Move \(slot.title)" : "Resize \(slot.title)"
-        eventUndoManager.record(EventUndoManager.EventTimeChange(
-            eventId: slot.id,
-            oldStartTime: slot.startTime,
-            oldEndTime: slot.endTime,
-            newStartTime: newStart,
-            newEndTime: newEnd,
-            description: description
-        ))
+        let result = TimelineEventTimeCommitter.commit([
+            TimelineEventTimeCommitter.Target(
+                eventId: slot.id,
+                oldStart: slot.startTime,
+                oldEnd: slot.endTime,
+                newStart: newStart,
+                newEnd: newEnd,
+                description: description
+            )
+        ], calendar: calendarService)
 
-        let success = calendarService.updateEventTime(
-            eventId: slot.id,
-            newStart: newStart,
-            newEnd: newEnd
-        )
-
-        if !success {
-            _ = eventUndoManager.undo()
-        } else {
-            optimisticallyUpdateSlot(id: slot.id, newStart: newStart, newEnd: newEnd)
-            // Final recalculation with committed position
-            recalculateWithDraggedSlot(slot, newStart: newStart, newEnd: newEnd)
+        applyEventTimeCommitResult(result)
+        if !result.optimisticUpdates.isEmpty {
+            recalculateWithCommittedTimeUpdates(result.optimisticUpdates)
         }
-
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
+        if result.shouldFetchEvents {
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
         }
 
         resetDragState()
@@ -3336,44 +3328,30 @@ extension TimelineView {
     /// Commit a group drag — every selected slot moves by the same translation atomically.
     private func commitGroupDrag() {
         let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
-
-        var changes: [EventUndoManager.EventTimeChange] = []
-        var committed: [(id: String, newStart: Date, newEnd: Date)] = []
+        var targets: [TimelineEventTimeCommitter.Target] = []
 
         for (id, target) in groupDrag.previewTimes {
             guard let original = groupDrag.originalTimes[id],
                   let liveSlot = slotsById[id] else { continue }
             guard target.start != original.start || target.end != original.end else { continue }
 
-            let success = calendarService.updateEventTime(
+            targets.append(TimelineEventTimeCommitter.Target(
                 eventId: id,
+                oldStart: original.start,
+                oldEnd: original.end,
                 newStart: target.start,
-                newEnd: target.end
-            )
-            if success {
-                changes.append(EventUndoManager.EventTimeChange(
-                    eventId: id,
-                    oldStartTime: original.start,
-                    oldEndTime: original.end,
-                    newStartTime: target.start,
-                    newEndTime: target.end,
-                    description: "Move \(liveSlot.title)"
-                ))
-                committed.append((id, target.start, target.end))
-            }
+                newEnd: target.end,
+                description: "Move \(liveSlot.title)"
+            ))
         }
 
-        if !changes.isEmpty {
-            eventUndoManager.recordBatch(changes)
-            for c in committed {
-                optimisticallyUpdateSlot(id: c.id, newStart: c.newStart, newEnd: c.newEnd)
-            }
-            let finalMap = Dictionary(uniqueKeysWithValues: committed.map { ($0.id, (start: $0.newStart, end: $0.newEnd)) })
-            recalculateWithDraggedSlots(finalMap)
+        let result = TimelineEventTimeCommitter.commit(targets, calendar: calendarService)
+        applyEventTimeCommitResult(result)
+        if !result.optimisticUpdates.isEmpty {
+            recalculateWithCommittedTimeUpdates(result.optimisticUpdates)
         }
-
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
+        if result.shouldFetchEvents {
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
         }
 
         resetDragState()
@@ -3433,17 +3411,10 @@ extension TimelineView {
         guard !schedulingEngine.sessionsFrozen else { return }
 
         let operationDate = actionContext.selectedDate
-        var modifiedSlots = timelineBusySlots(for: operationDate)
-        for i in modifiedSlots.indices {
-            if let target = updates[modifiedSlots[i].id] {
-                let old = modifiedSlots[i]
-                modifiedSlots[i] = BusyTimeSlot(
-                    id: old.id, title: old.title, startTime: target.start, endTime: target.end,
-                    notes: old.notes, url: old.url, calendarName: old.calendarName,
-                    calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
-                )
-            }
-        }
+        let modifiedSlots = applyingTimeUpdates(
+            to: timelineBusySlots(for: operationDate),
+            updates: updates
+        )
 
         recalculateProjectedSchedule(using: modifiedSlots)
     }
@@ -3502,6 +3473,25 @@ extension TimelineView {
 
             resetDragState()
         }
+    }
+
+    private func applyEventTimeCommitResult(_ result: TimelineEventTimeCommitter.Result) {
+        guard !result.undoChanges.isEmpty else { return }
+        eventUndoManager.recordBatch(result.undoChanges)
+        for update in result.optimisticUpdates {
+            optimisticallyUpdateSlot(
+                id: update.eventId,
+                newStart: update.newStart,
+                newEnd: update.newEnd
+            )
+        }
+    }
+
+    private func recalculateWithCommittedTimeUpdates(_ updates: [TimelineEventTimeCommitter.EventTimeUpdate]) {
+        let updateMap = Dictionary(uniqueKeysWithValues: updates.map {
+            ($0.eventId, (start: $0.newStart, end: $0.newEnd))
+        })
+        recalculateWithDraggedSlots(updateMap)
     }
 
     private func sessionDragPreviewBlock(
