@@ -23,6 +23,7 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 ### Fixed
 
 - Commit Mode start gate now appears for eligible sessions even when start goals are optional.
+- Skipped sessions no longer count as missing Alignment in Focus & Alignment.
 - Timeline editing, feedback, undo, redo, and projected-session movement are more reliable after deeper scheduling workflow cleanup.
 - Commit Mode goal entry no longer loses focus to the review field during end-session prompts.
 
