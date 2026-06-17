@@ -89,6 +89,7 @@ class SchedulingEngine: ObservableObject {
 
     // MARK: - Scheduled Output
     @Published var projectedSessions: [ScheduledSession] = []
+    @Published var projectedSessionsDate: Date? = nil
     @Published var schedulingMessage: String = ""
     @Published var quotasSatisfied: Bool = false
     @Published var quotaCounts: (work: Int, side: Int, deep: Int) = (0, 0, 0)
@@ -331,7 +332,7 @@ class SchedulingEngine: ObservableObject {
                         startTime: start,
                         endTime: end,
                         calendarName: workCalendarName,
-                        notes: "#break"
+                        notes: ownershipTag(for: .bigRest)
                     )
                     sessions.append(bigRest)
                     bigRestCount += 1
@@ -356,7 +357,7 @@ class SchedulingEngine: ObservableObject {
                 sessionTitle = "Planning"
                 calendarName = workCalendarName
                 calendarIdentifier = workCalendarIdentifier
-                sessionTag = "#plan"
+                sessionTag = ownershipTag(for: .planning)
             } else {
                 let sessionsSinceLastDeep = regularSessionsScheduled - regularCountAtLastDeep
 
@@ -386,7 +387,7 @@ class SchedulingEngine: ObservableObject {
                      
                      calendarName = deepSessionConfig.calendarName
                      calendarIdentifier = deepSessionConfig.calendarIdentifier
-                     sessionTag = "#deep"
+                     sessionTag = ownershipTag(for: .deep)
                      isDeep = true
                  } else if sessionIndex < sessionOrder.count {
                     let proposedType = sessionOrder[sessionIndex]
@@ -404,13 +405,13 @@ class SchedulingEngine: ObservableObject {
                         sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         calendarIdentifier = workCalendarIdentifier
-                        sessionTag = "#work"
+                        sessionTag = ownershipTag(for: .work)
                     case .side:
                         sessionDuration = sideSessionDuration
                         sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         calendarIdentifier = sideCalendarIdentifier
-                        sessionTag = "#side"
+                        sessionTag = ownershipTag(for: .side)
                     case .planning, .deep, .bigRest:
                          sessionDuration = workSessionDuration
                          sessionTitle = "Unknown"
@@ -425,21 +426,21 @@ class SchedulingEngine: ObservableObject {
                         sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         calendarIdentifier = workCalendarIdentifier
-                        sessionTag = "#work"
+                        sessionTag = ownershipTag(for: .work)
                     } else if sideCount < sideSessions {
                         sessionType = .side
                         sessionDuration = sideSessionDuration
                         sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         calendarIdentifier = sideCalendarIdentifier
-                        sessionTag = "#side"
+                        sessionTag = ownershipTag(for: .side)
                     } else if deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount {
                          sessionType = .deep
                          sessionDuration = deepSessionConfig.duration
                          sessionTitle = (useDeepTasks && projectedDeepCount < deepTitles.count) ? deepTitles[projectedDeepCount] : deepSessionConfig.name
                          calendarName = deepSessionConfig.calendarName
                          calendarIdentifier = deepSessionConfig.calendarIdentifier
-                         sessionTag = "#deep"
+                         sessionTag = ownershipTag(for: .deep)
                          isDeep = true
                     } else {
                         break
@@ -687,7 +688,7 @@ class SchedulingEngine: ObservableObject {
                 endTime: potentialEnd,
                 calendarName: alternativeCalendar,
                 calendarIdentifier: alternativeCalendarIdentifier,
-                notes: alternativeType == .work ? "#work" : "#side"
+                notes: ownershipTag(for: alternativeType)
             )
         }
         
@@ -720,7 +721,7 @@ class SchedulingEngine: ObservableObject {
                             endTime: sideEnd,
                             calendarName: sideCalendarName,
                             calendarIdentifier: sideCalendarIdentifier,
-                            notes: "#side"
+                            notes: ownershipTag(for: .side)
                         )
                     }
                 }
@@ -805,7 +806,7 @@ class SchedulingEngine: ObservableObject {
                     endTime: potentialEnd,
                     calendarName: calendarName,
                     calendarIdentifier: calendarIdentifier,
-                    notes: sessionType == .work ? "#work" : "#side"
+                    notes: ownershipTag(for: sessionType)
                 )
             }
         }
@@ -838,6 +839,10 @@ class SchedulingEngine: ObservableObject {
         cleanComponents.second = 0
         cleanComponents.minute = (components.minute ?? 0) + minutesToAdd
         return calendar.date(from: cleanComponents) ?? date
+    }
+
+    private func ownershipTag(for type: SessionType) -> String {
+        SessionFlowEventSemantics.ownershipTag(for: type).rawValue
     }
     
     // MARK: - Single Session Projection
@@ -917,7 +922,7 @@ class SchedulingEngine: ObservableObject {
                 endTime: potentialEnd,
                 calendarName: calendar,
                 calendarIdentifier: calendarIdentifier,
-                notes: type == .work ? "#work" : (type == .side ? "#side" : (type == .planning ? "#plan" : "#deep"))
+                notes: ownershipTag(for: type)
             )
         }
         

@@ -95,6 +95,7 @@ final class ScheduleCoordinator {
 
     @discardableResult
     func rebuildPreview(date: Date, startTime: Date, snapshot: ScheduleDaySnapshot) -> [ScheduledSession] {
+        let wasFrozen = engine.sessionsFrozen
         _ = engine.generateSchedule(
             startTime: startTime,
             baseDate: date,
@@ -107,6 +108,9 @@ final class ScheduleCoordinator {
             ),
             existingTitles: snapshot.existingSessions.titles
         )
+        if !wasFrozen {
+            engine.projectedSessionsDate = Calendar.current.startOfDay(for: date)
+        }
         return engine.projectedSessions
     }
 
@@ -134,6 +138,10 @@ final class ScheduleCoordinator {
     func commit(date: Date) async -> (success: Int, failed: Int, eventIds: [String]) {
         syncCalendarWindow()
         let sessions = engine.projectedSessions.filter { $0.type != .bigRest }
+        guard previewMatches(date: date) else {
+            engine.schedulingMessage = "Regenerate the schedule for this day before scheduling."
+            return (0, sessions.count, [])
+        }
         let result = calendar.createSessions(sessions)
         engine.schedulingMessage = result.failed == 0
             ? "Scheduled \(result.success) sessions"
@@ -141,7 +149,15 @@ final class ScheduleCoordinator {
         engine.sessionsFrozen = false
         await calendar.fetchEvents(for: date)
         engine.projectedSessions = []
+        engine.projectedSessionsDate = nil
         return result
+    }
+
+    private func previewMatches(date: Date) -> Bool {
+        guard let previewDate = engine.projectedSessionsDate else {
+            return engine.projectedSessions.isEmpty
+        }
+        return Calendar.current.isDate(previewDate, inSameDayAs: date)
     }
 
     /// Deletes SessionFlow-tagged events on the session calendars for the day. Never touches untagged events.

@@ -74,7 +74,43 @@ extension MCPFeatureTests {
         #expect(result.success > 0)
         #expect(!calendar.createdSessions.isEmpty)
         #expect(engine.projectedSessions.isEmpty)
+        #expect(engine.projectedSessionsDate == nil)
         #expect(engine.sessionsFrozen == false)
+    }
+
+    @Test func commitRejectsPreviewFromDifferentDate() async {
+        let (coordinator, engine, calendar) = makeCoordinator { engine in
+            engine.workSessions = 2
+            engine.sideSessions = 0
+            engine.schedulePlanning = false
+        }
+        let cal = Calendar.current
+        let date = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))!
+        let otherDate = cal.date(byAdding: .day, value: 1, to: date)!
+        let start = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date)!
+
+        _ = await coordinator.regeneratePreview(date: date, startTime: start)
+        let previewCount = engine.projectedSessions.filter { $0.type != .bigRest }.count
+        let result = await coordinator.commit(date: otherDate)
+
+        #expect(result.success == 0)
+        #expect(result.failed == previewCount)
+        #expect(calendar.createdSessions.isEmpty)
+        #expect(!engine.projectedSessions.isEmpty)
+        #expect(engine.projectedSessionsDate.map { cal.isDate($0, inSameDayAs: date) } == true)
+        #expect(engine.schedulingMessage == "Regenerate the schedule for this day before scheduling.")
+    }
+
+    @Test func projectSingleSessionUsesCentralOwnershipTags() {
+        let (_, engine, _) = makeCoordinator()
+        let cal = Calendar.current
+        let date = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))!
+        let start = cal.date(bySettingHour: 9, minute: 0, second: 0, of: date)!
+
+        for type in SessionType.allCases {
+            let session = engine.projectSingleSession(type: type, startTime: start, baseDate: date, busySlots: [])
+            #expect(session?.notes == SessionFlowEventSemantics.ownershipTag(for: type).rawValue)
+        }
     }
 
     @Test func deleteFutureUsesFutureDeletion() async {
