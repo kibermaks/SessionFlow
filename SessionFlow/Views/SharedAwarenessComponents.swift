@@ -22,6 +22,61 @@ var uses12HourClock: Bool {
     return format.contains("a")
 }
 
+struct AwarenessActiveBarLayout {
+    let totalWidth: CGFloat
+    let showsMetaColumn: Bool
+    let titleMinWidth: CGFloat
+    let trailingControlsWidth: CGFloat
+    let progressPreferredMinWidth: CGFloat
+    let titleFreeSpaceShare: CGFloat
+
+    private let horizontalPadding: CGFloat = 40
+    private let dividerWidth: CGFloat = 17
+
+    init(
+        totalWidth: CGFloat,
+        showsMetaColumn: Bool,
+        titleMinWidth: CGFloat,
+        trailingControlsWidth: CGFloat,
+        progressPreferredMinWidth: CGFloat = 112,
+        titleFreeSpaceShare: CGFloat = 0.6
+    ) {
+        self.totalWidth = totalWidth
+        self.showsMetaColumn = showsMetaColumn
+        self.titleMinWidth = titleMinWidth
+        self.trailingControlsWidth = trailingControlsWidth
+        self.progressPreferredMinWidth = progressPreferredMinWidth
+        self.titleFreeSpaceShare = titleFreeSpaceShare
+    }
+
+    private var dividerCount: CGFloat {
+        showsMetaColumn ? 3 : 2
+    }
+
+    private var fixedWidth: CGFloat {
+        horizontalPadding
+            + dividerCount * dividerWidth
+            + trailingControlsWidth
+            + (showsMetaColumn ? awarenessSessionMetaColumnWidth : 0)
+    }
+
+    private var availableWidth: CGFloat {
+        max(0, totalWidth - fixedWidth)
+    }
+
+    private var flexibleWidth: CGFloat {
+        max(0, availableWidth - titleMinWidth - progressPreferredMinWidth)
+    }
+
+    var titleWidth: CGFloat {
+        min(availableWidth, titleMinWidth + flexibleWidth * titleFreeSpaceShare)
+    }
+
+    var progressWidth: CGFloat {
+        max(0, availableWidth - titleWidth)
+    }
+}
+
 func formatSessionDuration(_ interval: TimeInterval) -> String {
     let totalSeconds = max(0, Int(interval))
     let hours = totalSeconds / 3600
@@ -259,6 +314,7 @@ struct AwarenessAlignmentButton: View {
 struct AwarenessSessionInfo: View {
     @ObservedObject var awarenessService: SessionAwarenessService
     @Binding var showingEventInfo: Bool
+    var isCompact: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
     var colors: AppColors { AppColors(isDark: colorScheme == .dark) }
@@ -274,8 +330,9 @@ struct AwarenessSessionInfo: View {
                 Text(awarenessService.currentSessionTitle)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(colors.textPrimary)
-                    .lineLimit(2)
+                    .lineLimit(isCompact ? 1 : 2)
                     .truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
                 if awarenessService.config.harshModeEnabled && awarenessService.config.harshModeShowGoalsInAwareness {
                     let goals = HarshModeSessionNotes.goals(from: awarenessService.currentEventNotes)
@@ -288,8 +345,9 @@ struct AwarenessSessionInfo: View {
                             Text(goalReminderText(goals))
                                 .font(.system(size: awarenessService.config.harshModeReminderStyle == .prominent ? 12 : 11, weight: .semibold))
                                 .foregroundColor(colors.isDark ? .orange.opacity(0.95) : Color(hex: "C2410C"))
-                                .lineLimit(awarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1)
+                                .lineLimit(isCompact ? 1 : (awarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1))
                                 .truncationMode(.tail)
+                                .layoutPriority(1)
                         }
                         .padding(.horizontal, awarenessService.config.harshModeReminderStyle == .prominent ? 7 : 0)
                         .padding(.vertical, awarenessService.config.harshModeReminderStyle == .prominent ? 3 : 0)
@@ -304,8 +362,9 @@ struct AwarenessSessionInfo: View {
                         Text(notes)
                             .font(.system(size: 11))
                             .foregroundColor(colors.textMuted)
-                            .lineLimit(2)
+                            .lineLimit(isCompact ? 1 : 2)
                             .truncationMode(.tail)
+                            .layoutPriority(1)
 
                         Button {
                             showingEventInfo.toggle()
@@ -322,6 +381,8 @@ struct AwarenessSessionInfo: View {
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
         }
     }
 
@@ -604,10 +665,12 @@ struct AwarenessNextUpContent<ToggleButton: View>: View {
                         .lineLimit(1)
                 }
             }
+            .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             AwarenessCountdown(awarenessService: awarenessService)
+                .fixedSize(horizontal: true, vertical: false)
 
             AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
@@ -635,12 +698,16 @@ struct AwarenessIdleContent<ToggleButton: View>: View {
             Text("SessionFlow Awareness")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(colors.textMuted)
+                .lineLimit(1)
+                .layoutPriority(1)
 
-            Spacer()
+            Spacer(minLength: 8)
 
             Text("No sessions today")
                 .font(.system(size: 11))
                 .foregroundColor(colors.textDisabled)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
 
             AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
         }
@@ -663,23 +730,30 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
         HStack(spacing: 12) {
             toggleButton
 
-            if let feedback = awarenessService.sessionFeedbackPending {
-                if feedbackConfirmation != nil {
-                    HStack(spacing: 8) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
-                        Text("Logged!")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(colors.textSecondary)
-                    }
-                    .transition(.scale.combined(with: .opacity))
-                } else if let rating = selectedRating {
+            if feedbackConfirmation != nil {
+                HStack(spacing: 8) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
+                    Text("Logged!")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(colors.textSecondary)
+                        .lineLimit(1)
+                }
+                .layoutPriority(1)
+                .transition(.scale.combined(with: .opacity))
+
+                Spacer(minLength: 8)
+
+                AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
+            } else if let feedback = awarenessService.sessionFeedbackPending {
+                if let rating = selectedRating {
                     Text("Aligned with your goal?")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(colors.textSecondary)
                         .lineLimit(1)
+                        .layoutPriority(1)
 
-                    Spacer()
+                    Spacer(minLength: 8)
 
                     HStack(spacing: 6) {
                         ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
@@ -710,8 +784,9 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(colors.textSecondary)
                         .lineLimit(1)
+                        .layoutPriority(1)
 
-                    Spacer()
+                    Spacer(minLength: 8)
 
                     HStack(spacing: 6) {
                         AwarenessFeedbackButton(rating: .rocket) { submitFeedback($0) }

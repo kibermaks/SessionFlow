@@ -110,8 +110,8 @@ final class HarshModeWindowController: ObservableObject {
                 onSubmitGoals: { [weak awarenessService] title, goals in
                     awarenessService?.submitHarshGoals(title: title, goals: goals) ?? false
                 },
-                onSubmitReview: { [weak awarenessService] rating, alignment, reflection, goals in
-                    awarenessService?.submitHarshReview(rating: rating, alignment: alignment, reflection: reflection, goals: goals) ?? false
+                onSubmitReview: { [weak awarenessService] title, rating, alignment, reflection, goals in
+                    awarenessService?.submitHarshReview(title: title, rating: rating, alignment: alignment, reflection: reflection, goals: goals) ?? false
                 },
                 onDelayPrompt: { [weak awarenessService] minutes in
                     awarenessService?.submitHarshDelay(minutes: minutes) ?? false
@@ -366,6 +366,11 @@ private struct HarshModeSuggestionList: View {
     }
 }
 
+private enum HarshModeFocusedTextArea {
+    case goals
+    case review
+}
+
 private struct HarshModeOverlayView: View {
     let prompt: HarshModePrompt
     @ObservedObject var awarenessService: SessionAwarenessService
@@ -376,12 +381,14 @@ private struct HarshModeOverlayView: View {
     let panelID: UUID
     let onActivate: () -> Void
     let onSubmitGoals: (String, [String]) -> Bool
-    let onSubmitReview: (SessionRating?, SessionAlignment?, String, [String]) -> Bool
+    let onSubmitReview: (String, SessionRating?, SessionAlignment?, String, [String]) -> Bool
     let onDelayPrompt: (Int) -> Bool
     let onEmergencyBreak: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
     @FocusState private var isTitleFocused: Bool
+    @State private var isTitleInlineEditing = false
+    @State private var focusedTextArea: HarshModeFocusedTextArea?
     @State private var titleSuggestionsVisible = false
     @State private var goalSuggestionsVisible = false
     @State private var goalsAreFocused = false
@@ -393,7 +400,7 @@ private struct HarshModeOverlayView: View {
         panelID: UUID,
         onActivate: @escaping () -> Void,
         onSubmitGoals: @escaping (String, [String]) -> Bool,
-        onSubmitReview: @escaping (SessionRating?, SessionAlignment?, String, [String]) -> Bool,
+        onSubmitReview: @escaping (String, SessionRating?, SessionAlignment?, String, [String]) -> Bool,
         onDelayPrompt: @escaping (Int) -> Bool,
         onEmergencyBreak: @escaping () -> Void
     ) {
@@ -421,8 +428,16 @@ private struct HarshModeOverlayView: View {
         HarshModeSessionNotes.goalLines(from: state.goalsText)
     }
 
-    private var canSubmitGoals: Bool {
+    private var startGoalsRequired: Bool {
+        awarenessService.config.harshModeRequireStartGoals
+    }
+
+    private var hasRequiredStartGoals: Bool {
         goalLines.count >= max(1, awarenessService.config.harshModeMinimumGoals)
+    }
+
+    private var canSubmitGoals: Bool {
+        !startGoalsRequired || hasRequiredStartGoals
     }
 
     private var canSubmitReview: Bool {
@@ -516,8 +531,13 @@ private struct HarshModeOverlayView: View {
         .preferredColorScheme(.dark)
         .focusEffectDisabled()
         .onAppear {
-            if prompt.phase == .start && isActivePanel {
-                isTitleFocused = true
+            if isActivePanel {
+                focusDefaultField()
+            }
+        }
+        .onChange(of: isActivePanel) { _, active in
+            if active {
+                focusDefaultField()
             }
         }
     }
@@ -687,11 +707,11 @@ private struct HarshModeOverlayView: View {
 
     private var taskFocus: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(state.titleText.isEmpty ? prompt.sessionTitle : state.titleText)
-                .font(.system(size: 24, weight: .bold, design: .rounded))
-                .foregroundColor(.primary)
-                .lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
+            if isTitleInlineEditing {
+                inlineTitleEditor
+            } else {
+                titleDisplay
+            }
 
             Text(prompt.phase == .start ? "Decide what this session is for." : "Close the loop before moving on.")
                 .font(.system(size: 13, weight: .medium))
@@ -699,57 +719,93 @@ private struct HarshModeOverlayView: View {
         }
     }
 
+    private var titleDisplay: some View {
+        Text(state.titleText.isEmpty ? prompt.sessionTitle : state.titleText)
+            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .foregroundColor(.primary)
+            .lineLimit(3)
+            .fixedSize(horizontal: false, vertical: true)
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                beginTitleInlineEdit()
+            }
+            .help("Double-click to edit session title")
+    }
+
+    private var inlineTitleEditor: some View {
+        TextField("Session title", text: $state.titleText)
+            .textFieldStyle(.plain)
+            .font(.system(size: 24, weight: .bold, design: .rounded))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.22))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(blockerAccent.opacity(0.46), lineWidth: 1)
+            )
+            .focused($isTitleFocused)
+            .onSubmit(finishTitleInlineEdit)
+            .onChange(of: isTitleFocused) { _, focused in
+                if !focused && isTitleInlineEditing {
+                    finishTitleInlineEdit()
+                }
+            }
+    }
+
     private var startForm: some View {
         VStack(alignment: .leading, spacing: 12) {
             nextTaskRow
 
-            VStack(alignment: .leading, spacing: 8) {
-                Label("Session title", systemImage: "textformat")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(.primary)
+            if !isTitleInlineEditing {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Session title", systemImage: "textformat")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.primary)
 
-                TextField("Session title", text: $state.titleText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15, weight: .semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 9)
-                    .background(Color.black.opacity(0.22))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.14), lineWidth: 1)
-                    )
-                    .focused($isTitleFocused)
-                    .onTapGesture {
-                        titleSuggestionsVisible = true
-                    }
-                    .onSubmit(submitGoals)
-                    .onChange(of: isTitleFocused) { _, focused in
-                        if focused {
+                    TextField("Session title", text: $state.titleText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15, weight: .semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .background(Color.black.opacity(0.22))
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                        )
+                        .focused($isTitleFocused)
+                        .onTapGesture {
                             titleSuggestionsVisible = true
-                        } else {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                                if !isTitleFocused {
-                                    titleSuggestionsVisible = false
+                        }
+                        .onSubmit(submitGoals)
+                        .onChange(of: isTitleFocused) { _, focused in
+                            if focused {
+                                titleSuggestionsVisible = true
+                            } else {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                    if !isTitleFocused {
+                                        titleSuggestionsVisible = false
+                                    }
                                 }
                             }
                         }
-                    }
-                    .overlay(alignment: .topLeading) {
-                        if titleSuggestionsVisible && !titleSuggestions.isEmpty {
-                            HarshModeSuggestionList(
-                                suggestions: titleSuggestions,
-                                accentColor: blockerAccent,
-                                onSelect: applyTitleSuggestion
-                            )
-                            .frame(maxWidth: .infinity)
-                            .offset(y: 42)
-                            .zIndex(20)
+                        .overlay(alignment: .topLeading) {
+                            if titleSuggestionsVisible && !titleSuggestions.isEmpty {
+                                HarshModeSuggestionList(
+                                    suggestions: titleSuggestions,
+                                    accentColor: blockerAccent,
+                                    onSelect: applyTitleSuggestion
+                                )
+                                .frame(maxWidth: .infinity)
+                                .offset(y: 42)
+                                .zIndex(20)
+                            }
                         }
-                    }
-                    .zIndex(titleSuggestionsVisible ? 20 : 0)
+                        .zIndex(titleSuggestionsVisible ? 20 : 0)
+                }
+                .zIndex(titleSuggestionsVisible ? 100 : 0)
             }
-            .zIndex(titleSuggestionsVisible ? 100 : 0)
 
             HStack {
                 Label("Goals for this session", systemImage: "scope")
@@ -775,11 +831,16 @@ private struct HarshModeOverlayView: View {
             HarshModeTextArea(
                 text: $state.goalsText,
                 fontSize: 16,
-                isFocused: false,
+                isFocused: focusedTextArea == .goals,
                 canSubmit: canSubmitGoals,
                 onSubmit: submitGoals,
                 onFocusChange: { focused in
                     goalsAreFocused = focused
+                    if focused {
+                        focusedTextArea = .goals
+                    } else if focusedTextArea == .goals {
+                        focusedTextArea = nil
+                    }
                     if focused {
                         goalSuggestionsVisible = true
                     } else {
@@ -826,7 +887,7 @@ private struct HarshModeOverlayView: View {
             .zIndex(goalSuggestionsVisible ? 100 : 0)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("One goal per line. Minimum: \(max(1, awarenessService.config.harshModeMinimumGoals)). Saved into this Calendar event.")
+                Text(startGoalRequirementText)
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
 
@@ -853,9 +914,16 @@ private struct HarshModeOverlayView: View {
                 HarshModeTextArea(
                     text: $state.goalsText,
                     fontSize: 14,
-                    isFocused: false,
+                    isFocused: focusedTextArea == .goals,
                     canSubmit: false,
-                    onSubmit: {}
+                    onSubmit: {},
+                    onFocusChange: { focused in
+                        if focused {
+                            focusedTextArea = .goals
+                        } else if focusedTextArea == .goals {
+                            focusedTextArea = nil
+                        }
+                    }
                 )
                 .padding(10)
                 .frame(height: 64)
@@ -899,9 +967,16 @@ private struct HarshModeOverlayView: View {
                 HarshModeTextArea(
                     text: $state.reflectionText,
                     fontSize: 14,
-                    isFocused: isActivePanel,
+                    isFocused: focusedTextArea == .review,
                     canSubmit: canSubmitReview,
-                    onSubmit: submitReview
+                    onSubmit: submitReview,
+                    onFocusChange: { focused in
+                        if focused {
+                            focusedTextArea = .review
+                        } else if focusedTextArea == .review {
+                            focusedTextArea = nil
+                        }
+                    }
                 )
                 .padding(10)
                 .frame(height: 72)
@@ -1057,6 +1132,51 @@ private struct HarshModeOverlayView: View {
         }
     }
 
+    private var startGoalRequirementText: String {
+        if startGoalsRequired {
+            return "One goal per line. Minimum: \(max(1, awarenessService.config.harshModeMinimumGoals)). Saved into this Calendar event."
+        }
+        return "Goals are optional. Add one per line to save them into this Calendar event."
+    }
+
+    private var titleRequiredMessage: String {
+        prompt.phase == .start ? "Keep a session title before starting." : "Keep a session title before closing."
+    }
+
+    private func focusDefaultField() {
+        if prompt.phase == .start {
+            focusedTextArea = nil
+            isTitleFocused = true
+        } else if focusedTextArea == nil && !isTitleInlineEditing {
+            isTitleFocused = false
+            focusedTextArea = .review
+        }
+    }
+
+    private func beginTitleInlineEdit() {
+        isTitleInlineEditing = true
+        focusedTextArea = nil
+        titleSuggestionsVisible = false
+        goalSuggestionsVisible = false
+        DispatchQueue.main.async {
+            isTitleFocused = true
+        }
+    }
+
+    private func finishTitleInlineEdit() {
+        let cleanedTitle = state.titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanedTitle.isEmpty else {
+            state.errorMessage = titleRequiredMessage
+            DispatchQueue.main.async {
+                isTitleFocused = true
+            }
+            return
+        }
+        state.titleText = cleanedTitle
+        state.errorMessage = nil
+        isTitleInlineEditing = false
+    }
+
     private func ratingButton(_ rating: SessionRating) -> some View {
         let isSelected = state.selectedRating == rating
         let color = awarenessRatingColor(rating, isDark: true)
@@ -1133,6 +1253,12 @@ private struct HarshModeOverlayView: View {
     }
 
     private func submitReview() {
+        let title = state.titleText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else {
+            state.errorMessage = "Keep a session title before closing."
+            beginTitleInlineEdit()
+            return
+        }
         guard canSubmitReview else {
             if awarenessService.config.harshModeRequireEndRating && state.selectedRating == nil {
                 state.errorMessage = "Choose a Focus rating before stopping."
@@ -1143,7 +1269,9 @@ private struct HarshModeOverlayView: View {
             }
             return
         }
-        state.errorMessage = onSubmitReview(state.selectedRating, state.selectedAlignment, state.reflectionText, goalLines) ? nil : "Could not save review to Calendar."
+        state.titleText = title
+        isTitleInlineEditing = false
+        state.errorMessage = onSubmitReview(title, state.selectedRating, state.selectedAlignment, state.reflectionText, goalLines) ? nil : "Could not save review to Calendar."
     }
 
     private func applyTitleSuggestion(_ suggestion: String) {

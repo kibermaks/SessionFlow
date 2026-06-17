@@ -32,6 +32,53 @@ struct TimelineEventContentTests {
         ))
     }
 
+    @Test func notesUpdatePreservesHarshGoalsWhenSavingEditedNotes() {
+        let existingNotes = HarshModeSessionNotes.applyingGoals(
+            ["Ship paid work", "Write recap"],
+            to: "#work Original notes \(SessionRating.completed.tag)"
+        )
+
+        let update = TimelineEventContent.notesUpdate(
+            editedText: "#work Edited notes",
+            originalText: "#work Original notes",
+            existingNotes: existingNotes,
+            isFlowFlexible: true
+        )
+
+        #expect(TimelineEventContent.detailEditableNotes(from: update?.notesToSave) == "#work Edited notes")
+        #expect(HarshModeSessionNotes.goals(from: update?.notesToSave) == ["Ship paid work", "Write recap"])
+        #expect(HarshModeSessionNotes.goals(from: update?.oldNotesForUndo) == ["Ship paid work", "Write recap"])
+    }
+
+    @Test func goalsUpdateReplacesGoalsAndPreservesUserNotesAndReviewTags() {
+        let existingNotes = HarshModeSessionNotes.applyingGoals(
+            ["Old goal"],
+            to: "#work Client notes \(SessionRating.completed.tag) \(SessionAlignment.direct.tag)"
+        )
+
+        let update = TimelineEventContent.goalsUpdate(
+            editedText: "New goal\nSecond goal",
+            originalText: "Old goal",
+            existingNotes: existingNotes,
+            isFlowFlexible: true
+        )
+
+        #expect(TimelineEventContent.detailEditableNotes(from: update?.notesToSave) == "#work Client notes")
+        #expect(HarshModeSessionNotes.goals(from: update?.notesToSave) == ["New goal", "Second goal"])
+        #expect(SessionRating.fromNotes(update?.notesToSave) == .completed)
+        #expect(SessionAlignment.fromNotes(update?.notesToSave) == .direct)
+        #expect(update?.oldNotesForUndo == existingNotes)
+    }
+
+    @Test func goalsUpdateReturnsNilWhenGoalLinesDoNotChange() {
+        #expect(TimelineEventContent.goalsUpdate(
+            editedText: "Same goal",
+            originalText: "Same goal",
+            existingNotes: HarshModeSessionNotes.applyingGoals(["Same goal"], to: "#work Notes"),
+            isFlowFlexible: true
+        ) == nil)
+    }
+
     @Test func notesUpdateAddsFlexibleTagWhenEditedNotesNoLongerContainOwnershipTag() {
         let update = TimelineEventContent.notesUpdate(
             editedText: "Edited external notes",

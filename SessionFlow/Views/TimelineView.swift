@@ -1568,18 +1568,12 @@ extension TimelineView {
                             .padding(.trailing, showsFeedbackBadge ? 16 : 0)
                     }
                 } else {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        flowFlexibilityIndicator(for: slot, size: 11)
-                        Text(slot.title)
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(colors.textPrimary)
-                            .lineLimit(showsGoalReminder ? 1 : nil)
-                            .fixedSize(horizontal: false, vertical: !showsGoalReminder)
-
-                        if showsGoalReminder {
-                            busySlotGoalReminder(goals, inline: true)
-                        }
-                    }
+                    busySlotHeader(
+                        for: slot,
+                        goals: goals,
+                        blockHeight: blockHeight,
+                        allowsStackedGoalReminder: blockHeight >= 54
+                    )
 
                     Text(startAndDurationString(start: slot.startTime, end: slot.endTime))
                         .font(.system(size: 10))
@@ -1781,8 +1775,57 @@ extension TimelineView {
         }
     }
 
-    private func busySlotGoalReminder(_ goals: [String], inline: Bool = false, compact: Bool = false) -> some View {
-        HStack(alignment: .center, spacing: 4) {
+    @ViewBuilder
+    private func busySlotHeader(
+        for slot: BusyTimeSlot,
+        goals: [String],
+        blockHeight: CGFloat,
+        allowsStackedGoalReminder: Bool
+    ) -> some View {
+        if !goals.isEmpty && allowsStackedGoalReminder {
+            ViewThatFits(in: .horizontal) {
+                busySlotInlineHeader(for: slot, goals: goals)
+                busySlotStackedHeader(for: slot, goals: goals, blockHeight: blockHeight)
+            }
+        } else {
+            busySlotInlineHeader(for: slot, goals: goals)
+        }
+    }
+
+    private func busySlotInlineHeader(for slot: BusyTimeSlot, goals: [String]) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            flowFlexibilityIndicator(for: slot, size: 11)
+            Text(slot.title)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(colors.textPrimary)
+                .lineLimit(goals.isEmpty ? nil : 1)
+                .fixedSize(horizontal: false, vertical: goals.isEmpty)
+
+            if !goals.isEmpty {
+                busySlotGoalReminder(goals, inline: true)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+    }
+
+    private func busySlotStackedHeader(for slot: BusyTimeSlot, goals: [String], blockHeight: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                flowFlexibilityIndicator(for: slot, size: 11)
+                Text(slot.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(colors.textPrimary)
+                    .lineLimit(1)
+            }
+
+            busySlotGoalReminder(goals, lineLimit: blockHeight >= 86 ? 3 : 2)
+        }
+    }
+
+    private func busySlotGoalReminder(_ goals: [String], inline: Bool = false, compact: Bool = false, lineLimit: Int? = nil) -> some View {
+        let resolvedLineLimit = lineLimit ?? (inline ? 1 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1))
+
+        return HStack(alignment: inline ? .center : .top, spacing: 4) {
             Image(systemName: "scope")
                 .font(.system(size: compact ? 8 : 9, weight: .semibold))
                 .foregroundColor(busySlotGoalColor)
@@ -1791,9 +1834,11 @@ extension TimelineView {
             Text(busySlotGoalReminderText(goals))
                 .font(.system(size: compact ? 8 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 10 : 9), weight: .semibold))
                 .foregroundColor(busySlotGoalColor)
-                .lineLimit(inline ? 1 : (sessionAwarenessService.config.harshModeReminderStyle == .prominent ? 2 : 1))
+                .lineLimit(resolvedLineLimit)
                 .truncationMode(.tail)
+                .fixedSize(horizontal: false, vertical: !inline)
         }
+        .frame(maxWidth: inline ? nil : .infinity, alignment: .leading)
         .padding(.horizontal, sessionAwarenessService.config.harshModeReminderStyle == .prominent ? (compact ? 3 : 5) : 0)
         .padding(.vertical, sessionAwarenessService.config.harshModeReminderStyle == .prominent && !compact ? 2 : 0)
         .background(busySlotGoalBackground)
@@ -2256,6 +2301,70 @@ extension TimelineView {
                 .contentShape(Rectangle())
                 .help(flexibilityHelpText(for: slot))
 
+                // Goals section with inline editing
+                VStack(alignment: .leading, spacing: 4) {
+                    Divider().background(colors.divider)
+
+                    if inlineEditor.goals.isEditing {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Goals:")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundColor(colors.textSecondary)
+                            TextEditor(text: $inlineEditor.goals.draft)
+                                .font(.system(size: 12))
+                                .foregroundColor(colors.textPrimary)
+                                .scrollContentBackground(.hidden)
+                                .background(colors.subtleBackground)
+                                .cornerRadius(4)
+                                .frame(minHeight: 52, maxHeight: 92)
+                                .focused($focusedField, equals: .goals)
+                                .onKeyPress(.escape) {
+                                    cancelGoalsEdit()
+                                    return .handled
+                                }
+                                .onKeyPress(phases: .down) { press in
+                                    if press.key == .return && press.modifiers.contains(.command) {
+                                        saveGoals(for: slot)
+                                        return .handled
+                                    }
+                                    return .ignored
+                                }
+                        }
+                    } else {
+                        let goals = HarshModeSessionNotes.goals(from: slot.notes)
+                        if !goals.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Goals:")
+                                    .font(.system(size: 12, weight: .bold))
+                                Text(goals.joined(separator: "\n"))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(colors.textSecondary)
+                                    .lineLimit(3)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                inlineEditor.begin(.goals, original: goals.joined(separator: "\n"))
+                                focusedField = .goals
+                            }
+                        } else {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle")
+                                    .font(.system(size: 11))
+                                Text("Add goal")
+                                    .font(.system(size: 12))
+                            }
+                            .foregroundColor(colors.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                inlineEditor.begin(.goals, original: "")
+                                focusedField = .goals
+                            }
+                        }
+                    }
+                }
+
                 // Notes section with inline editing
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
@@ -2405,6 +2514,9 @@ extension TimelineView {
             if oldValue == .title && newValue != .title && inlineEditor.title.isEditing {
                 saveTitle(for: slot)
             }
+            if oldValue == .goals && newValue != .goals && inlineEditor.goals.isEditing {
+                saveGoals(for: slot)
+            }
             if oldValue == .notes && newValue != .notes && inlineEditor.notes.isEditing {
                 saveNotes(for: slot)
             }
@@ -2419,6 +2531,9 @@ extension TimelineView {
                 case .title:
                     inlineEditor.begin(.title, original: slot.title)
                     focusedField = .title
+                case .goals:
+                    inlineEditor.begin(.goals, original: HarshModeSessionNotes.goals(from: slot.notes).joined(separator: "\n"))
+                    focusedField = .goals
                 case .notes:
                     let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
                     inlineEditor.begin(.notes, original: stripped)
@@ -3099,6 +3214,10 @@ extension TimelineView {
         saveInlineEdit(.title, for: slot)
     }
 
+    private func saveGoals(for slot: BusyTimeSlot) {
+        saveInlineEdit(.goals, for: slot)
+    }
+
     private func saveNotes(for slot: BusyTimeSlot) {
         saveInlineEdit(.notes, for: slot)
     }
@@ -3219,6 +3338,12 @@ extension TimelineView {
         focusedField = nil
         // onChange(of: focusedField) fires on the next runloop; clear the guard
         // after it has had a chance to run.
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
+    }
+
+    private func cancelGoalsEdit() {
+        inlineEditor.cancel(.goals)
+        focusedField = nil
         DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 

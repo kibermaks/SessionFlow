@@ -14,6 +14,18 @@ struct SessionAwarenessPanel: View {
     @State private var feedbackConfirmation: SessionRating? = nil
     @State private var flashOpacity: Double = 0
     @State private var flashColor: Color = .clear
+    @State private var totalWidth: CGFloat = 0
+
+    private let activeTrailingControlsWidth: CGFloat = 180
+    private var activeLayout: AwarenessActiveBarLayout {
+        AwarenessActiveBarLayout(
+            totalWidth: totalWidth,
+            showsMetaColumn: true,
+            titleMinWidth: 220,
+            trailingControlsWidth: activeTrailingControlsWidth,
+            progressPreferredMinWidth: 220
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,6 +41,11 @@ struct SessionAwarenessPanel: View {
                 idleBar
             }
         }
+        .background(
+            GeometryReader { geo in
+                Color.clear.task(id: geo.size.width) { totalWidth = geo.size.width }
+            }
+        )
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isActive)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.isResting)
         .animation(.easeInOut(duration: 0.3), value: awarenessService.sessionFeedbackPending?.id)
@@ -53,7 +70,7 @@ struct SessionAwarenessPanel: View {
                 collapseButton
                 AwarenessSessionInfo(awarenessService: awarenessService, showingEventInfo: $showingEventInfo)
             }
-            .frame(minWidth: 200, maxWidth: 280, alignment: .leading)
+            .frame(width: activeLayout.titleWidth, alignment: .leading)
 
             AwarenessDivider()
 
@@ -64,6 +81,7 @@ struct SessionAwarenessPanel: View {
 
             AwarenessProgressBar(awarenessService: awarenessService)
                 .padding(.horizontal, 12)
+                .frame(width: activeLayout.progressWidth)
 
             AwarenessDivider()
 
@@ -72,8 +90,9 @@ struct SessionAwarenessPanel: View {
                 AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
             }
-            .frame(width: 180, alignment: .trailing)
+            .frame(width: activeTrailingControlsWidth, alignment: .trailing)
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .background(

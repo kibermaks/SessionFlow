@@ -50,6 +50,7 @@ class SessionAudioService: ObservableObject {
     private var previewPausedConfig: SessionSoundConfig?
     private var previewPausedShouldPlay = false
     private var previewPausedRate: Float = 1.0
+    private var ambientResumePlaybackRate: Float = 1.0
 
     private var deviceListenerBlock: AudioObjectPropertyListenerBlock?
 
@@ -169,6 +170,7 @@ class SessionAudioService: ObservableObject {
         audioRouteIsRecovering = false
         previewPausedConfig = nil
         previewPausedShouldPlay = false
+        ambientResumePlaybackRate = 1.0
         applyPlaybackRate(1.0)
         updateAudioActivity()
 
@@ -189,14 +191,21 @@ class SessionAudioService: ObservableObject {
 
     // MARK: - Ambient Playback
 
-    func playAmbient(config: SessionSoundConfig, ignoreMute: Bool = false) {
+    func playAmbient(config: SessionSoundConfig, ignoreMute: Bool = false, initialPlaybackRate: Float? = nil) {
         ambientPlaybackGeneration += 1
-        playAmbient(config: config, ignoreMute: ignoreMute, attempt: 0, generation: ambientPlaybackGeneration)
+        playAmbient(
+            config: config,
+            ignoreMute: ignoreMute,
+            initialPlaybackRate: initialPlaybackRate ?? 1.0,
+            attempt: 0,
+            generation: ambientPlaybackGeneration
+        )
     }
 
     private func playAmbient(
         config: SessionSoundConfig,
         ignoreMute: Bool,
+        initialPlaybackRate: Float,
         attempt: Int,
         generation: Int
     ) {
@@ -222,6 +231,7 @@ class SessionAudioService: ObservableObject {
             scheduleAmbientRestart(
                 config: config,
                 ignoreMute: ignoreMute,
+                initialPlaybackRate: initialPlaybackRate,
                 nextAttempt: attempt + 1,
                 generation: generation,
                 reason: "audio route is recovering"
@@ -235,6 +245,7 @@ class SessionAudioService: ObservableObject {
             handleAmbientStartFailure(
                 config: config,
                 ignoreMute: ignoreMute,
+                initialPlaybackRate: initialPlaybackRate,
                 attempt: attempt,
                 generation: generation,
                 reason: "unable to load ambient buffer"
@@ -247,6 +258,7 @@ class SessionAudioService: ObservableObject {
             handleAmbientStartFailure(
                 config: config,
                 ignoreMute: ignoreMute,
+                initialPlaybackRate: initialPlaybackRate,
                 attempt: attempt,
                 generation: generation,
                 reason: "invalid ambient buffer format"
@@ -260,7 +272,7 @@ class SessionAudioService: ObservableObject {
         ambientEngine.connect(varispeedNode, to: ambientEngine.mainMixerNode, format: buffer.format)
         ambientPlayerNode.volume = config.volume
         ambientEngine.mainMixerNode.outputVolume = masterVolume
-        applyPlaybackRate(1.0)
+        applyPlaybackRate(initialPlaybackRate)
 
         do {
             ambientEngine.prepare()
@@ -269,6 +281,7 @@ class SessionAudioService: ObservableObject {
                 handleAmbientStartFailure(
                     config: config,
                     ignoreMute: ignoreMute,
+                    initialPlaybackRate: initialPlaybackRate,
                     attempt: attempt,
                     generation: generation,
                     reason: "ambient engine did not remain running"
@@ -281,6 +294,7 @@ class SessionAudioService: ObservableObject {
                 handleAmbientStartFailure(
                     config: config,
                     ignoreMute: ignoreMute,
+                    initialPlaybackRate: initialPlaybackRate,
                     attempt: attempt,
                     generation: generation,
                     reason: exceptionReason
@@ -294,6 +308,7 @@ class SessionAudioService: ObservableObject {
             handleAmbientStartFailure(
                 config: config,
                 ignoreMute: ignoreMute,
+                initialPlaybackRate: initialPlaybackRate,
                 attempt: attempt,
                 generation: generation,
                 reason: "\(error)"
@@ -302,7 +317,7 @@ class SessionAudioService: ObservableObject {
     }
 
     /// Update ambient sound dynamically (e.g. when user changes settings mid-session)
-    func updateAmbientIfPlaying(config: SessionSoundConfig) {
+    func updateAmbientIfPlaying(config: SessionSoundConfig, initialPlaybackRate: Float? = nil) {
         guard shouldBePlayingAmbient || isPlaying else { return }
 
         if currentAmbientConfig?.sound != config.sound || currentAmbientConfig?.isPlayable != config.isPlayable {
@@ -310,12 +325,17 @@ class SessionAudioService: ObservableObject {
             if !config.isPlayable {
                 stopAmbient()
             } else {
-                playAmbient(config: config)
+                playAmbient(config: config, initialPlaybackRate: initialPlaybackRate)
             }
         } else if currentAmbientConfig?.volume != config.volume {
             // Volume only — adjust directly without engine restart
             ambientPlayerNode.volume = config.volume
             currentAmbientConfig = config
+            if let initialPlaybackRate {
+                applyPlaybackRate(initialPlaybackRate)
+            }
+        } else if let initialPlaybackRate {
+            applyPlaybackRate(initialPlaybackRate)
         }
     }
 
@@ -324,27 +344,35 @@ class SessionAudioService: ObservableObject {
         applyPlaybackRate(rate)
     }
 
-    private func applyPlaybackRate(_ rate: Float) {
-        let clampedRate = min(max(rate, 0.25), 4.0)
+    static func playbackRate(progress: Double, accelerando: AccelerandoConfig) -> Float {
+        guard accelerando.enabled else {
+            return Float(accelerando.maxMultiplier)
+        }
+        // Accelerando ramps toward 1.0:
+        //   speed > 1.0: starts at 1.0, ends at maxMultiplier
+        //   speed < 1.0: starts at maxMultiplier, ends at 1.0
+        let boundedProgress = min(1.0, max(0.0, progress))
+        let startRate = min(accelerando.maxMultiplier, 1.0)
+        let endRate = max(accelerando.maxMultiplier, 1.0)
+        return Float(startRate + (endRate - startRate) * boundedProgress)
+    }
+
+    private static func clampedPlaybackRate(_ rate: Float) -> Float {
+        min(max(rate, 0.25), 4.0)
+    }
+
+    private func applyPlaybackRate(_ rate: Float, rememberForResume: Bool = true) {
+        let clampedRate = Self.clampedPlaybackRate(rate)
+        if rememberForResume {
+            ambientResumePlaybackRate = clampedRate
+        }
         guard abs(varispeedNode.rate - clampedRate) >= 0.001 else { return }
         varispeedNode.rate = clampedRate
     }
 
     /// Update playback rate for accelerando effect
     func updatePlaybackRate(progress: Double, accelerando: AccelerandoConfig) {
-        guard accelerando.enabled else {
-            // When not accelerating, use the fixed multiplier as constant speed
-            let fixedRate = Float(accelerando.maxMultiplier)
-            applyPlaybackRate(fixedRate)
-            return
-        }
-        // Accelerando ramps toward 1.0:
-        //   speed > 1.0: starts at 1.0, ends at maxMultiplier
-        //   speed < 1.0: starts at maxMultiplier, ends at 1.0
-        let startRate = min(accelerando.maxMultiplier, 1.0)
-        let endRate = max(accelerando.maxMultiplier, 1.0)
-        let rate = Float(startRate + (endRate - startRate) * progress)
-        applyPlaybackRate(rate)
+        applyPlaybackRate(Self.playbackRate(progress: progress, accelerando: accelerando))
     }
 
     func stopAmbient() {
@@ -352,11 +380,13 @@ class SessionAudioService: ObservableObject {
         stopAmbientInternal()
         shouldBePlayingAmbient = false
         currentAmbientConfig = nil
+        ambientResumePlaybackRate = 1.0
         updateAudioActivity()
     }
 
     /// Stops playback but preserves shouldBePlayingAmbient + currentAmbientConfig so unmute can resume
     private func muteAmbient() {
+        ambientResumePlaybackRate = varispeedNode.rate
         stopAmbientInternal()
         updateAudioActivity()
     }
@@ -364,7 +394,7 @@ class SessionAudioService: ObservableObject {
     /// Stops engine/player without clearing state (used internally before restarting)
     private func stopAmbientInternal() {
         ambientPlayerNode.stop()
-        applyPlaybackRate(1.0)
+        applyPlaybackRate(1.0, rememberForResume: false)
         if ambientEngine.isRunning {
             ambientEngine.stop()
         }
@@ -374,12 +404,13 @@ class SessionAudioService: ObservableObject {
 
     private func resumeAmbient() {
         guard let config = currentAmbientConfig, config.isPlayable else { return }
-        playAmbient(config: config)
+        playAmbient(config: config, initialPlaybackRate: ambientResumePlaybackRate)
     }
 
     private func handleAmbientStartFailure(
         config: SessionSoundConfig,
         ignoreMute: Bool,
+        initialPlaybackRate: Float,
         attempt: Int,
         generation: Int,
         reason: String
@@ -393,6 +424,7 @@ class SessionAudioService: ObservableObject {
         scheduleAmbientRestart(
             config: config,
             ignoreMute: ignoreMute,
+            initialPlaybackRate: initialPlaybackRate,
             nextAttempt: attempt + 1,
             generation: generation,
             reason: reason
@@ -402,6 +434,7 @@ class SessionAudioService: ObservableObject {
     private func scheduleAmbientRestart(
         config: SessionSoundConfig,
         ignoreMute: Bool,
+        initialPlaybackRate: Float,
         nextAttempt: Int,
         generation: Int,
         reason: String
@@ -429,6 +462,7 @@ class SessionAudioService: ObservableObject {
             self.playAmbient(
                 config: config,
                 ignoreMute: ignoreMute,
+                initialPlaybackRate: initialPlaybackRate,
                 attempt: nextAttempt,
                 generation: generation
             )
@@ -561,8 +595,7 @@ class SessionAudioService: ObservableObject {
         currentAmbientConfig = config
         shouldBePlayingAmbient = true
         if !isMuted {
-            playAmbient(config: config)
-            setFixedPlaybackRate(savedRate)
+            playAmbient(config: config, initialPlaybackRate: savedRate)
         }
     }
 

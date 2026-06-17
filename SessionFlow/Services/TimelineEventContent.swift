@@ -17,7 +17,9 @@ enum TimelineEventContent {
 
     static func detailEditableNotes(from notes: String?) -> String? {
         FlowFlexibilityNotes.strippingTags(
-            from: SessionAlignment.stripAlignmentTags(SessionRating.stripFeedbackTags(notes))
+            from: HarshModeSessionNotes.removingManagedBlocks(
+                from: SessionAlignment.stripAlignmentTags(SessionRating.stripFeedbackTags(notes))
+            )
         )
     }
 
@@ -34,8 +36,29 @@ enum TimelineEventContent {
 
         let finalNotes = (normalizedNew ?? "") + reviewTagSuffix(from: existingNotes)
         let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
-        let notesToSave = FlowFlexibilityNotes.applyingFlexible(isFlowFlexible, to: trimmedNotes)
-        let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(isFlowFlexible, to: normalizedOriginal)
+        let notesWithFlexibility = FlowFlexibilityNotes.applyingFlexible(isFlowFlexible, to: trimmedNotes)
+        let notesToSave = applyingExistingGoals(from: existingNotes, to: notesWithFlexibility)
+        let oldNotesWithFlexibility = FlowFlexibilityNotes.applyingFlexible(isFlowFlexible, to: normalizedOriginal)
+        let oldNotesForUndo = applyingExistingGoals(from: existingNotes, to: oldNotesWithFlexibility)
+
+        return NotesUpdate(notesToSave: notesToSave, oldNotesForUndo: oldNotesForUndo)
+    }
+
+    static func goalsUpdate(
+        editedText: String,
+        originalText: String,
+        existingNotes: String?,
+        isFlowFlexible: Bool
+    ) -> NotesUpdate? {
+        let newGoals = HarshModeSessionNotes.goalLines(from: editedText)
+        let originalGoals = HarshModeSessionNotes.goalLines(from: originalText)
+
+        guard newGoals != originalGoals else { return nil }
+
+        let notesWithoutGoals = HarshModeSessionNotes.applyingGoals([], to: existingNotes)
+        let notesWithFlexibility = FlowFlexibilityNotes.applyingFlexible(isFlowFlexible, to: notesWithoutGoals)
+        let notesToSave = HarshModeSessionNotes.applyingGoals(newGoals, to: notesWithFlexibility)
+        let oldNotesForUndo = existingNotes
 
         return NotesUpdate(notesToSave: notesToSave, oldNotesForUndo: oldNotesForUndo)
     }
@@ -75,6 +98,12 @@ enum TimelineEventContent {
         case .prominent:
             return goals.prefix(2).joined(separator: " / ")
         }
+    }
+
+    private static func applyingExistingGoals(from sourceNotes: String?, to notes: String?) -> String? {
+        let goals = HarshModeSessionNotes.goals(from: sourceNotes)
+        guard !goals.isEmpty else { return notes }
+        return HarshModeSessionNotes.applyingGoals(goals, to: notes)
     }
 
     private static func reviewTagSuffix(from notes: String?) -> String {

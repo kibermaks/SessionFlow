@@ -2,6 +2,7 @@ import Foundation
 
 enum TimelineInlineEditField: Hashable {
     case title
+    case goals
     case notes
     case url
 }
@@ -25,6 +26,7 @@ struct TimelineInlineEditor: Equatable {
     }
 
     var title = TextEdit()
+    var goals = TextEdit()
     var notes = TextEdit()
     var url = TextEdit()
     var isCanceling = false
@@ -53,6 +55,7 @@ struct TimelineInlineEditor: Equatable {
 
     mutating func resetAll() {
         title = TextEdit()
+        goals = TextEdit()
         notes = TextEdit()
         url = TextEdit()
         isCanceling = false
@@ -67,6 +70,8 @@ struct TimelineInlineEditor: Equatable {
         switch field {
         case .title:
             return titleCommitPlan()
+        case .goals:
+            return goalsCommitPlan(existingNotes: existingNotes, isFlowFlexible: isFlowFlexible)
         case .notes:
             return notesCommitPlan(existingNotes: existingNotes, isFlowFlexible: isFlowFlexible)
         case .url:
@@ -113,6 +118,23 @@ struct TimelineInlineEditor: Equatable {
         )
     }
 
+    private func goalsCommitPlan(existingNotes: String?, isFlowFlexible: Bool) -> TimelineInlineEditCommit? {
+        guard goals.isEditing else { return nil }
+        guard let update = TimelineEventContent.goalsUpdate(
+            editedText: goals.draft,
+            originalText: goals.original,
+            existingNotes: existingNotes,
+            isFlowFlexible: isFlowFlexible
+        ) else {
+            return nil
+        }
+
+        return TimelineInlineEditCommit(
+            change: .notes(old: update.oldNotesForUndo, new: update.notesToSave),
+            description: "Edit Goals"
+        )
+    }
+
     private func urlCommitPlan() -> TimelineInlineEditCommit? {
         guard url.isEditing else { return nil }
         guard let update = TimelineEventContent.urlUpdate(editedText: url.draft, originalText: url.original) else {
@@ -129,6 +151,8 @@ struct TimelineInlineEditor: Equatable {
         switch field {
         case .title:
             return title
+        case .goals:
+            return goals
         case .notes:
             return notes
         case .url:
@@ -140,6 +164,8 @@ struct TimelineInlineEditor: Equatable {
         switch field {
         case .title:
             title = state
+        case .goals:
+            goals = state
         case .notes:
             notes = state
         case .url:
@@ -149,5 +175,5 @@ struct TimelineInlineEditor: Equatable {
 }
 
 private extension TimelineInlineEditField {
-    static let commitOrder: [TimelineInlineEditField] = [.title, .notes, .url]
+    static let commitOrder: [TimelineInlineEditField] = [.title, .goals, .notes, .url]
 }

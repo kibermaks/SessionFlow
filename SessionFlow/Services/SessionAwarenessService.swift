@@ -152,16 +152,28 @@ class SessionAwarenessService: ObservableObject {
             if let audioService = audioService {
                 if isActive {
                     let soundConfig: SessionSoundConfig
+                    let accelConfig: AccelerandoConfig
                     if let type = currentSessionType {
                         soundConfig = config.soundConfig(for: type)
+                        accelConfig = config.accelerandoConfig(for: type)
                     } else if isBusySlotMode {
                         soundConfig = config.otherEventsSound
+                        accelConfig = config.otherEventsSoundAccelerando
                     } else {
                         return
                     }
-                    audioService.updateAmbientIfPlaying(config: soundConfig)
+                    audioService.updateAmbientIfPlaying(
+                        config: soundConfig,
+                        initialPlaybackRate: SessionAudioService.playbackRate(progress: progress, accelerando: accelConfig)
+                    )
                 } else if isResting {
-                    audioService.updateAmbientIfPlaying(config: config.restSound)
+                    audioService.updateAmbientIfPlaying(
+                        config: config.restSound,
+                        initialPlaybackRate: SessionAudioService.playbackRate(
+                            progress: restProgress,
+                            accelerando: config.restSoundAccelerando
+                        )
+                    )
                 }
             }
         }
@@ -224,6 +236,9 @@ class SessionAwarenessService: ObservableObject {
     private var harshLifecycleStartedEventIds: Set<String> = []
     private var harshLifecycleEndedEventIds: Set<String> = []
     private var harshEndPendingMutedByID: [String: Bool] = [:]
+    private var isHarshCommitPromptVisible: Bool {
+        harshModePrompt != nil
+    }
 
     // Cached slots — refreshed every 30s or immediately when calendar data changes
     private var cachedNowSlots: [BusyTimeSlot] = []
@@ -372,9 +387,10 @@ class SessionAwarenessService: ObservableObject {
 
         let isHarshStartBlocked = isCurrentHarshStartBlocked(now: now)
         let isHarshEndPromptPending = harshModePrompt?.phase == .end
+        let isHarshPromptVisible = isHarshCommitPromptVisible
 
         // Audio/visual features require awareness enabled
-        if isEnabled {
+        if isEnabled && !isHarshPromptVisible {
             // Phase 3: Presence reminder (suppressed when session-muted)
             if isActive && !isHarshStartBlocked && config.presenceReminderEnabled && !isSessionMuted {
                 checkPresenceReminder(at: now)
@@ -404,7 +420,7 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Ending soon shortcut — fires regardless of awareness state
-        if isActive && !isHarshStartBlocked && !hasFiredEndingSoonShortcut {
+        if isActive && !isHarshStartBlocked && !isHarshPromptVisible && !hasFiredEndingSoonShortcut {
             let leadMinutes = config.shortcuts.endingSoon.leadTimeMinutes ?? 2
             let leadSeconds = TimeInterval(leadMinutes * 60)
             if remaining <= leadSeconds && remaining > 0 {
@@ -558,7 +574,13 @@ class SessionAwarenessService: ObservableObject {
 
             // Play rest ambient (awareness only)
             if isEnabled && !isSessionMuted {
-                audioService?.playAmbient(config: config.restSound)
+                audioService?.playAmbient(
+                    config: config.restSound,
+                    initialPlaybackRate: SessionAudioService.playbackRate(
+                        progress: restProgress,
+                        accelerando: config.restSoundAccelerando
+                    )
+                )
             }
 
             // Fire rest started shortcut
@@ -763,15 +785,31 @@ class SessionAwarenessService: ObservableObject {
 
     // MARK: - Harsh Mode
 
-    private func isHarshModeEligible(sessionType: SessionType?, isBusySlot: Bool) -> Bool {
+    private static func isHarshModeEligible(config: SessionAwarenessConfig, sessionType: SessionType?, isBusySlot: Bool) -> Bool {
         guard config.harshModeEnabled, !isBusySlot, let sessionType else {
             return false
         }
         return config.harshModeSessionTypes.matches(sessionType)
     }
 
+    private func isHarshModeEligible(sessionType: SessionType?, isBusySlot: Bool) -> Bool {
+        Self.isHarshModeEligible(config: config, sessionType: sessionType, isBusySlot: isBusySlot)
+    }
+
     private func isHarshStartAccepted(eventId: String, notes: String?) -> Bool {
         !HarshModeSessionNotes.goals(from: notes).isEmpty || harshGoalCapturedEventIds.contains(eventId)
+    }
+
+    static func shouldPauseHarshStartLifecycle(
+        config: SessionAwarenessConfig,
+        sessionType: SessionType?,
+        isBusySlot: Bool,
+        startAccepted: Bool,
+        startBypassed: Bool
+    ) -> Bool {
+        guard isHarshModeEligible(config: config, sessionType: sessionType, isBusySlot: isBusySlot) else { return false }
+        guard !startAccepted else { return false }
+        return !startBypassed
     }
 
     private func shouldGateHarshStart(
@@ -781,10 +819,13 @@ class SessionAwarenessService: ObservableObject {
         notes: String?,
         now: Date
     ) -> Bool {
-        guard isHarshModeEligible(sessionType: sessionType, isBusySlot: isBusySlot) else { return false }
-        guard config.harshModeRequireStartGoals else { return false }
-        guard !isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
-        return !harshStartBypassedEventIds.contains(eventId)
+        Self.shouldPauseHarshStartLifecycle(
+            config: config,
+            sessionType: sessionType,
+            isBusySlot: isBusySlot,
+            startAccepted: isHarshStartAccepted(eventId: eventId, notes: notes),
+            startBypassed: harshStartBypassedEventIds.contains(eventId)
+        )
     }
 
     private func isCurrentHarshStartBlocked(now: Date) -> Bool {
@@ -808,9 +849,7 @@ class SessionAwarenessService: ObservableObject {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
         guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return false }
-        if config.harshModeRequireStartGoals {
-            guard isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
-        }
+        guard isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
         guard !harshReviewCapturedEventIds.contains(eventId),
               !harshEndBypassedEventIds.contains(eventId),
               !harshLifecycleEndedEventIds.contains(eventId) else { return false }
@@ -825,7 +864,6 @@ class SessionAwarenessService: ObservableObject {
     ) -> Bool {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
-        guard config.harshModeRequireStartGoals else { return false }
         return !isHarshStartAccepted(eventId: eventId, notes: notes)
     }
 
@@ -1076,6 +1114,7 @@ class SessionAwarenessService: ObservableObject {
         ) {
             harshEndPendingMutedByID["\(eventId)-\(HarshModePromptPhase.end.rawValue)"] = isSessionMuted
             cancelPendingSessionAudioStart()
+            pauseSessionAudioForHarshEndPrompt(wasSessionMuted: isSessionMuted)
             presentHarshModeEndPromptIfNeeded(
                 eventId: eventId,
                 sessionTitle: sessionTitle,
@@ -1105,7 +1144,8 @@ class SessionAwarenessService: ObservableObject {
         startTime: Date,
         endTime: Date,
         isNaturalEnd: Bool,
-        wasSessionMuted: Bool
+        wasSessionMuted: Bool,
+        playEndSound: Bool = true
     ) {
         // Shortcuts fire on ALL session end transitions (natural end or drag-away)
         shortcutService.fire(
@@ -1128,7 +1168,7 @@ class SessionAwarenessService: ObservableObject {
             audioService?.stopTransition()
         }
 
-        if isNaturalEnd && !wasSessionMuted && config.endSound.isPlayable {
+        if playEndSound && isNaturalEnd && !wasSessionMuted && config.endSound.isPlayable {
             audioService?.playTransition(config: config.endSound)
         }
 
@@ -1197,8 +1237,32 @@ class SessionAwarenessService: ObservableObject {
             startTime: prompt.startTime,
             endTime: prompt.endTime,
             isNaturalEnd: true,
-            wasSessionMuted: wasSessionMuted
+            wasSessionMuted: wasSessionMuted,
+            playEndSound: false
         )
+    }
+
+    private func pauseSessionAudioForHarshEndPrompt(wasSessionMuted: Bool) {
+        guard isEnabled else { return }
+
+        audioService?.stopAmbient()
+        if wasSessionMuted {
+            audioService?.stopTransition()
+        } else if Self.shouldPlayHarshEndPromptSound(
+            isEnabled: isEnabled,
+            wasSessionMuted: wasSessionMuted,
+            endSound: config.endSound
+        ) {
+            audioService?.playTransition(config: config.endSound)
+        }
+    }
+
+    static func shouldPlayHarshEndPromptSound(
+        isEnabled: Bool,
+        wasSessionMuted: Bool,
+        endSound: TransitionSoundConfig
+    ) -> Bool {
+        isEnabled && !wasSessionMuted && endSound.isPlayable
     }
 
     private func playSessionStartAudio(sessionType: SessionType?, skipTransition: Bool = false) {
@@ -1238,10 +1302,14 @@ class SessionAwarenessService: ObservableObject {
                       generation == self.sessionAudioStartGeneration,
                       self.isEnabled,
                       self.isActive,
+                      !self.isHarshCommitPromptVisible,
                       !self.isSessionMuted,
                       self.currentEventId == targetEventId else { return }
 
-                audioService.playAmbient(config: soundConfig)
+                audioService.playAmbient(
+                    config: soundConfig,
+                    initialPlaybackRate: SessionAudioService.playbackRate(progress: self.progress, accelerando: accelConfig)
+                )
                 // Apply speed/accelerando immediately so the first sound is already modified
                 audioService.updatePlaybackRate(progress: self.progress, accelerando: accelConfig)
             }
@@ -1273,6 +1341,7 @@ class SessionAwarenessService: ObservableObject {
 
     func refreshAudioState() {
         guard let audioService = audioService, isActive || isResting else { return }
+        guard !isHarshCommitPromptVisible else { return }
 
         let soundConfig: SessionSoundConfig
         let accelConfig: AccelerandoConfig
@@ -1294,7 +1363,10 @@ class SessionAwarenessService: ObservableObject {
         }
 
         if soundConfig.isPlayable && !audioService.isMuted && !isSessionMuted {
-            audioService.playAmbient(config: soundConfig)
+            audioService.playAmbient(
+                config: soundConfig,
+                initialPlaybackRate: SessionAudioService.playbackRate(progress: currentProgress, accelerando: accelConfig)
+            )
             audioService.updatePlaybackRate(progress: currentProgress, accelerando: accelConfig)
         }
     }
@@ -1308,7 +1380,9 @@ class SessionAwarenessService: ObservableObject {
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
         guard !cleanedTitle.isEmpty else { return false }
-        guard cleanedGoals.count >= max(1, config.harshModeMinimumGoals) else { return false }
+        guard !config.harshModeRequireStartGoals || cleanedGoals.count >= max(1, config.harshModeMinimumGoals) else {
+            return false
+        }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
             currentSessionTitle = cleanedTitle
             harshGoalCapturedEventIds.insert(prompt.eventId)
@@ -1318,7 +1392,12 @@ class SessionAwarenessService: ObservableObject {
         }
 
         let sourceNotes = currentEventId == prompt.eventId ? currentEventNotes : prompt.notes
-        let updatedNotes = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: sourceNotes)
+        let updatedNotes: String?
+        if cleanedGoals.isEmpty, HarshModeSessionNotes.goals(from: sourceNotes).isEmpty {
+            updatedNotes = nil
+        } else {
+            updatedNotes = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: sourceNotes)
+        }
         guard calendarService?.updateEvent(eventId: prompt.eventId, title: cleanedTitle, notes: updatedNotes, url: nil) == true else {
             return false
         }
@@ -1339,16 +1418,19 @@ class SessionAwarenessService: ObservableObject {
         return true
     }
 
-    func submitHarshReview(rating: SessionRating?, alignment: SessionAlignment?, reflection: String, goals: [String]) -> Bool {
+    func submitHarshReview(title: String, rating: SessionRating?, alignment: SessionAlignment?, reflection: String, goals: [String]) -> Bool {
         guard let prompt = harshModePrompt, prompt.phase == .end else { return false }
+        let cleanedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedReflection = reflection.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanedGoals = goals
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+        guard !cleanedTitle.isEmpty else { return false }
         guard !config.harshModeRequireEndRating || rating != nil else { return false }
         guard !config.harshModeRequireEndRating || alignment != nil else { return false }
         guard !config.harshModeRequireReviewNote || !cleanedReflection.isEmpty else { return false }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
+            currentSessionTitle = cleanedTitle
             harshReviewCapturedEventIds.insert(prompt.eventId)
             harshPromptSnoozeUntilByID[prompt.id] = nil
             sessionFeedbackPending = nil
@@ -1359,14 +1441,16 @@ class SessionAwarenessService: ObservableObject {
 
         let notesWithGoals = HarshModeSessionNotes.applyingGoals(cleanedGoals, to: prompt.notes)
         let updatedNotes = HarshModeSessionNotes.applyingReview(rating: rating, alignment: alignment, reflection: cleanedReflection, to: notesWithGoals)
-        guard calendarService?.updateEvent(eventId: prompt.eventId, title: nil, notes: updatedNotes, url: nil) == true else {
+        guard calendarService?.updateEvent(eventId: prompt.eventId, title: cleanedTitle, notes: updatedNotes, url: nil) == true else {
             return false
         }
 
         if let sessionType = prompt.sessionType {
+            SessionNameHistory.shared.addName(cleanedTitle, for: sessionType)
             TaskLineHistory.shared.addLines(cleanedGoals, for: sessionType)
         }
         if currentEventId == prompt.eventId {
+            currentSessionTitle = cleanedTitle
             currentEventNotes = updatedNotes
         }
         harshReviewCapturedEventIds.insert(prompt.eventId)
@@ -1424,7 +1508,13 @@ class SessionAwarenessService: ObservableObject {
             if isActive {
                 playSessionStartAudio(sessionType: currentSessionType, skipTransition: true)
             } else if isResting {
-                audioService?.playAmbient(config: config.restSound)
+                audioService?.playAmbient(
+                    config: config.restSound,
+                    initialPlaybackRate: SessionAudioService.playbackRate(
+                        progress: restProgress,
+                        accelerando: config.restSoundAccelerando
+                    )
+                )
             }
         } else {
             cancelPendingSessionAudioStart()

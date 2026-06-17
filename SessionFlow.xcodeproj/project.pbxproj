@@ -119,6 +119,7 @@
 		TTSTB01 /* TimelineTimeScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTSTF01 /* TimelineTimeScaleTests.swift */; };
 		TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRUTF01 /* TimelineReviewUpdateTests.swift */; };
 		TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETCTF01 /* TimelineEventTimeCommitterTests.swift */; };
+		SASTB01 /* SessionAwarenessServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SASTF01 /* SessionAwarenessServiceTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -239,6 +240,7 @@
 		TTSTF01 /* TimelineTimeScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimeScaleTests.swift; sourceTree = "<group>"; };
 		TRUTF01 /* TimelineReviewUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdateTests.swift; sourceTree = "<group>"; };
 		TETCTF01 /* TimelineEventTimeCommitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitterTests.swift; sourceTree = "<group>"; };
+		SASTF01 /* SessionAwarenessServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessServiceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -328,6 +330,7 @@
 				TTSTF01 /* TimelineTimeScaleTests.swift */,
 				TRUTF01 /* TimelineReviewUpdateTests.swift */,
 				TETCTF01 /* TimelineEventTimeCommitterTests.swift */,
+				SASTF01 /* SessionAwarenessServiceTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -706,6 +709,7 @@
 				TTSTB01 /* TimelineTimeScaleTests.swift in Sources */,
 				TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */,
 				TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */,
+				SASTB01 /* SessionAwarenessServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -844,7 +848,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1079;
+				CURRENT_PROJECT_VERSION = 1083;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -882,7 +886,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1079;
+				CURRENT_PROJECT_VERSION = 1083;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;

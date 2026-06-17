@@ -21,15 +21,16 @@ struct MiniPlayerView: View {
     @State private var activationBorderOpacity: Double = 0
     @State private var showingEventInfo = false
     @State private var feedbackConfirmation: SessionRating? = nil
-    @State private var totalWidth: CGFloat = 620
+    @State private var totalWidth: CGFloat = 0
     @State private var progressAreaWidth: CGFloat = 200
 
-    private var metaColumnThreshold: CGFloat { uses12HourClock ? 620 : 500 }
+    private var metaColumnThreshold: CGFloat { uses12HourClock ? 820 : 760 }
     private let fullProgressThreshold: CGFloat = 150
+    private let activeTrailingControlsWidth: CGFloat = 160
 
     var body: some View {
         Group {
-            if awarenessService.sessionFeedbackPending != nil {
+            if awarenessService.sessionFeedbackPending != nil || feedbackConfirmation != nil {
                 miniFeedbackBar
             } else if awarenessService.isActive {
                 miniActiveBar
@@ -41,6 +42,7 @@ struct MiniPlayerView: View {
                 miniIdleBar
             }
         }
+        .frame(maxWidth: .infinity)
         .fixedSize(horizontal: false, vertical: true)
         .background(miniBackground)
         .overlay(
@@ -79,14 +81,23 @@ struct MiniPlayerView: View {
 
     private var showMetaColumn: Bool { totalWidth >= metaColumnThreshold }
     private var showFullProgress: Bool { progressAreaWidth >= fullProgressThreshold }
+    private var activeTitleMinWidth: CGFloat { showMetaColumn ? 240 : 220 }
+    private var activeLayout: AwarenessActiveBarLayout {
+        AwarenessActiveBarLayout(
+            totalWidth: totalWidth,
+            showsMetaColumn: showMetaColumn,
+            titleMinWidth: activeTitleMinWidth,
+            trailingControlsWidth: activeTrailingControlsWidth
+        )
+    }
 
     private var miniActiveBar: some View {
         HStack(spacing: 0) {
             HStack(spacing: 8) {
                 expandButton
-                AwarenessSessionInfo(awarenessService: awarenessService, showingEventInfo: $showingEventInfo)
+                AwarenessSessionInfo(awarenessService: awarenessService, showingEventInfo: $showingEventInfo, isCompact: true)
             }
-            .frame(minWidth: showMetaColumn ? 240 : 220, maxWidth: 280, alignment: .leading)
+            .frame(width: activeLayout.titleWidth, alignment: .leading)
 
             AwarenessDivider()
 
@@ -107,7 +118,7 @@ struct MiniPlayerView: View {
                 }
             }
             .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
+            .frame(width: activeLayout.progressWidth)
             .background(
                 GeometryReader { geo in
                     Color.clear.task(id: geo.size.width) { progressAreaWidth = geo.size.width }
@@ -121,7 +132,7 @@ struct MiniPlayerView: View {
                 AwarenessSkipSessionButton(awarenessService: awarenessService)
                 AwarenessMuteButton(audioService: audioService, awarenessService: awarenessService)
             }
-            .frame(minWidth: 160, maxWidth: 190, alignment: .trailing)
+            .frame(width: activeTrailingControlsWidth, alignment: .trailing)
         }
         .frame(maxWidth: .infinity)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showFullProgress)
