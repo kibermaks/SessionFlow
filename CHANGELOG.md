@@ -7,6 +7,24 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.6.17] - 2026-06-17
+
+### Added
+
+- Preset dropdown now remembers recently used scheduler configurations that are not already saved as named presets.
+- Commit Mode overlays now support editing session goals and session titles during start and end flows.
+
+### Changed
+
+- Mini-player and bottom panel layouts now give session goals more room, wrapping long goals when space allows.
+- Commit Mode end prompts now play a completion sound, pause session audio while the prompt is visible, and restore working audio when more time is requested.
+- Accelerando awareness audio now resumes at the current session pace instead of easing up from the beginning.
+
+### Fixed
+
+- Timeline editing, feedback, undo, redo, and projected-session movement are more reliable after deeper scheduling workflow cleanup.
+- Commit Mode goal entry no longer loses focus to the review field during end-session prompts.
+
 ## [2026.6.13] - 2026-06-13
 
 ### Added
