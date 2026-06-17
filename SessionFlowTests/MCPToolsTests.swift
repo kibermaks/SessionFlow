@@ -298,6 +298,37 @@ extension MCPFeatureTests {
         #expect(!SessionFlowDefaults.store.bool(forKey: "hasCompletedSetup"))
     }
 
+    @Test func recentSchedulersSkipConfigurationsThatMatchNamedPresets() {
+        let named = Preset(name: "Named", workSessionCount: 4, sideSessionCount: 2)
+        let sameConfiguration = named.withIdentity(name: "Recent Candidate", icon: "clock")
+        PresetStorage.shared.savePresets([named])
+
+        PresetStorage.shared.recordRecentScheduler(sameConfiguration, excludingNamedPresets: [named])
+
+        #expect(PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: [named]).isEmpty)
+    }
+
+    @Test func recentSchedulersDedupeAndKeepFiveMostRecent() {
+        let named = Preset(name: "Named", workSessionCount: 1, sideSessionCount: 1)
+        PresetStorage.shared.savePresets([named])
+
+        for count in 2...7 {
+            PresetStorage.shared.recordRecentScheduler(
+                Preset(name: "Candidate \(count)", workSessionCount: count, sideSessionCount: 1),
+                excludingNamedPresets: [named]
+            )
+        }
+        PresetStorage.shared.recordRecentScheduler(
+            Preset(name: "Duplicate", workSessionCount: 5, sideSessionCount: 1),
+            excludingNamedPresets: [named]
+        )
+
+        let recent = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: [named])
+
+        #expect(recent.map(\.workSessionCount) == [5, 7, 6, 4, 3])
+        #expect(recent.count == 5)
+    }
+
     @Test func getDayReturnsAvailability() async throws {
         let server = try await MCPTestServer.start()
         let json = try await server.callJSON("get_day", ["date": .string("2026-05-28")])

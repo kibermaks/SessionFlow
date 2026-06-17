@@ -2215,6 +2215,7 @@ Spacer()
     private func resetPresets() {
         SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.Presets")
         SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.LastActivePresetID")
+        PresetStorage.shared.clearRecentSchedulers()
         timelineIntroBarDismissed = false
         PresetStorage.shared.markSetupIncomplete()
         NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)

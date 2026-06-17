@@ -69,6 +69,8 @@ struct ContentView: View {
     @State private var deletePastSessions = false
     @State private var presets: [Preset] = []
     @State private var selectedPreset: Preset?
+    @State private var recentSchedulers: [Preset] = []
+    @State private var selectedRecentScheduler: Preset?
     @State private var showingNewPresetSheet = false
     @State private var nowTimer: Timer?
     @AppStorage("hasSeenWelcome") private var hasSeenWelcome = false
@@ -124,6 +126,8 @@ struct ContentView: View {
                     deletePastSessions: $deletePastSessions,
                     presets: $presets,
                     selectedPreset: $selectedPreset,
+                    recentSchedulers: $recentSchedulers,
+                    selectedRecentScheduler: $selectedRecentScheduler,
                     showingNewPresetSheet: $showingNewPresetSheet,
                     nowTimer: $nowTimer,
                     hasSeenWelcome: $hasSeenWelcome,
@@ -159,10 +163,20 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresetsUpdated"))) { _ in
             presets = PresetStorage.shared.loadPresets()
+            recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
             if let current = selectedPreset,
                let refreshed = presets.first(where: { $0.id == current.id }) {
                 selectedPreset = refreshed
+            } else if let currentRecent = selectedRecentScheduler,
+                      let refreshedRecent = recentSchedulers.first(where: { $0.id == currentRecent.id }) {
+                selectedRecentScheduler = refreshedRecent
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("PresetsReset"))) { _ in
+            presets = []
+            recentSchedulers = []
+            selectedPreset = nil
+            selectedRecentScheduler = nil
         }
         .onReceive(updateService.$pendingAlert) { alert in
             updateAlert = alert
@@ -302,6 +316,8 @@ struct ContentViewBody: View {
     @Binding var deletePastSessions: Bool
     @Binding var presets: [Preset]
     @Binding var selectedPreset: Preset?
+    @Binding var recentSchedulers: [Preset]
+    @Binding var selectedRecentScheduler: Preset?
     @Binding var showingNewPresetSheet: Bool
     @Binding var nowTimer: Timer?
     @Binding var hasSeenWelcome: Bool
@@ -625,10 +641,14 @@ struct ContentViewBody: View {
             LeftPanel(
                 presets: $presets,
                 selectedPreset: $selectedPreset,
+                recentSchedulers: $recentSchedulers,
+                selectedRecentScheduler: $selectedRecentScheduler,
                 showingNewPresetSheet: $showingNewPresetSheet,
                 autoPreview: autoPreview,
                 updatePreview: updateProjectedSchedule,
-                applyPreset: applyPreset,
+                applyPreset: { applyPreset($0) },
+                applyPresetWithoutRecording: { applyPreset($0, recordCurrentAsRecent: false) },
+                applyRecentScheduler: { applyRecentScheduler($0) },
                 hasSeenPatternsGuide: $hasSeenPatternsGuide,
                 showingPatternsGuide: $showingPatternsGuide,
                 hasSeenTasksGuide: $hasSeenTasksGuide,
@@ -715,13 +735,19 @@ struct ContentViewBody: View {
     
     private func onAppearActions() {
         presets = PresetStorage.shared.loadPresets()
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
         
         // Restore last active preset
-        if let lastId = PresetStorage.shared.loadLastActivePresetId(),
-           let lastPreset = presets.first(where: { $0.id == lastId }) {
-            applyPreset(lastPreset)
+        if let lastId = PresetStorage.shared.loadLastActivePresetId() {
+            if let lastPreset = presets.first(where: { $0.id == lastId }) {
+                applyPreset(lastPreset, recordCurrentAsRecent: false)
+            } else if let recent = recentSchedulers.first(where: { $0.id == lastId }) {
+                applyRecentScheduler(recent, recordCurrentAsRecent: false)
+            } else if let first = presets.first {
+                applyPreset(first, recordCurrentAsRecent: false)
+            }
         } else if let first = presets.first {
-            applyPreset(first)
+            applyPreset(first, recordCurrentAsRecent: false)
         }
         
         calendarService.scheduleEndHour = schedulingEngine.scheduleEndHour
@@ -734,14 +760,45 @@ struct ContentViewBody: View {
         }
     }
     
-    private func applyPreset(_ preset: Preset) {
+    private func applyPreset(_ preset: Preset, recordCurrentAsRecent: Bool = true) {
+        if recordCurrentAsRecent {
+            recordCurrentSchedulerIfNeeded()
+        }
         selectedPreset = preset
+        selectedRecentScheduler = nil
         
         // Ensure calendars exist
         ensureCalendarsExist(for: preset)
         
         schedulingEngine.applyPreset(preset)
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
         if autoPreview { updateProjectedSchedule() }
+    }
+
+    private func applyRecentScheduler(_ scheduler: Preset, recordCurrentAsRecent: Bool = true) {
+        if recordCurrentAsRecent {
+            recordCurrentSchedulerIfNeeded()
+        }
+        PresetStorage.shared.recordRecentScheduler(scheduler, excludingNamedPresets: presets)
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
+        let schedulerToApply = recentSchedulers.first {
+            $0.hasSameSchedulerConfiguration(as: scheduler)
+        } ?? scheduler
+
+        selectedPreset = nil
+        selectedRecentScheduler = schedulerToApply
+
+        ensureCalendarsExist(for: schedulerToApply)
+
+        schedulingEngine.applyPreset(schedulerToApply)
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
+        if autoPreview { updateProjectedSchedule() }
+    }
+
+    private func recordCurrentSchedulerIfNeeded() {
+        let current = schedulingEngine.saveAsPreset(name: "Recent Scheduler", icon: "clock.arrow.circlepath")
+        PresetStorage.shared.recordRecentScheduler(current, excludingNamedPresets: presets)
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
     }
     
     private func ensureCalendarsExist(for preset: Preset) {
@@ -1257,10 +1314,14 @@ struct LeftPanel: View {
     @EnvironmentObject var schedulingEngine: SchedulingEngine
     @Binding var presets: [Preset]
     @Binding var selectedPreset: Preset?
+    @Binding var recentSchedulers: [Preset]
+    @Binding var selectedRecentScheduler: Preset?
     @Binding var showingNewPresetSheet: Bool
     let autoPreview: Bool
     let updatePreview: () -> Void
     let applyPreset: (Preset) -> Void
+    let applyPresetWithoutRecording: (Preset) -> Void
+    let applyRecentScheduler: (Preset) -> Void
 
     @Binding var hasSeenPatternsGuide: Bool
     @Binding var showingPatternsGuide: Bool
@@ -1413,6 +1474,17 @@ struct LeftPanel: View {
     
     private var presetMenu: some View {
         Menu {
+            if !recentSchedulers.isEmpty {
+                Section("Recent Schedulers") {
+                    ForEach(recentSchedulers) { scheduler in
+                        Button { applyRecentScheduler(scheduler) } label: {
+                            Label(recentSchedulerTitle(scheduler), systemImage: scheduler.icon)
+                        }
+                    }
+                }
+                Divider()
+            }
+
             ForEach(presets) { preset in
                 Button { applyPreset(preset) } label: { Label(preset.name, systemImage: preset.icon) }
             }
@@ -1428,6 +1500,13 @@ struct LeftPanel: View {
                     Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
                     let modified = schedulingEngine.isPresetModified(p)
                     Text(p.name + (modified ? " ＊" : ""))
+                        .foregroundColor(colors.textPrimary)
+                        .lineLimit(1)
+                        .layoutPriority(1)
+                } else if let p = selectedRecentScheduler {
+                    Image(systemName: p.icon).foregroundColor(Color(hex: "8B5CF6"))
+                    let modified = schedulingEngine.isPresetModified(p)
+                    Text(recentSchedulerTitle(p) + (modified ? " ＊" : ""))
                         .foregroundColor(colors.textPrimary)
                         .lineLimit(1)
                         .layoutPriority(1)
@@ -1451,21 +1530,29 @@ struct LeftPanel: View {
         .frame(maxWidth: .infinity, alignment: .trailing)
         .frame(height: 24)
     }
+
+    private func recentSchedulerTitle(_ scheduler: Preset) -> String {
+        "\(scheduler.workSessionCount)W / \(scheduler.sideSessionCount)S · \(scheduler.pattern.rawValue)"
+    }
     
     private func updateCurrentPreset(_ preset: Preset) {
         // Reuse saveAsPreset so the field list stays in one place (preserve id/name/icon).
         let updated = schedulingEngine.saveAsPreset(id: preset.id, name: preset.name, icon: preset.icon)
         PresetStorage.shared.updatePreset(updated)
         presets = PresetStorage.shared.loadPresets()
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
         selectedPreset = updated
+        selectedRecentScheduler = nil
     }
     
     private func deletePreset(_ preset: Preset) {
         PresetStorage.shared.deletePreset(preset)
         presets = PresetStorage.shared.loadPresets()
+        recentSchedulers = PresetStorage.shared.loadRecentSchedulers(excludingNamedPresets: presets)
         selectedPreset = presets.first
+        selectedRecentScheduler = nil
         if let first = selectedPreset {
-            applyPreset(first)
+            applyPresetWithoutRecording(first)
         }
     }
 }

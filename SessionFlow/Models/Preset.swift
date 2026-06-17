@@ -307,6 +307,56 @@ struct Preset: Identifiable, Codable, Equatable {
         // If version is missing, assume v1 (old preset)
         schemaVersion = decode(PresetSchemaVersion.self, forKey: .schemaVersion, default: .v1)
     }
+
+    func hasSameSchedulerConfiguration(as other: Preset) -> Bool {
+        workSessionCount == other.workSessionCount &&
+            sideSessionCount == other.sideSessionCount &&
+            workSessionName == other.workSessionName &&
+            sideSessionName == other.sideSessionName &&
+            workSessionDuration == other.workSessionDuration &&
+            sideSessionDuration == other.sideSessionDuration &&
+            planningDuration == other.planningDuration &&
+            restDuration == other.restDuration &&
+            sideRestDuration == other.sideRestDuration &&
+            deepRestDuration == other.deepRestDuration &&
+            schedulePlanning == other.schedulePlanning &&
+            pattern == other.pattern &&
+            workSessionsPerCycle == other.workSessionsPerCycle &&
+            sideSessionsPerCycle == other.sideSessionsPerCycle &&
+            sideFirst == other.sideFirst &&
+            deepSessionConfig == other.deepSessionConfig &&
+            flexibleSideScheduling == other.flexibleSideScheduling &&
+            bigRestConfig == other.bigRestConfig &&
+            calendarMapping == other.calendarMapping
+    }
+
+    func withIdentity(id: UUID = UUID(), name: String, icon: String) -> Preset {
+        Preset(
+            id: id,
+            name: name,
+            icon: icon,
+            workSessionCount: workSessionCount,
+            sideSessionCount: sideSessionCount,
+            workSessionName: workSessionName,
+            sideSessionName: sideSessionName,
+            workSessionDuration: workSessionDuration,
+            sideSessionDuration: sideSessionDuration,
+            planningDuration: planningDuration,
+            restDuration: restDuration,
+            sideRestDuration: sideRestDuration,
+            deepRestDuration: deepRestDuration,
+            schedulePlanning: schedulePlanning,
+            pattern: pattern,
+            workSessionsPerCycle: workSessionsPerCycle,
+            sideSessionsPerCycle: sideSessionsPerCycle,
+            sideFirst: sideFirst,
+            deepSessionConfig: deepSessionConfig,
+            flexibleSideScheduling: flexibleSideScheduling,
+            bigRestConfig: bigRestConfig,
+            calendarMapping: calendarMapping,
+            schemaVersion: schemaVersion
+        )
+    }
     
     // MARK: - Default Presets
     private static let basicSessions = 5
@@ -607,6 +657,7 @@ extension Preset {
 class PresetStorage {
     static let shared = PresetStorage()
     private let presetsKey = "SessionFlow.Presets"
+    private let recentSchedulersKey = "SessionFlow.RecentSchedulers"
     private let lastActivePresetKey = "SessionFlow.LastActivePresetID"
     private let savedStateKey = "SessionFlow.SavedState"
     private let setupCompleteKey = "SessionFlow.HasCompletedSetup"
@@ -619,6 +670,7 @@ class PresetStorage {
     ]
     
     private init() {}
+    private let recentSchedulerLimit = 5
     
     func loadPresets() -> [Preset] {
         if let source = storedPresetData(),
@@ -717,6 +769,66 @@ class PresetStorage {
         var presets = loadPresets()
         presets.removeAll { $0.id == preset.id }
         savePresets(presets)
+    }
+
+    func loadRecentSchedulers(excludingNamedPresets namedPresets: [Preset]? = nil) -> [Preset] {
+        guard let data = SessionFlowDefaults.store.data(forKey: recentSchedulersKey),
+              var recent = decodePresets(from: data)?.presets else {
+            return []
+        }
+
+        _ = migrateToCurrentVersion(&recent)
+        let named = namedPresets ?? loadPresets()
+        let filtered = recent.filter { scheduler in
+            !named.contains { $0.hasSameSchedulerConfiguration(as: scheduler) }
+        }
+        let capped = Array(filtered.prefix(recentSchedulerLimit))
+        if capped != recent {
+            saveRecentSchedulers(capped)
+        }
+        return capped
+    }
+
+    func recordRecentScheduler(_ scheduler: Preset, excludingNamedPresets namedPresets: [Preset]) {
+        guard !namedPresets.contains(where: { $0.hasSameSchedulerConfiguration(as: scheduler) }) else {
+            removeRecentSchedulers(matching: scheduler)
+            return
+        }
+
+        var schedulerToSave = scheduler.withIdentity(
+            id: UUID(),
+            name: recentSchedulerName(for: scheduler),
+            icon: "clock.arrow.circlepath"
+        )
+        schedulerToSave.schemaVersion = PresetSchemaVersion.current
+
+        var recent = loadRecentSchedulers(excludingNamedPresets: namedPresets)
+        recent.removeAll { $0.hasSameSchedulerConfiguration(as: schedulerToSave) }
+        recent.insert(schedulerToSave, at: 0)
+        saveRecentSchedulers(Array(recent.prefix(recentSchedulerLimit)))
+    }
+
+    func clearRecentSchedulers() {
+        SessionFlowDefaults.store.removeObject(forKey: recentSchedulersKey)
+    }
+
+    private func saveRecentSchedulers(_ schedulers: [Preset]) {
+        var schedulersToSave = schedulers
+        for index in schedulersToSave.indices {
+            schedulersToSave[index].schemaVersion = PresetSchemaVersion.current
+        }
+        guard let data = try? JSONEncoder().encode(schedulersToSave) else { return }
+        SessionFlowDefaults.store.set(data, forKey: recentSchedulersKey)
+    }
+
+    private func removeRecentSchedulers(matching scheduler: Preset) {
+        let recent = loadRecentSchedulers()
+            .filter { !$0.hasSameSchedulerConfiguration(as: scheduler) }
+        saveRecentSchedulers(recent)
+    }
+
+    private func recentSchedulerName(for scheduler: Preset) -> String {
+        "\(scheduler.workSessionCount)W / \(scheduler.sideSessionCount)S · \(scheduler.pattern.rawValue)"
     }
     
     func populateCalendarIdentifiers(using calendars: [EKCalendar]) {
