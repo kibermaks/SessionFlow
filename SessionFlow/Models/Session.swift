@@ -36,6 +36,14 @@ enum FlowFlexibilityNotes {
         !alignmentIsOptional(notes) || alignment != nil
     }
 
+    static func countsTowardAlignmentScore(
+        _ notes: String?,
+        alignment: SessionAlignment?,
+        eligibleMinutes: Double
+    ) -> Bool {
+        eligibleMinutes > 0 && countsTowardAlignmentScore(notes, alignment: alignment)
+    }
+
     static func strippingTags(from notes: String?) -> String? {
         SessionFlowEventSemantics.strippingExactTags(allTags, from: notes)
     }

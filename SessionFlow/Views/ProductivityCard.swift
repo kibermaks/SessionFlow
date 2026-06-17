@@ -96,7 +96,8 @@ struct ProductivityCard: View {
                 let alignment = SessionAlignment.fromNotes(slot.notes)
                 let countsTowardAlignment = FlowFlexibilityNotes.countsTowardAlignmentScore(
                     slot.notes,
-                    alignment: alignment
+                    alignment: alignment,
+                    eligibleMinutes: alignmentEligible
                 )
                 if countsTowardAlignment {
                     alignmentEligibleTotal += alignmentEligible

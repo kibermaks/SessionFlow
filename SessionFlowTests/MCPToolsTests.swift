@@ -424,6 +424,22 @@ extension MCPFeatureTests {
         #expect(FocusWeights().multiplier(for: .procrastinated) == 0)
     }
 
+    @Test func skippedSessionsDoNotRequireAlignmentWhenEligibleFocusIsZero() {
+        let skippedNotes = SessionRating.skipped.applyTo(notes: "#work Missed session")
+        let focusedNotes = SessionRating.completed.applyTo(notes: "#work Focused session")
+
+        #expect(!FlowFlexibilityNotes.countsTowardAlignmentScore(
+            skippedNotes,
+            alignment: nil,
+            eligibleMinutes: 0
+        ))
+        #expect(FlowFlexibilityNotes.countsTowardAlignmentScore(
+            focusedNotes,
+            alignment: nil,
+            eligibleMinutes: 30
+        ))
+    }
+
     @Test func externalCalendarEventsDoNotRequireAlignment() {
         let fixedExternalNotes = "Pickup kid"
         let sessionFlowNotes = "#work Client delivery"

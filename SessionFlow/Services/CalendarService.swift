@@ -806,7 +806,8 @@ class CalendarService: ObservableObject {
                 let alignment = SessionAlignment.fromNotes(event.notes)
                 let countsTowardAlignment = FlowFlexibilityNotes.countsTowardAlignmentScore(
                     event.notes,
-                    alignment: alignment
+                    alignment: alignment,
+                    eligibleMinutes: alignmentEligibleMinutes
                 )
                 result[day, default: DayFeedbackStats()].spentMinutes += spentMinutes
                 result[day, default: DayFeedbackStats()].focusMinutes += focusMinutes
