@@ -49,6 +49,27 @@ struct SessionAwarenessServiceTests {
         ))
     }
 
+    @Test func commitModeStartPromptIgnoresExistingGoalsUntilStartIsSubmitted() {
+        var config = SessionAwarenessConfig()
+        config.harshModeEnabled = true
+        config.harshModeRequireStartGoals = false
+        let notesWithGoals = HarshModeSessionNotes.applyingGoals(["Already planned"], to: "#work")
+
+        let startAccepted = SessionAwarenessService.hasSubmittedHarshStart(startSubmissionRecorded: false)
+
+        #expect(SessionAwarenessService.shouldPauseHarshStartLifecycle(
+            config: config,
+            sessionType: .work,
+            isBusySlot: false,
+            startAccepted: startAccepted,
+            startBypassed: false
+        ))
+        #expect(SessionAwarenessService.hasCompletedHarshStartForEndGate(
+            notes: notesWithGoals,
+            startSubmissionRecorded: false
+        ))
+    }
+
     @Test func commitModeStartAcceptsEmptyGoalsWhenGoalsAreOptional() {
         let sandbox = DefaultsSandbox()
         defer { sandbox.restore() }

@@ -230,7 +230,7 @@ class SessionAwarenessService: ObservableObject {
     private var savedSessionMuted: Bool = false
     private var harshStartBypassedEventIds: Set<String> = []
     private var harshEndBypassedEventIds: Set<String> = []
-    private var harshGoalCapturedEventIds: Set<String> = []
+    private var harshStartAcceptedEventIds: Set<String> = []
     private var harshReviewCapturedEventIds: Set<String> = []
     private var harshPromptSnoozeUntilByID: [String: Date] = [:]
     private var harshLifecycleStartedEventIds: Set<String> = []
@@ -646,7 +646,6 @@ class SessionAwarenessService: ObservableObject {
             eventId: slot.id,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
-            notes: slot.notes,
             now: now
         )
 
@@ -796,8 +795,23 @@ class SessionAwarenessService: ObservableObject {
         Self.isHarshModeEligible(config: config, sessionType: sessionType, isBusySlot: isBusySlot)
     }
 
-    private func isHarshStartAccepted(eventId: String, notes: String?) -> Bool {
-        !HarshModeSessionNotes.goals(from: notes).isEmpty || harshGoalCapturedEventIds.contains(eventId)
+    static func hasSubmittedHarshStart(startSubmissionRecorded: Bool) -> Bool {
+        startSubmissionRecorded
+    }
+
+    static func hasCompletedHarshStartForEndGate(notes: String?, startSubmissionRecorded: Bool) -> Bool {
+        startSubmissionRecorded || !HarshModeSessionNotes.goals(from: notes).isEmpty
+    }
+
+    private func isHarshStartAccepted(eventId: String) -> Bool {
+        Self.hasSubmittedHarshStart(startSubmissionRecorded: harshStartAcceptedEventIds.contains(eventId))
+    }
+
+    private func hasHarshStartEvidence(eventId: String, notes: String?) -> Bool {
+        Self.hasCompletedHarshStartForEndGate(
+            notes: notes,
+            startSubmissionRecorded: harshStartAcceptedEventIds.contains(eventId)
+        )
     }
 
     static func shouldPauseHarshStartLifecycle(
@@ -816,14 +830,13 @@ class SessionAwarenessService: ObservableObject {
         eventId: String,
         sessionType: SessionType?,
         isBusySlot: Bool,
-        notes: String?,
         now: Date
     ) -> Bool {
         Self.shouldPauseHarshStartLifecycle(
             config: config,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
-            startAccepted: isHarshStartAccepted(eventId: eventId, notes: notes),
+            startAccepted: isHarshStartAccepted(eventId: eventId),
             startBypassed: harshStartBypassedEventIds.contains(eventId)
         )
     }
@@ -834,7 +847,6 @@ class SessionAwarenessService: ObservableObject {
             eventId: eventId,
             sessionType: currentSessionType,
             isBusySlot: isBusySlotMode,
-            notes: currentEventNotes,
             now: now
         )
     }
@@ -849,7 +861,7 @@ class SessionAwarenessService: ObservableObject {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
         guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return false }
-        guard isHarshStartAccepted(eventId: eventId, notes: notes) else { return false }
+        guard hasHarshStartEvidence(eventId: eventId, notes: notes) else { return false }
         guard !harshReviewCapturedEventIds.contains(eventId),
               !harshEndBypassedEventIds.contains(eventId),
               !harshLifecycleEndedEventIds.contains(eventId) else { return false }
@@ -864,7 +876,7 @@ class SessionAwarenessService: ObservableObject {
     ) -> Bool {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
-        return !isHarshStartAccepted(eventId: eventId, notes: notes)
+        return !hasHarshStartEvidence(eventId: eventId, notes: notes)
     }
 
     private func presentHarshModeStartPromptIfNeeded(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool) {
@@ -872,11 +884,10 @@ class SessionAwarenessService: ObservableObject {
             eventId: slot.id,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
-            notes: slot.notes,
             now: effectiveNow
         ) else { return }
         guard !isHarshPromptSnoozed(phase: .start, eventId: slot.id, now: effectiveNow) else { return }
-        guard !harshGoalCapturedEventIds.contains(slot.id),
+        guard !harshStartAcceptedEventIds.contains(slot.id),
               !harshStartBypassedEventIds.contains(slot.id) else { return }
         if harshModePrompt?.phase == .start && harshModePrompt?.eventId == slot.id {
             return
@@ -1385,7 +1396,7 @@ class SessionAwarenessService: ObservableObject {
         }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
             currentSessionTitle = cleanedTitle
-            harshGoalCapturedEventIds.insert(prompt.eventId)
+            harshStartAcceptedEventIds.insert(prompt.eventId)
             harshPromptSnoozeUntilByID[prompt.id] = nil
             harshModePrompt = nil
             return true
@@ -1410,7 +1421,7 @@ class SessionAwarenessService: ObservableObject {
             currentSessionTitle = cleanedTitle
             currentEventNotes = updatedNotes
         }
-        harshGoalCapturedEventIds.insert(prompt.eventId)
+        harshStartAcceptedEventIds.insert(prompt.eventId)
         harshPromptSnoozeUntilByID[prompt.id] = nil
         fireHarshStartLifecycle(prompt: prompt, title: cleanedTitle)
         harshModePrompt = nil

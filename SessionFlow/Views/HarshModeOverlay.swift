@@ -1328,7 +1328,7 @@ struct HarshModeGuide: View {
     private let pages: [(title: String, subtitle: String, icon: String, color: Color)] = [
         (
             title: "Start With Goals",
-            subtitle: "When a tagged SessionFlow task starts, Commit Mode covers every display until you set one or more goals.",
+            subtitle: "When a tagged SessionFlow task starts, Commit Mode covers every display until you confirm the start gate. Goals can be required or optional.",
             icon: "lock.shield.fill",
             color: Color(hex: "EF4444")
         ),
