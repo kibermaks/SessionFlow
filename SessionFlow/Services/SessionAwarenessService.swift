@@ -292,12 +292,9 @@ class SessionAwarenessService: ObservableObject {
 
     static func strippedNotes(_ notes: String?) -> String? {
         guard let notes = notes, !notes.isEmpty else { return nil }
-        var result = HarshModeSessionNotes.removingManagedBlocks(from: notes)
-        for tag in FlowFlexibilityNotes.sessionFlowTags + FlowFlexibilityNotes.allTags + SessionRating.allTags + SessionAlignment.allTags {
-            result = result.replacingOccurrences(of: tag, with: "", options: .caseInsensitive)
-        }
-        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        return result.isEmpty ? nil : result
+        return SessionFlowEventSemantics.strippingSessionFlowMetadata(
+            from: HarshModeSessionNotes.removingManagedBlocks(from: notes)
+        )
     }
 
     // MARK: - Timer

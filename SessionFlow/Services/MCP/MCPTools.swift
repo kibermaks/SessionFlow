@@ -405,37 +405,30 @@ final class MCPToolHandler {
     // MARK: get_day
 
     private func dayDictionary(for date: Date) async -> [String: Any] {
-        calendar.scheduleEndHour = engine.scheduleEndHour
-        await calendar.fetchEvents(for: date)
-        let busy = calendar.busySlotsForFetchedDate(date)
-        let events: [[String: Any]] = busy.map { slot in
+        let snapshot = await coordinator.daySnapshot(date: date)
+        let events: [[String: Any]] = snapshot.busySlots.map { slot in
             [
                 "id": slot.id,
                 "title": slot.title,
                 "start": Self.isoString(slot.startTime),
                 "end": Self.isoString(slot.endTime),
                 "calendar": slot.calendarName,
-                "sessionType": Self.orNull(CalendarService.sessionType(fromNotes: slot.notes)?.rawValue),
+                "sessionType": Self.orNull(SessionFlowEventSemantics.sessionType(fromNotes: slot.notes)?.rawValue),
             ]
         }
-        let existing = calendar.countExistingSessions(
-            for: date,
-            workCalendar: CalendarDescriptor(name: engine.workCalendarName, identifier: engine.workCalendarIdentifier),
-            sideCalendar: CalendarDescriptor(name: engine.sideCalendarName, identifier: engine.sideCalendarIdentifier),
-            deepConfig: engine.deepSessionConfig
-        )
-        let avail = engine.calculateAvailability(
-            startTime: coordinator.defaultStartTime(for: date), baseDate: date, busySlots: busy
-        )
         return [
             "date": Self.dayString(date),
             "events": events,
-            "existingSessionCounts": ["work": existing.work, "side": existing.side, "deep": existing.deep],
+            "existingSessionCounts": [
+                "work": snapshot.existingSessions.work,
+                "side": snapshot.existingSessions.side,
+                "deep": snapshot.existingSessions.deep,
+            ],
             "availability": [
-                "availableMinutes": avail.availableMinutes,
-                "possibleWorkSessions": avail.possibleWorkSessions,
-                "possibleSideSessions": avail.possibleSideSessions,
-                "possibleDeepSessions": avail.possibleDeepSessions,
+                "availableMinutes": snapshot.availability.availableMinutes,
+                "possibleWorkSessions": snapshot.availability.possibleWorkSessions,
+                "possibleSideSessions": snapshot.availability.possibleSideSessions,
+                "possibleDeepSessions": snapshot.availability.possibleDeepSessions,
             ],
         ]
     }

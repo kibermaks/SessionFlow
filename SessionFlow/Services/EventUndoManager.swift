@@ -311,14 +311,13 @@ class EventUndoManager: ObservableObject {
         updateState()
     }
 
-    /// After undoing a schedule, caller provides new event IDs from re-creating sessions.
-    func pushRedoForScheduleUndo(_ snapshot: ScheduleSnapshot) {
-        // Replace the redo entry with updated event IDs
-        if let idx = redoStack.lastIndex(where: {
+    /// After redoing a schedule, replace the top undo entry with the new EventKit IDs.
+    func updateTopUndoSchedule(_ snapshot: ScheduleSnapshot) {
+        if let idx = undoStack.lastIndex(where: {
             if case .schedule = $0 { return true }
             return false
         }) {
-            redoStack[idx] = .schedule(snapshot)
+            undoStack[idx] = .schedule(snapshot)
         }
         updateState()
     }

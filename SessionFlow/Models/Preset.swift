@@ -644,6 +644,20 @@ class PresetStorage {
     func hasInitializedPresets() -> Bool {
         !loadPresets().isEmpty
     }
+
+    var hasCompletedSetup: Bool {
+        setupCompleted
+    }
+
+    func markSetupCompleted() {
+        SessionFlowDefaults.store.set(true, forKey: setupCompleteKey)
+        SessionFlowDefaults.store.set(true, forKey: legacySetupCompleteKey)
+    }
+
+    func markSetupIncomplete() {
+        SessionFlowDefaults.store.set(false, forKey: setupCompleteKey)
+        SessionFlowDefaults.store.set(false, forKey: legacySetupCompleteKey)
+    }
     
     /// Initialize presets with calendar names from setup
     func initializePresets(
@@ -679,9 +693,9 @@ class PresetStorage {
         }
         
         guard let data = try? JSONEncoder().encode(presetsToSave) else { return }
-        UserDefaults.standard.set(data, forKey: presetsKey)
+        SessionFlowDefaults.store.set(data, forKey: presetsKey)
         for key in legacyPresetKeys {
-            UserDefaults.standard.removeObject(forKey: key)
+            SessionFlowDefaults.store.removeObject(forKey: key)
         }
     }
     
@@ -741,9 +755,9 @@ class PresetStorage {
     
     func saveLastActivePresetId(_ id: UUID?) {
         if let id = id {
-            UserDefaults.standard.set(id.uuidString, forKey: lastActivePresetKey)
+            SessionFlowDefaults.store.set(id.uuidString, forKey: lastActivePresetKey)
         } else {
-            UserDefaults.standard.removeObject(forKey: lastActivePresetKey)
+            SessionFlowDefaults.store.removeObject(forKey: lastActivePresetKey)
         }
     }
     
@@ -816,12 +830,12 @@ private extension PresetStorage {
     struct DiscardedPreset: Decodable {}
 
     func storedPresetData() -> (data: Data, isLegacy: Bool)? {
-        if let data = UserDefaults.standard.data(forKey: presetsKey) {
+        if let data = SessionFlowDefaults.store.data(forKey: presetsKey) {
             return (data, false)
         }
 
         for key in legacyPresetKeys {
-            if let data = UserDefaults.standard.data(forKey: key) {
+            if let data = SessionFlowDefaults.store.data(forKey: key) {
                 return (data, true)
             }
         }
@@ -857,7 +871,7 @@ private extension PresetStorage {
     func recoveredPresetsAfterSetup() -> [Preset]? {
         guard setupCompleted else { return nil }
 
-        if let data = UserDefaults.standard.data(forKey: savedStateKey),
+        if let data = SessionFlowDefaults.store.data(forKey: savedStateKey),
            var state = try? JSONDecoder().decode(Preset.self, from: data) {
             state.migrateToCurrentVersion()
             state.name = "Recovered Current Settings"
@@ -869,12 +883,12 @@ private extension PresetStorage {
     }
 
     var setupCompleted: Bool {
-        UserDefaults.standard.bool(forKey: setupCompleteKey) ||
-            UserDefaults.standard.bool(forKey: legacySetupCompleteKey)
+        SessionFlowDefaults.store.bool(forKey: setupCompleteKey) ||
+            SessionFlowDefaults.store.bool(forKey: legacySetupCompleteKey)
     }
 
     func uuid(forKey key: String) -> UUID? {
-        guard let str = UserDefaults.standard.string(forKey: key) else { return nil }
+        guard let str = SessionFlowDefaults.store.string(forKey: key) else { return nil }
         return UUID(uuidString: str)
     }
 }

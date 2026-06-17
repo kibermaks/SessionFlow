@@ -4,6 +4,7 @@ import AppKit
 enum SessionFlowWindowIdentity {
     static let mainWindowSceneID = "main"
     static let mainWindowIdentifier = NSUserInterfaceItemIdentifier("SessionFlow.mainWindow")
+    static let mainWindowMinimumContentSize = NSSize(width: 1_200, height: 900)
 
     static func mainWindow(preferVisible: Bool = false) -> NSWindow? {
         if preferVisible,
@@ -108,7 +109,10 @@ struct SessionFlowApp: App {
                     .environmentObject(sessionAudioService)
                     .environmentObject(recentEventsStore)
                     .environmentObject(eventCreationCoordinator)
-                    .frame(minWidth: 1100, minHeight: 700)
+                    .frame(
+                        minWidth: SessionFlowWindowIdentity.mainWindowMinimumContentSize.width,
+                        minHeight: SessionFlowWindowIdentity.mainWindowMinimumContentSize.height
+                    )
                     .preferredColorScheme(preferredScheme)
                     .focusEffectDisabled()
                     .onAppear { applyAppearance(appearanceModeRaw) }
@@ -142,6 +146,10 @@ struct SessionFlowApp: App {
             }
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(
+            width: SessionFlowWindowIdentity.mainWindowMinimumContentSize.width,
+            height: SessionFlowWindowIdentity.mainWindowMinimumContentSize.height
+        )
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(replacing: .appInfo) {
@@ -254,8 +262,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func configureMainWindow(_ window: NSWindow) {
         window.identifier = SessionFlowWindowIdentity.mainWindowIdentifier
+        window.contentMinSize = SessionFlowWindowIdentity.mainWindowMinimumContentSize
         window.setFrameAutosaveName("SessionFlowMainWindow")
+        enforceMainWindowMinimumSize(window)
         installTitlebarDoubleClickMonitor(for: window)
+    }
+
+    private func enforceMainWindowMinimumSize(_ window: NSWindow) {
+        let minimum = SessionFlowWindowIdentity.mainWindowMinimumContentSize
+        let current = window.contentLayoutRect.size
+        guard current.width < minimum.width || current.height < minimum.height else { return }
+
+        window.setContentSize(NSSize(
+            width: max(current.width, minimum.width),
+            height: max(current.height, minimum.height)
+        ))
     }
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {

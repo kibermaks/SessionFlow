@@ -10,11 +10,13 @@
 		001 /* SessionFlowApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 101 /* SessionFlowApp.swift */; };
 		002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 102 /* ContentView.swift */; };
 		003 /* Session.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103 /* Session.swift */; };
+		SFESEM002 /* SessionFlowEventSemantics.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFESEM001 /* SessionFlowEventSemantics.swift */; };
 		AT001 /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AT002 /* AppTheme.swift */; };
 		004 /* SchedulePattern.swift in Sources */ = {isa = PBXBuildFile; fileRef = 104 /* SchedulePattern.swift */; };
 		005 /* Preset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 105 /* Preset.swift */; };
 		006 /* CalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 106 /* CalendarService.swift */; };
 		007 /* SchedulingEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 107 /* SchedulingEngine.swift */; };
+		SFD002 /* SessionFlowDefaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFD001 /* SessionFlowDefaults.swift */; };
 		009 /* TimelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 109 /* TimelineView.swift */; };
 		010 /* SettingsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 110 /* SettingsPanel.swift */; };
 		011 /* PresetManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111 /* PresetManager.swift */; };
@@ -76,6 +78,19 @@
 		A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B1C1D1E1F10004A2B2C2D1 /* SessionFlowIntents.swift */; };
 		EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */; };
 		EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */; };
+		TEP001 /* TimelineEditPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEP002 /* TimelineEditPlanner.swift */; };
+		TEC002 /* TimelineEventContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEC001 /* TimelineEventContent.swift */; };
+		TIE002 /* TimelineInlineEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TIE001 /* TimelineInlineEditor.swift */; };
+		TEA002 /* TimelineEventActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEA001 /* TimelineEventActions.swift */; };
+		TEE002 /* TimelineElasticEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEE001 /* TimelineElasticEditor.swift */; };
+		TGD002 /* TimelineGroupDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = TGD001 /* TimelineGroupDrag.swift */; };
+		TPSD002 /* TimelineProjectedSessionDrag.swift in Sources */ = {isa = PBXBuildFile; fileRef = TPSD001 /* TimelineProjectedSessionDrag.swift */; };
+		TDP002 /* TimelineDragPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDP001 /* TimelineDragPreview.swift */; };
+		TBSL002 /* TimelineBusySlotLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = TBSL001 /* TimelineBusySlotLayout.swift */; };
+		TURA002 /* TimelineUndoRedoApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = TURA001 /* TimelineUndoRedoApplier.swift */; };
+		TTS002 /* TimelineTimeScale.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTS001 /* TimelineTimeScale.swift */; };
+		TRU002 /* TimelineReviewUpdate.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRU001 /* TimelineReviewUpdate.swift */; };
+		TETC002 /* TimelineEventTimeCommitter.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETC001 /* TimelineEventTimeCommitter.swift */; };
 		AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */ = {isa = PBXBuildFile; fileRef = AFA001000000000000000002 /* AVAudioExceptionCatcher.m */; };
 		MCPBLD01 /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD01 /* MCP */; };
 		MCPS01 /* MCPHTTPListener.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCPF01 /* MCPHTTPListener.swift */; };
@@ -89,6 +104,21 @@
 		TB03 /* MCPListenerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF03 /* MCPListenerTests.swift */; };
 		TB04 /* ScheduleCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF04 /* ScheduleCoordinatorTests.swift */; };
 		TB05 /* AgentGuideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TF05 /* AgentGuideTests.swift */; };
+		TEPTB01 /* TimelineEditPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEPTF01 /* TimelineEditPlannerTests.swift */; };
+		SFESEMTB02 /* SessionFlowEventSemanticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */; };
+		TECTB01 /* TimelineEventContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TECTF01 /* TimelineEventContentTests.swift */; };
+		TIETB01 /* TimelineInlineEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TIETF01 /* TimelineInlineEditorTests.swift */; };
+		TEATB01 /* TimelineEventActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEATF01 /* TimelineEventActionsTests.swift */; };
+		TEETB01 /* TimelineElasticEditorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TEETF01 /* TimelineElasticEditorTests.swift */; };
+		TGDTB01 /* TimelineGroupDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TGDTF01 /* TimelineGroupDragTests.swift */; };
+		TPSTB01 /* TimelineProjectedSessionDragTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TPSTF01 /* TimelineProjectedSessionDragTests.swift */; };
+		TDPTB01 /* TimelineDragPreviewTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TDPTF01 /* TimelineDragPreviewTests.swift */; };
+		TBSLTB01 /* TimelineBusySlotLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TBSLTF01 /* TimelineBusySlotLayoutTests.swift */; };
+		EUMTB01 /* EventUndoManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EUMTF01 /* EventUndoManagerTests.swift */; };
+		TURATB01 /* TimelineUndoRedoApplierTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TURATF01 /* TimelineUndoRedoApplierTests.swift */; };
+		TTSTB01 /* TimelineTimeScaleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TTSTF01 /* TimelineTimeScaleTests.swift */; };
+		TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRUTF01 /* TimelineReviewUpdateTests.swift */; };
+		TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETCTF01 /* TimelineEventTimeCommitterTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -97,11 +127,13 @@
 		101 /* SessionFlowApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowApp.swift; sourceTree = "<group>"; };
 		102 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		103 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
+		SFESEM001 /* SessionFlowEventSemantics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowEventSemantics.swift; sourceTree = "<group>"; };
 		AT002 /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		104 /* SchedulePattern.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulePattern.swift; sourceTree = "<group>"; };
 		105 /* Preset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Preset.swift; sourceTree = "<group>"; };
 		106 /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
 		107 /* SchedulingEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchedulingEngine.swift; sourceTree = "<group>"; };
+		SFD001 /* SessionFlowDefaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowDefaults.swift; sourceTree = "<group>"; };
 		109 /* TimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineView.swift; sourceTree = "<group>"; };
 		110 /* SettingsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsPanel.swift; sourceTree = "<group>"; };
 		111 /* PresetManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresetManager.swift; sourceTree = "<group>"; };
@@ -164,6 +196,19 @@
 		FF01CHANGELOG001 /* CHANGELOG.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = CHANGELOG.md; path = CHANGELOG.md; sourceTree = SOURCE_ROOT; };
 		EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecentEventsStore.swift; sourceTree = "<group>"; };
 		EC02A2B3C4D5E6F7A8B9C0D2 /* EventCreationPopover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventCreationPopover.swift; sourceTree = "<group>"; };
+		TEP002 /* TimelineEditPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEditPlanner.swift; sourceTree = "<group>"; };
+		TEC001 /* TimelineEventContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventContent.swift; sourceTree = "<group>"; };
+		TIE001 /* TimelineInlineEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInlineEditor.swift; sourceTree = "<group>"; };
+		TEA001 /* TimelineEventActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventActions.swift; sourceTree = "<group>"; };
+		TEE001 /* TimelineElasticEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineElasticEditor.swift; sourceTree = "<group>"; };
+		TGD001 /* TimelineGroupDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineGroupDrag.swift; sourceTree = "<group>"; };
+		TPSD001 /* TimelineProjectedSessionDrag.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineProjectedSessionDrag.swift; sourceTree = "<group>"; };
+		TDP001 /* TimelineDragPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineDragPreview.swift; sourceTree = "<group>"; };
+		TBSL001 /* TimelineBusySlotLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineBusySlotLayout.swift; sourceTree = "<group>"; };
+		TURA001 /* TimelineUndoRedoApplier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineUndoRedoApplier.swift; sourceTree = "<group>"; };
+		TTS001 /* TimelineTimeScale.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimeScale.swift; sourceTree = "<group>"; };
+		TRU001 /* TimelineReviewUpdate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdate.swift; sourceTree = "<group>"; };
+		TETC001 /* TimelineEventTimeCommitter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitter.swift; sourceTree = "<group>"; };
 		AFA001000000000000000002 /* AVAudioExceptionCatcher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AVAudioExceptionCatcher.m; sourceTree = "<group>"; };
 		AFA001000000000000000003 /* AVAudioExceptionCatcher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AVAudioExceptionCatcher.h; sourceTree = "<group>"; };
 		AFA001000000000000000004 /* SessionFlow-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SessionFlow-Bridging-Header.h"; sourceTree = "<group>"; };
@@ -179,6 +224,21 @@
 		TF03 /* MCPListenerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPListenerTests.swift; sourceTree = "<group>"; };
 		TF04 /* ScheduleCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScheduleCoordinatorTests.swift; sourceTree = "<group>"; };
 		TF05 /* AgentGuideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentGuideTests.swift; sourceTree = "<group>"; };
+		TEPTF01 /* TimelineEditPlannerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEditPlannerTests.swift; sourceTree = "<group>"; };
+		SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionFlowEventSemanticsTests.swift; sourceTree = "<group>"; };
+		TECTF01 /* TimelineEventContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventContentTests.swift; sourceTree = "<group>"; };
+		TIETF01 /* TimelineInlineEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineInlineEditorTests.swift; sourceTree = "<group>"; };
+		TEATF01 /* TimelineEventActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventActionsTests.swift; sourceTree = "<group>"; };
+		TEETF01 /* TimelineElasticEditorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineElasticEditorTests.swift; sourceTree = "<group>"; };
+		TGDTF01 /* TimelineGroupDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineGroupDragTests.swift; sourceTree = "<group>"; };
+		TPSTF01 /* TimelineProjectedSessionDragTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineProjectedSessionDragTests.swift; sourceTree = "<group>"; };
+		TDPTF01 /* TimelineDragPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineDragPreviewTests.swift; sourceTree = "<group>"; };
+		TBSLTF01 /* TimelineBusySlotLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineBusySlotLayoutTests.swift; sourceTree = "<group>"; };
+		EUMTF01 /* EventUndoManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventUndoManagerTests.swift; sourceTree = "<group>"; };
+		TURATF01 /* TimelineUndoRedoApplierTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineUndoRedoApplierTests.swift; sourceTree = "<group>"; };
+		TTSTF01 /* TimelineTimeScaleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineTimeScaleTests.swift; sourceTree = "<group>"; };
+		TRUTF01 /* TimelineReviewUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdateTests.swift; sourceTree = "<group>"; };
+		TETCTF01 /* TimelineEventTimeCommitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitterTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -253,6 +313,21 @@
 				TF03 /* MCPListenerTests.swift */,
 				TF04 /* ScheduleCoordinatorTests.swift */,
 				TF05 /* AgentGuideTests.swift */,
+				TEPTF01 /* TimelineEditPlannerTests.swift */,
+				SFESEMTF01 /* SessionFlowEventSemanticsTests.swift */,
+				TECTF01 /* TimelineEventContentTests.swift */,
+				TIETF01 /* TimelineInlineEditorTests.swift */,
+				TEATF01 /* TimelineEventActionsTests.swift */,
+				TEETF01 /* TimelineElasticEditorTests.swift */,
+				TGDTF01 /* TimelineGroupDragTests.swift */,
+				TPSTF01 /* TimelineProjectedSessionDragTests.swift */,
+				TDPTF01 /* TimelineDragPreviewTests.swift */,
+				TBSLTF01 /* TimelineBusySlotLayoutTests.swift */,
+				EUMTF01 /* EventUndoManagerTests.swift */,
+				TURATF01 /* TimelineUndoRedoApplierTests.swift */,
+				TTSTF01 /* TimelineTimeScaleTests.swift */,
+				TRUTF01 /* TimelineReviewUpdateTests.swift */,
+				TETCTF01 /* TimelineEventTimeCommitterTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -261,6 +336,7 @@
 			isa = PBXGroup;
 			children = (
 				103 /* Session.swift */,
+				SFESEM001 /* SessionFlowEventSemantics.swift */,
 				AT002 /* AppTheme.swift */,
 				104 /* SchedulePattern.swift */,
 				105 /* Preset.swift */,
@@ -310,6 +386,7 @@
 			children = (
 				106 /* CalendarService.swift */,
 				107 /* SchedulingEngine.swift */,
+				SFD001 /* SessionFlowDefaults.swift */,
 				120 /* UpdateService.swift */,
 			121 /* TimeSnapping.swift */,
 			122 /* EventUndoManager.swift */,
@@ -320,6 +397,19 @@
 				E2F3A4B5C6D7E8F9A0B1C2D3 /* MenuBarController.swift */,
 				A1B1C1D1E1F10002A2B2C2D1 /* ShortcutService.swift */,
 				EC01A2B3C4D5E6F7A8B9C0D2 /* RecentEventsStore.swift */,
+				TEP002 /* TimelineEditPlanner.swift */,
+				TEC001 /* TimelineEventContent.swift */,
+				TIE001 /* TimelineInlineEditor.swift */,
+				TEA001 /* TimelineEventActions.swift */,
+				TEE001 /* TimelineElasticEditor.swift */,
+				TGD001 /* TimelineGroupDrag.swift */,
+				TPSD001 /* TimelineProjectedSessionDrag.swift */,
+				TDP001 /* TimelineDragPreview.swift */,
+				TBSL001 /* TimelineBusySlotLayout.swift */,
+				TURA001 /* TimelineUndoRedoApplier.swift */,
+				TTS001 /* TimelineTimeScale.swift */,
+				TRU001 /* TimelineReviewUpdate.swift */,
+				TETC001 /* TimelineEventTimeCommitter.swift */,
 				AFA001000000000000000003 /* AVAudioExceptionCatcher.h */,
 				AFA001000000000000000002 /* AVAudioExceptionCatcher.m */,
 				MCPGRP /* MCP */,
@@ -522,6 +612,7 @@
 				001 /* SessionFlowApp.swift in Sources */,
 				002 /* ContentView.swift in Sources */,
 				003 /* Session.swift in Sources */,
+				SFESEM002 /* SessionFlowEventSemantics.swift in Sources */,
 				AT001 /* AppTheme.swift in Sources */,
 				004 /* SchedulePattern.swift in Sources */,
 				005 /* Preset.swift in Sources */,
@@ -529,6 +620,7 @@
 				2DC4CFE72EFA885900F7A35D /* TaskEditor.swift in Sources */,
 				2DC4CFE82EFA885900F7A35D /* TasksPanel.swift in Sources */,
 				007 /* SchedulingEngine.swift in Sources */,
+				SFD002 /* SessionFlowDefaults.swift in Sources */,
 				009 /* TimelineView.swift in Sources */,
 				010 /* SettingsPanel.swift in Sources */,
 				011 /* PresetManager.swift in Sources */,
@@ -568,6 +660,19 @@
 				A1B1C1D1E1F10003A2B2C2D1 /* SessionFlowIntents.swift in Sources */,
 				EC01A2B3C4D5E6F7A8B9C0D1 /* RecentEventsStore.swift in Sources */,
 				EC02A2B3C4D5E6F7A8B9C0D1 /* EventCreationPopover.swift in Sources */,
+				TEP001 /* TimelineEditPlanner.swift in Sources */,
+				TEC002 /* TimelineEventContent.swift in Sources */,
+				TIE002 /* TimelineInlineEditor.swift in Sources */,
+				TEA002 /* TimelineEventActions.swift in Sources */,
+				TEE002 /* TimelineElasticEditor.swift in Sources */,
+				TGD002 /* TimelineGroupDrag.swift in Sources */,
+				TPSD002 /* TimelineProjectedSessionDrag.swift in Sources */,
+				TDP002 /* TimelineDragPreview.swift in Sources */,
+				TBSL002 /* TimelineBusySlotLayout.swift in Sources */,
+				TURA002 /* TimelineUndoRedoApplier.swift in Sources */,
+				TTS002 /* TimelineTimeScale.swift in Sources */,
+				TRU002 /* TimelineReviewUpdate.swift in Sources */,
+				TETC002 /* TimelineEventTimeCommitter.swift in Sources */,
 				AFA001000000000000000001 /* AVAudioExceptionCatcher.m in Sources */,
 				MCPS01 /* MCPHTTPListener.swift in Sources */,
 				MCPS02 /* MCPServerController.swift in Sources */,
@@ -586,6 +691,21 @@
 				TB03 /* MCPListenerTests.swift in Sources */,
 				TB04 /* ScheduleCoordinatorTests.swift in Sources */,
 				TB05 /* AgentGuideTests.swift in Sources */,
+				TEPTB01 /* TimelineEditPlannerTests.swift in Sources */,
+				SFESEMTB02 /* SessionFlowEventSemanticsTests.swift in Sources */,
+				TECTB01 /* TimelineEventContentTests.swift in Sources */,
+				TIETB01 /* TimelineInlineEditorTests.swift in Sources */,
+				TEATB01 /* TimelineEventActionsTests.swift in Sources */,
+				TEETB01 /* TimelineElasticEditorTests.swift in Sources */,
+				TGDTB01 /* TimelineGroupDragTests.swift in Sources */,
+				TPSTB01 /* TimelineProjectedSessionDragTests.swift in Sources */,
+				TDPTB01 /* TimelineDragPreviewTests.swift in Sources */,
+				TBSLTB01 /* TimelineBusySlotLayoutTests.swift in Sources */,
+				EUMTB01 /* EventUndoManagerTests.swift in Sources */,
+				TURATB01 /* TimelineUndoRedoApplierTests.swift in Sources */,
+				TTSTB01 /* TimelineTimeScaleTests.swift in Sources */,
+				TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */,
+				TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -724,7 +844,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1054;
+				CURRENT_PROJECT_VERSION = 1079;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -743,7 +863,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.6.13;
+				MARKETING_VERSION = 2026.6.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
@@ -762,7 +882,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1054;
+				CURRENT_PROJECT_VERSION = 1079;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -781,7 +901,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.6.13;
+				MARKETING_VERSION = 2026.6.17;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";

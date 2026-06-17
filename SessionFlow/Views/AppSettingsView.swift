@@ -2208,17 +2208,15 @@ Spacer()
     }
 
     private func resetCalendarSetup() {
-        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
-        UserDefaults.standard.set(false, forKey: "hasCompletedSetup")
+        PresetStorage.shared.markSetupIncomplete()
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
     }
 
     private func resetPresets() {
-        UserDefaults.standard.removeObject(forKey: "SessionFlow.Presets")
-        UserDefaults.standard.removeObject(forKey: "SessionFlow.LastActivePresetID")
+        SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.Presets")
+        SessionFlowDefaults.store.removeObject(forKey: "SessionFlow.LastActivePresetID")
         timelineIntroBarDismissed = false
-        UserDefaults.standard.set(false, forKey: "SessionFlow.HasCompletedSetup")
-        UserDefaults.standard.set(false, forKey: "hasCompletedSetup")
+        PresetStorage.shared.markSetupIncomplete()
         NotificationCenter.default.post(name: Notification.Name("PresetsReset"), object: nil)
         NotificationCenter.default.post(name: Notification.Name("ResetCalendarSetup"), object: nil)
         if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {

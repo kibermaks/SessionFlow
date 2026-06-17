@@ -22,56 +22,56 @@ class SchedulingEngine: ObservableObject {
     @Published var sideCalendarName: String = "Side Tasks" { didSet { saveState() } }
     @Published var workCalendarIdentifier: String? { didSet { saveState() } }
     @Published var sideCalendarIdentifier: String? { didSet { saveState() } }
-    @Published var hideNightHours: Bool = UserDefaults.standard.object(forKey: "SessionFlow.HideNightHours") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(hideNightHours, forKey: "SessionFlow.HideNightHours") }
+    @Published var hideNightHours: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.HideNightHours") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(hideNightHours, forKey: "SessionFlow.HideNightHours") }
     }
-    @Published var awareExistingTasks: Bool = UserDefaults.standard.object(forKey: "SessionFlow.AwareExistingTasks") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(awareExistingTasks, forKey: "SessionFlow.AwareExistingTasks") }
+    @Published var awareExistingTasks: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.AwareExistingTasks") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(awareExistingTasks, forKey: "SessionFlow.AwareExistingTasks") }
     }
-    @Published var showDidYouKnowCard: Bool = UserDefaults.standard.object(forKey: "SessionFlow.ShowDidYouKnowCardV2") as? Bool ?? true {
-        didSet { UserDefaults.standard.set(showDidYouKnowCard, forKey: "SessionFlow.ShowDidYouKnowCardV2") }
+    @Published var showDidYouKnowCard: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.ShowDidYouKnowCardV2") as? Bool ?? true {
+        didSet { SessionFlowDefaults.store.set(showDidYouKnowCard, forKey: "SessionFlow.ShowDidYouKnowCardV2") }
     }
-    @Published var dayStartHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DayStartHour") as? Int) ?? 6 {
-        didSet { UserDefaults.standard.set(dayStartHour, forKey: "SessionFlow.DayStartHour") }
+    @Published var dayStartHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DayStartHour") as? Int) ?? 6 {
+        didSet { SessionFlowDefaults.store.set(dayStartHour, forKey: "SessionFlow.DayStartHour") }
     }
-    @Published var dayEndHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DayEndHour") as? Int) ?? 24 {
-        didSet { UserDefaults.standard.set(dayEndHour, forKey: "SessionFlow.DayEndHour") }
+    @Published var dayEndHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DayEndHour") as? Int) ?? 24 {
+        didSet { SessionFlowDefaults.store.set(dayEndHour, forKey: "SessionFlow.DayEndHour") }
     }
-    @Published var scheduleEndHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.ScheduleEndHour") as? Int) ?? 24 {
-        didSet { UserDefaults.standard.set(scheduleEndHour, forKey: "SessionFlow.ScheduleEndHour") }
+    @Published var scheduleEndHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.ScheduleEndHour") as? Int) ?? 24 {
+        didSet { SessionFlowDefaults.store.set(scheduleEndHour, forKey: "SessionFlow.ScheduleEndHour") }
     }
-    @Published var flexibleSideScheduling: Bool = UserDefaults.standard.object(forKey: "SessionFlow.FlexibleSideScheduling") as? Bool ?? true {
+    @Published var flexibleSideScheduling: Bool = SessionFlowDefaults.store.object(forKey: "SessionFlow.FlexibleSideScheduling") as? Bool ?? true {
         didSet {
-            UserDefaults.standard.set(flexibleSideScheduling, forKey: "SessionFlow.FlexibleSideScheduling")
+            SessionFlowDefaults.store.set(flexibleSideScheduling, forKey: "SessionFlow.FlexibleSideScheduling")
             saveState()
         }
     }
     
     
     // Task lists and enablement
-    @Published var workTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.WorkTasks") ?? "" {
-        didSet { UserDefaults.standard.set(workTasks, forKey: "SessionFlow.WorkTasks") }
+    @Published var workTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.WorkTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(workTasks, forKey: "SessionFlow.WorkTasks") }
     }
-    @Published var sideTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.SideTasks") ?? "" {
-        didSet { UserDefaults.standard.set(sideTasks, forKey: "SessionFlow.SideTasks") }
+    @Published var sideTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.SideTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(sideTasks, forKey: "SessionFlow.SideTasks") }
     }
-    @Published var deepTasks: String = UserDefaults.standard.string(forKey: "SessionFlow.DeepTasks") ?? "" {
-        didSet { UserDefaults.standard.set(deepTasks, forKey: "SessionFlow.DeepTasks") }
+    @Published var deepTasks: String = SessionFlowDefaults.store.string(forKey: "SessionFlow.DeepTasks") ?? "" {
+        didSet { SessionFlowDefaults.store.set(deepTasks, forKey: "SessionFlow.DeepTasks") }
     }
-    @Published var useWorkTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseWorkTasks") {
-        didSet { UserDefaults.standard.set(useWorkTasks, forKey: "SessionFlow.UseWorkTasks") }
+    @Published var useWorkTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseWorkTasks") {
+        didSet { SessionFlowDefaults.store.set(useWorkTasks, forKey: "SessionFlow.UseWorkTasks") }
     }
-    @Published var useSideTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseSideTasks") {
-        didSet { UserDefaults.standard.set(useSideTasks, forKey: "SessionFlow.UseSideTasks") }
+    @Published var useSideTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseSideTasks") {
+        didSet { SessionFlowDefaults.store.set(useSideTasks, forKey: "SessionFlow.UseSideTasks") }
     }
-    @Published var useDeepTasks: Bool = UserDefaults.standard.bool(forKey: "SessionFlow.UseDeepTasks") {
-        didSet { UserDefaults.standard.set(useDeepTasks, forKey: "SessionFlow.UseDeepTasks") }
+    @Published var useDeepTasks: Bool = SessionFlowDefaults.store.bool(forKey: "SessionFlow.UseDeepTasks") {
+        didSet { SessionFlowDefaults.store.set(useDeepTasks, forKey: "SessionFlow.UseDeepTasks") }
     }
     
     @Published var sideRestDuration: Int = 15 { didSet { saveState() } }
     @Published var deepRestDuration: Int = 20 { didSet { saveState() } }
-    @Published var defaultStartHour: Int = (UserDefaults.standard.object(forKey: "SessionFlow.DefaultStartHour") as? Int) ?? 8 {
-        didSet { UserDefaults.standard.set(defaultStartHour, forKey: "SessionFlow.DefaultStartHour") }
+    @Published var defaultStartHour: Int = (SessionFlowDefaults.store.object(forKey: "SessionFlow.DefaultStartHour") as? Int) ?? 8 {
+        didSet { SessionFlowDefaults.store.set(defaultStartHour, forKey: "SessionFlow.DefaultStartHour") }
     }
     
     @Published var deepSessionConfig: DeepSessionConfig = .default { didSet { saveState() } }
@@ -89,6 +89,7 @@ class SchedulingEngine: ObservableObject {
 
     // MARK: - Scheduled Output
     @Published var projectedSessions: [ScheduledSession] = []
+    @Published var projectedSessionsDate: Date? = nil
     @Published var schedulingMessage: String = ""
     @Published var quotasSatisfied: Bool = false
     @Published var quotaCounts: (work: Int, side: Int, deep: Int) = (0, 0, 0)
@@ -96,6 +97,44 @@ class SchedulingEngine: ObservableObject {
 
     var hasNoSessionTargets: Bool {
         workSessions == 0 && sideSessions == 0 && (!deepSessionConfig.enabled || deepSessionConfig.sessionCount == 0) && !schedulePlanning
+    }
+
+    var restDurationsBySessionType: [SessionType: Int] {
+        [
+            .work: restDuration,
+            .side: sideRestDuration,
+            .deep: deepRestDuration,
+            .planning: restDuration,
+        ]
+    }
+
+    var workCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: workCalendarName, identifier: workCalendarIdentifier)
+    }
+
+    var sideCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: sideCalendarName, identifier: sideCalendarIdentifier)
+    }
+
+    var deepCalendarDescriptor: CalendarDescriptor {
+        CalendarDescriptor(name: deepSessionConfig.calendarName, identifier: deepSessionConfig.calendarIdentifier)
+    }
+
+    var sessionCalendarDescriptors: [CalendarDescriptor] {
+        var calendars = [workCalendarDescriptor, sideCalendarDescriptor]
+        if deepSessionConfig.enabled {
+            calendars.append(deepCalendarDescriptor)
+        }
+
+        var unique: [CalendarDescriptor] = []
+        for descriptor in calendars {
+            let duplicate = unique.contains {
+                ($0.identifier != nil && $0.identifier == descriptor.identifier) ||
+                ($0.identifier == nil && descriptor.identifier == nil && $0.name == descriptor.name)
+            }
+            if !duplicate { unique.append(descriptor) }
+        }
+        return unique
     }
     
     // MARK: - Initialization
@@ -293,7 +332,7 @@ class SchedulingEngine: ObservableObject {
                         startTime: start,
                         endTime: end,
                         calendarName: workCalendarName,
-                        notes: "#break"
+                        notes: ownershipTag(for: .bigRest)
                     )
                     sessions.append(bigRest)
                     bigRestCount += 1
@@ -318,7 +357,7 @@ class SchedulingEngine: ObservableObject {
                 sessionTitle = "Planning"
                 calendarName = workCalendarName
                 calendarIdentifier = workCalendarIdentifier
-                sessionTag = "#plan"
+                sessionTag = ownershipTag(for: .planning)
             } else {
                 let sessionsSinceLastDeep = regularSessionsScheduled - regularCountAtLastDeep
 
@@ -348,7 +387,7 @@ class SchedulingEngine: ObservableObject {
                      
                      calendarName = deepSessionConfig.calendarName
                      calendarIdentifier = deepSessionConfig.calendarIdentifier
-                     sessionTag = "#deep"
+                     sessionTag = ownershipTag(for: .deep)
                      isDeep = true
                  } else if sessionIndex < sessionOrder.count {
                     let proposedType = sessionOrder[sessionIndex]
@@ -366,13 +405,13 @@ class SchedulingEngine: ObservableObject {
                         sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         calendarIdentifier = workCalendarIdentifier
-                        sessionTag = "#work"
+                        sessionTag = ownershipTag(for: .work)
                     case .side:
                         sessionDuration = sideSessionDuration
                         sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         calendarIdentifier = sideCalendarIdentifier
-                        sessionTag = "#side"
+                        sessionTag = ownershipTag(for: .side)
                     case .planning, .deep, .bigRest:
                          sessionDuration = workSessionDuration
                          sessionTitle = "Unknown"
@@ -387,21 +426,21 @@ class SchedulingEngine: ObservableObject {
                         sessionTitle = (useWorkTasks && projectedWorkCount < workTitles.count) ? workTitles[projectedWorkCount] : workSessionName
                         calendarName = workCalendarName
                         calendarIdentifier = workCalendarIdentifier
-                        sessionTag = "#work"
+                        sessionTag = ownershipTag(for: .work)
                     } else if sideCount < sideSessions {
                         sessionType = .side
                         sessionDuration = sideSessionDuration
                         sessionTitle = (useSideTasks && projectedSideCount < sideTitles.count) ? sideTitles[projectedSideCount] : sideSessionName
                         calendarName = sideCalendarName
                         calendarIdentifier = sideCalendarIdentifier
-                        sessionTag = "#side"
+                        sessionTag = ownershipTag(for: .side)
                     } else if deepSessionConfig.enabled && deepCount < deepSessionConfig.sessionCount {
                          sessionType = .deep
                          sessionDuration = deepSessionConfig.duration
                          sessionTitle = (useDeepTasks && projectedDeepCount < deepTitles.count) ? deepTitles[projectedDeepCount] : deepSessionConfig.name
                          calendarName = deepSessionConfig.calendarName
                          calendarIdentifier = deepSessionConfig.calendarIdentifier
-                         sessionTag = "#deep"
+                         sessionTag = ownershipTag(for: .deep)
                          isDeep = true
                     } else {
                         break
@@ -649,7 +688,7 @@ class SchedulingEngine: ObservableObject {
                 endTime: potentialEnd,
                 calendarName: alternativeCalendar,
                 calendarIdentifier: alternativeCalendarIdentifier,
-                notes: alternativeType == .work ? "#work" : "#side"
+                notes: ownershipTag(for: alternativeType)
             )
         }
         
@@ -682,7 +721,7 @@ class SchedulingEngine: ObservableObject {
                             endTime: sideEnd,
                             calendarName: sideCalendarName,
                             calendarIdentifier: sideCalendarIdentifier,
-                            notes: "#side"
+                            notes: ownershipTag(for: .side)
                         )
                     }
                 }
@@ -767,7 +806,7 @@ class SchedulingEngine: ObservableObject {
                     endTime: potentialEnd,
                     calendarName: calendarName,
                     calendarIdentifier: calendarIdentifier,
-                    notes: sessionType == .work ? "#work" : "#side"
+                    notes: ownershipTag(for: sessionType)
                 )
             }
         }
@@ -800,6 +839,10 @@ class SchedulingEngine: ObservableObject {
         cleanComponents.second = 0
         cleanComponents.minute = (components.minute ?? 0) + minutesToAdd
         return calendar.date(from: cleanComponents) ?? date
+    }
+
+    private func ownershipTag(for type: SessionType) -> String {
+        SessionFlowEventSemantics.ownershipTag(for: type).rawValue
     }
     
     // MARK: - Single Session Projection
@@ -879,7 +922,7 @@ class SchedulingEngine: ObservableObject {
                 endTime: potentialEnd,
                 calendarName: calendar,
                 calendarIdentifier: calendarIdentifier,
-                notes: type == .work ? "#work" : (type == .side ? "#side" : (type == .planning ? "#plan" : "#deep"))
+                notes: ownershipTag(for: type)
             )
         }
         
@@ -995,12 +1038,12 @@ class SchedulingEngine: ObservableObject {
         )
 
         if let data = try? JSONEncoder().encode(state) {
-            UserDefaults.standard.set(data, forKey: "SessionFlow.SavedState")
+            SessionFlowDefaults.store.set(data, forKey: "SessionFlow.SavedState")
         }
     }
     
     private func loadState() {
-        guard let data = UserDefaults.standard.data(forKey: "SessionFlow.SavedState"),
+        guard let data = SessionFlowDefaults.store.data(forKey: "SessionFlow.SavedState"),
               var state = try? JSONDecoder().decode(Preset.self, from: data) else {
             return
         }

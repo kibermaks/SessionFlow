@@ -5,6 +5,21 @@ enum DeleteScope: String {
     case future
 }
 
+struct ExistingSessionSummary: Equatable {
+    let work: Int
+    let side: Int
+    let deep: Int
+    let titles: Set<String>
+}
+
+struct ScheduleDaySnapshot {
+    let date: Date
+    let busySlots: [BusyTimeSlot]
+    let planningExists: Bool
+    let existingSessions: ExistingSessionSummary
+    let availability: (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int, possibleDeepSessions: Int)
+}
+
 /// Drives schedule preview / commit / delete the way ContentView does, but parameterized by an
 /// explicit date and start time so the MCP agent (and tests) can operate on any day independently
 /// of the open window's UI state. Reuses the same `SchedulingEngine` and calendar APIs the UI uses.
@@ -35,71 +50,98 @@ final class ScheduleCoordinator {
         return cal.date(byAdding: .minute, value: bump, to: floored) ?? now
     }
 
-    private func workSideDescriptors() -> (work: CalendarDescriptor, side: CalendarDescriptor) {
-        (
-            CalendarDescriptor(name: engine.workCalendarName, identifier: engine.workCalendarIdentifier),
-            CalendarDescriptor(name: engine.sideCalendarName, identifier: engine.sideCalendarIdentifier)
+    private func existingSessions(for date: Date) -> ExistingSessionSummary {
+        let existing = calendar.countExistingSessions(
+            for: date,
+            workCalendar: engine.workCalendarDescriptor,
+            sideCalendar: engine.sideCalendarDescriptor,
+            deepConfig: engine.deepSessionConfig
+        )
+        return ExistingSessionSummary(
+            work: existing.work,
+            side: existing.side,
+            deep: existing.deep,
+            titles: existing.titles
         )
     }
 
-    private func sessionCalendars() -> [CalendarDescriptor] {
-        var calendars: [CalendarDescriptor] = [
-            CalendarDescriptor(name: engine.workCalendarName, identifier: engine.workCalendarIdentifier),
-            CalendarDescriptor(name: engine.sideCalendarName, identifier: engine.sideCalendarIdentifier),
-        ]
-        if engine.deepSessionConfig.enabled {
-            calendars.append(CalendarDescriptor(
-                name: engine.deepSessionConfig.calendarName,
-                identifier: engine.deepSessionConfig.calendarIdentifier
-            ))
+    func daySnapshot(date: Date, startTime: Date? = nil, extraBusySlots: [BusyTimeSlot] = []) async -> ScheduleDaySnapshot {
+        syncCalendarWindow()
+        await calendar.fetchEvents(for: date)
+        return daySnapshotFromFetched(
+            date: date,
+            startTime: startTime ?? defaultStartTime(for: date),
+            busySlots: calendar.busySlotsForFetchedDate(date) + extraBusySlots
+        )
+    }
+
+    func daySnapshotFromFetched(date: Date, startTime: Date, busySlots: [BusyTimeSlot]) -> ScheduleDaySnapshot {
+        syncCalendarWindow()
+        let planningExists = calendar.hasPlanningSession(for: date, planningEventName: "Planning")
+        let existing = existingSessions(for: date)
+        let availability = engine.calculateAvailability(
+            startTime: startTime,
+            baseDate: date,
+            busySlots: busySlots
+        )
+        return ScheduleDaySnapshot(
+            date: date,
+            busySlots: busySlots,
+            planningExists: planningExists,
+            existingSessions: existing,
+            availability: availability
+        )
+    }
+
+    @discardableResult
+    func rebuildPreview(date: Date, startTime: Date, snapshot: ScheduleDaySnapshot) -> [ScheduledSession] {
+        let wasFrozen = engine.sessionsFrozen
+        _ = engine.generateSchedule(
+            startTime: startTime,
+            baseDate: date,
+            busySlots: snapshot.busySlots,
+            includePlanning: !snapshot.planningExists,
+            existingSessions: (
+                work: snapshot.existingSessions.work,
+                side: snapshot.existingSessions.side,
+                deep: snapshot.existingSessions.deep
+            ),
+            existingTitles: snapshot.existingSessions.titles
+        )
+        if !wasFrozen {
+            engine.projectedSessionsDate = Calendar.current.startOfDay(for: date)
         }
-        var unique: [CalendarDescriptor] = []
-        for descriptor in calendars {
-            let duplicate = unique.contains {
-                ($0.identifier != nil && $0.identifier == descriptor.identifier) ||
-                ($0.identifier == nil && $0.name == descriptor.name)
-            }
-            if !duplicate { unique.append(descriptor) }
-        }
-        return unique
+        return engine.projectedSessions
+    }
+
+    @discardableResult
+    func regeneratePreviewFromFetched(date: Date, startTime: Date, busySlots: [BusyTimeSlot]) -> [ScheduledSession] {
+        let snapshot = daySnapshotFromFetched(date: date, startTime: startTime, busySlots: busySlots)
+        return rebuildPreview(date: date, startTime: startTime, snapshot: snapshot)
     }
 
     /// Rebuilds the in-app preview (`engine.projectedSessions`) for the given day. No calendar writes.
     @discardableResult
     func regeneratePreview(date: Date, startTime: Date? = nil, extraBusySlots: [BusyTimeSlot] = []) async -> [ScheduledSession] {
-        syncCalendarWindow()
-        await calendar.fetchEvents(for: date)
-        let busy = calendar.busySlotsForFetchedDate(date) + extraBusySlots
-        let planningExists = calendar.hasPlanningSession(for: date, planningEventName: "Planning")
-        let (work, side) = workSideDescriptors()
-        let existing = calendar.countExistingSessions(
-            for: date, workCalendar: work, sideCalendar: side, deepConfig: engine.deepSessionConfig
-        )
-        _ = engine.generateSchedule(
-            startTime: startTime ?? defaultStartTime(for: date),
-            baseDate: date,
-            busySlots: busy,
-            includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
-            existingTitles: existing.titles
-        )
-        return engine.projectedSessions
+        let resolvedStartTime = startTime ?? defaultStartTime(for: date)
+        let snapshot = await daySnapshot(date: date, startTime: resolvedStartTime, extraBusySlots: extraBusySlots)
+        return rebuildPreview(date: date, startTime: resolvedStartTime, snapshot: snapshot)
     }
 
     func availability(date: Date, startTime: Date? = nil) async
         -> (availableMinutes: Int, possibleWorkSessions: Int, possibleSideSessions: Int, possibleDeepSessions: Int) {
-        syncCalendarWindow()
-        await calendar.fetchEvents(for: date)
-        let busy = calendar.busySlotsForFetchedDate(date)
-        return engine.calculateAvailability(
-            startTime: startTime ?? defaultStartTime(for: date), baseDate: date, busySlots: busy
-        )
+        let snapshot = await daySnapshot(date: date, startTime: startTime ?? defaultStartTime(for: date))
+        return snapshot.availability
     }
 
     /// Writes the current preview to the real calendar (excluding long rests), then clears the preview.
     func commit(date: Date) async -> (success: Int, failed: Int, eventIds: [String]) {
         syncCalendarWindow()
         let sessions = engine.projectedSessions.filter { $0.type != .bigRest }
+        guard previewMatches(date: date) else {
+            engine.schedulingMessage = "Regenerate the schedule for this day before scheduling."
+            return (0, sessions.count, [])
+        }
         let result = calendar.createSessions(sessions)
         engine.schedulingMessage = result.failed == 0
             ? "Scheduled \(result.success) sessions"
@@ -107,13 +149,21 @@ final class ScheduleCoordinator {
         engine.sessionsFrozen = false
         await calendar.fetchEvents(for: date)
         engine.projectedSessions = []
+        engine.projectedSessionsDate = nil
         return result
+    }
+
+    private func previewMatches(date: Date) -> Bool {
+        guard let previewDate = engine.projectedSessionsDate else {
+            return engine.projectedSessions.isEmpty
+        }
+        return Calendar.current.isDate(previewDate, inSameDayAs: date)
     }
 
     /// Deletes SessionFlow-tagged events on the session calendars for the day. Never touches untagged events.
     func deleteSessions(date: Date, scope: DeleteScope) async -> (deleted: Int, failed: Int) {
         syncCalendarWindow()
-        let calendars = sessionCalendars()
+        let calendars = engine.sessionCalendarDescriptors
         let result: (deleted: Int, failed: Int)
         switch scope {
         case .all:

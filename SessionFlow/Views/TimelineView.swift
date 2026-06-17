@@ -74,6 +74,10 @@ struct TimelineView: View {
     @EnvironmentObject var sessionAwarenessService: SessionAwarenessService
     @EnvironmentObject var recentEventsStore: RecentEventsStore
     @EnvironmentObject var eventCreationCoordinator: EventCreationCoordinator
+
+    private var scheduleCoordinator: ScheduleCoordinator {
+        ScheduleCoordinator(engine: schedulingEngine, calendar: calendarService)
+    }
     
     private let hourHeight: CGFloat = 90 // Zoomed in from 60
     private let timeColumnWidth: CGFloat = 55
@@ -86,24 +90,8 @@ struct TimelineView: View {
     @State private var selectedBusySlot: BusyTimeSlot?
     
     // Inline Editing State (only for BusyTimeSlot)
-    @State private var isEditingTitle = false
-    @State private var isEditingNotes = false
-    @State private var isEditingURL = false
-    @State private var editingTitle: String = ""
-    @State private var editingNotes: String = ""
-    @State private var editingURL: String = ""
-    @State private var originalTitle: String = ""
-    @State private var originalNotes: String = ""
-    @State private var originalURL: String = ""
-    @State private var isCanceling = false
-    @State private var autoFocusField: EditField? = nil
-    @FocusState private var focusedField: EditField?
-    
-    enum EditField {
-        case title
-        case notes
-        case url
-    }
+    @State private var inlineEditor = TimelineInlineEditor()
+    @FocusState private var focusedField: TimelineInlineEditField?
     
     // Width tracking for adaptive UI - default to 0 to start compact
     @State private var containerWidth: CGFloat = 0
@@ -125,27 +113,19 @@ struct TimelineView: View {
     @State private var dragSessionId: UUID? = nil
     @State private var dragPreviewStartTime: Date? = nil
     @State private var dragPreviewEndTime: Date? = nil
-    @State private var dragMode: DragMode = .none
+    @State private var dragMode: TimelineDragMode = .none
     @State private var isShiftHeld: Bool = false
     @State private var isCommandHeld: Bool = false
     @State private var isOptionHeld: Bool = false
     @State private var flagsMonitor: Any? = nil
-    // Group drag: original times of every selected slot at drag start, and live preview targets.
-    @State private var groupDragOriginalTimes: [String: (start: Date, end: Date)] = [:]
-    @State private var groupDragPreviewTimes: [String: (start: Date, end: Date)] = [:]
+    @State private var groupDrag = TimelineGroupDrag()
     @State private var keyDownMonitor: Any? = nil
     @State private var mouseDownMonitor: Any? = nil
     @StateObject private var eventUndoManager = EventUndoManager()
     @StateObject private var actionContext = TimelineActionContext()
     @State private var eventsLocked: Bool = false
     @State private var isTimelinePanelHovered: Bool = false
-    @State private var elasticOriginalBusySlots: [BusyTimeSlot]? = nil
-    @State private var elasticStagedBusySlots: [BusyTimeSlot] = []
-    @State private var elasticPreDragBusySlots: [BusyTimeSlot]? = nil
-    @State private var elasticUndoStack: [ElasticEditSnapshot] = []
-    @State private var elasticRedoStack: [ElasticEditSnapshot] = []
-    @State private var elasticDisplacementMode: ElasticDisplacementMode = .bubble
-    @State private var elasticEmptySpaceAfterBySlotId: [String: TimeInterval] = [:]
+    @State private var elasticEditor = TimelineElasticEditor()
     @State private var showingUnfreezeConfirmation: Bool = false
     @State private var showingCopyDatePicker: Bool = false
     @State private var copyTargetDate: Date = Date()
@@ -159,8 +139,7 @@ struct TimelineView: View {
     // Throttle for real-time recalculation during drag
     @State private var lastDragRecalcTime: Date = .distantPast
     private let dragRecalcInterval: TimeInterval = 0.15 // 150ms throttle
-    // Snapshot of sessions before displacement began (for clean displacement each frame)
-    @State private var preDisplacementSessions: [ScheduledSession]? = nil
+    @State private var projectedSessionDrag = TimelineProjectedSessionDrag()
     // Prevents drag re-initialization after Esc while mouse button is still held
     @State private var dragCancelled: Bool = false
     // Auto-scroll during drag
@@ -170,37 +149,6 @@ struct TimelineView: View {
     /// Last hour we scrolled to; used to avoid resetting scroll on every timer tick (only scroll when hour changes)
     @State private var lastScrolledStartHour: Int? = nil
 
-    private enum DragMode: Equatable {
-        case none
-        case move
-        case resizeTop
-        case resizeBottom
-    }
-
-    private enum ElasticDisplacementMode: String, CaseIterable, Identifiable {
-        case bubble = "Bubble"
-        case pushDown = "Push down"
-
-        var id: String { rawValue }
-
-        var shortLabel: String {
-            switch self {
-            case .bubble: return "Bubble"
-            case .pushDown: return "Push"
-            }
-        }
-    }
-
-    private struct ElasticObstacle {
-        let start: Date
-        let paddedEnd: Date
-    }
-
-    private struct ElasticEditSnapshot {
-        let slots: [BusyTimeSlot]
-        let emptySpaceAfterBySlotId: [String: TimeInterval]
-    }
-    
     private var isNarrow: Bool {
         // Use a reasonable threshold for narrow width
         containerWidth < 750
@@ -212,11 +160,11 @@ struct TimelineView: View {
     }
 
     private var isElasticEditing: Bool {
-        elasticOriginalBusySlots != nil
+        elasticEditor.isEditing
     }
 
     private var elasticChangeCount: Int {
-        elasticTimeChanges().count
+        elasticEditor.changeCount
     }
     
     private var showingDetailSheet: Bool {
@@ -231,6 +179,17 @@ struct TimelineView: View {
     private var currentSelectedBusySlot: BusyTimeSlot? {
         guard let selectedBusySlot else { return nil }
         return filteredBusySlots.first { $0.id == selectedBusySlot.id }
+    }
+
+    private var timelineTimeScale: TimelineTimeScale {
+        TimelineTimeScale(
+            selectedDate: selectedDate,
+            hourHeight: hourHeight,
+            hideNightHours: schedulingEngine.hideNightHours,
+            dayStartHour: schedulingEngine.dayStartHour,
+            dayEndHour: schedulingEngine.dayEndHour,
+            scheduleEndHour: schedulingEngine.scheduleEndHour
+        )
     }
     
     var body: some View {
@@ -315,10 +274,10 @@ struct TimelineView: View {
                     }
                     if isElasticEditing {
                         if event.modifierFlags.contains(.shift) {
-                            guard !elasticRedoStack.isEmpty else { return event }
+                            guard elasticEditor.canRedo else { return event }
                             redoElasticChange()
                         } else {
-                            guard !elasticUndoStack.isEmpty else { return event }
+                            guard elasticEditor.canUndo else { return event }
                             undoElasticChange()
                         }
                         return nil
@@ -422,16 +381,7 @@ struct TimelineView: View {
                         Button("Copy") {
                             if let slotId = copySlotId,
                                let slot = filteredBusySlots.first(where: { $0.id == slotId }) {
-                                let formatter = DateFormatter()
-                                formatter.dateFormat = "EEE, MMM d"
-                                let label = formatter.string(from: copyTargetDate)
-                                let result = calendarService.copyEventToDay(eventId: slotId, targetDate: copyTargetDate)
-                                if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                                    onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: label, targetDate: copyTargetDate, targetStartTime: targetStart, newEventId: eventId))
-                                    Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                                } else {
-                                    schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
-                                }
+                                copyBusySlot(slot, toCustomDate: copyTargetDate)
                             }
                             showingCopyDatePicker = false
                         }
@@ -563,7 +513,7 @@ struct TimelineView: View {
                         eventsAreaView
                     }
                     .padding(.vertical, 20)
-                    .frame(height: CGFloat(visibleHours.count) * hourHeight + 40)
+                    .frame(height: timelineTimeScale.contentHeight)
                     .onAppear {
                         scrollProxy = proxy
                         lastScrolledStartHour = Calendar.current.component(.hour, from: startTime)
@@ -671,8 +621,8 @@ struct TimelineView: View {
 
                     // Group drag: render preview blocks for every other selected slot.
                     if dragMode == .move {
-                        ForEach(filteredBusySlots.filter { $0.id != slotId && groupDragPreviewTimes[$0.id] != nil }, id: \.id) { otherSlot in
-                            if let target = groupDragPreviewTimes[otherSlot.id] {
+                        ForEach(filteredBusySlots.filter { $0.id != slotId && groupDrag.preview(for: $0.id) != nil }, id: \.id) { otherSlot in
+                            if let target = groupDrag.preview(for: otherSlot.id) {
                                 dragPreviewBlock(
                                     slot: otherSlot,
                                     newStart: target.start,
@@ -1059,7 +1009,7 @@ Elastic edit: stage calendar moves before saving.
             Divider()
                 .frame(height: 22)
 
-            Picker("", selection: $elasticDisplacementMode) {
+            Picker("", selection: $elasticEditor.displacementMode) {
                 ForEach(ElasticDisplacementMode.allCases) { mode in
                     Text(mode.shortLabel).tag(mode)
                 }
@@ -1212,14 +1162,6 @@ private struct SpringShape: Shape {
 }
 
 extension TimelineView {
-    
-    private struct PositionedBusySlot: Identifiable {
-        let slot: BusyTimeSlot
-        let column: Int
-        var totalColumns: Int
-        var id: String { slot.id }
-    }
-    
     private var filteredBusySlots: [BusyTimeSlot] {
         let excluded = calendarService.excludedCalendarIDs
         let slots = timelineBusySlots(for: selectedDate)
@@ -1244,13 +1186,13 @@ extension TimelineView {
         }
     }
     
-    private var busySlotsWithLayout: [PositionedBusySlot] {
-        layoutBusySlots(filteredBusySlots)
+    private var busySlotsWithLayout: [TimelineBusySlotLayout.PositionedSlot] {
+        TimelineBusySlotLayout.positionedSlots(for: filteredBusySlots)
     }
 
     private func timelineBusySlots(for date: Date) -> [BusyTimeSlot] {
         if isElasticEditing, Calendar.current.isDate(date, inSameDayAs: selectedDate) {
-            return elasticStagedBusySlots
+            return elasticEditor.stagedSlots
         }
         return calendarService.busySlotsForFetchedDate(date)
     }
@@ -1318,13 +1260,7 @@ extension TimelineView {
             selectedBusySlotIds = preservedSelection
         }
         let snapshot = calendarService.busySlotsForFetchedDate(actionContext.selectedDate)
-        elasticOriginalBusySlots = snapshot
-        elasticStagedBusySlots = snapshot
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = calculateElasticEmptySpaceAfterBySlotId(for: snapshot)
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
-        elasticDisplacementMode = mode
+        elasticEditor.begin(with: snapshot, mode: mode)
 
         if showToast {
             onModeToast?("Elastic editing enabled")
@@ -1347,7 +1283,7 @@ extension TimelineView {
     private func activateElasticModeForDragIfNeeded() {
         guard let requestedMode = requestedElasticModeForDrag() else { return }
         if isElasticEditing {
-            elasticDisplacementMode = requestedMode
+            elasticEditor.displacementMode = requestedMode
         } else {
             beginElasticEditing(mode: requestedMode, preserveSelection: true)
         }
@@ -1355,12 +1291,7 @@ extension TimelineView {
 
     private func cancelElasticEditing(showToast: Bool = true) {
         guard isElasticEditing else { return }
-        elasticOriginalBusySlots = nil
-        elasticStagedBusySlots = []
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = [:]
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
+        elasticEditor.reset()
         selectedBusySlotIds.removeAll()
         resetDragState()
         recalculateWithOriginalSlots()
@@ -1371,7 +1302,7 @@ extension TimelineView {
     }
 
     private func saveElasticEditing() {
-        let changes = elasticTimeChanges()
+        let changes = elasticEditor.timeChanges()
         guard !changes.isEmpty else {
             cancelElasticEditing()
             return
@@ -1392,12 +1323,7 @@ extension TimelineView {
         }
 
         let savedCount = changes.count
-        elasticOriginalBusySlots = nil
-        elasticStagedBusySlots = []
-        elasticPreDragBusySlots = nil
-        elasticEmptySpaceAfterBySlotId = [:]
-        elasticUndoStack.removeAll()
-        elasticRedoStack.removeAll()
+        elasticEditor.reset()
         selectedBusySlotIds.removeAll()
         resetDragState()
 
@@ -1406,156 +1332,37 @@ extension TimelineView {
     }
 
     private func recordElasticUndoSnapshot(_ snapshot: [BusyTimeSlot]) {
-        elasticUndoStack.append(
-            ElasticEditSnapshot(
-                slots: snapshot,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        if elasticUndoStack.count > 50 {
-            elasticUndoStack.removeFirst()
-        }
-        elasticRedoStack.removeAll()
+        elasticEditor.recordUndoSnapshot(snapshot)
     }
 
     private func undoElasticChange() {
-        guard let previous = elasticUndoStack.popLast() else { return }
-        elasticRedoStack.append(
-            ElasticEditSnapshot(
-                slots: elasticStagedBusySlots,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        elasticStagedBusySlots = previous.slots
-        elasticEmptySpaceAfterBySlotId = previous.emptySpaceAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        guard elasticEditor.undo() else { return }
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("Undid elastic move")
     }
 
     private func redoElasticChange() {
-        guard let next = elasticRedoStack.popLast() else { return }
-        elasticUndoStack.append(
-            ElasticEditSnapshot(
-                slots: elasticStagedBusySlots,
-                emptySpaceAfterBySlotId: elasticEmptySpaceAfterBySlotId
-            )
-        )
-        elasticStagedBusySlots = next.slots
-        elasticEmptySpaceAfterBySlotId = next.emptySpaceAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        guard elasticEditor.redo() else { return }
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("Redid elastic move")
     }
 
-    private func elasticTimeChanges() -> [EventUndoManager.EventTimeChange] {
-        guard let original = elasticOriginalBusySlots else { return [] }
-        let originalsById = Dictionary(uniqueKeysWithValues: original.map { ($0.id, $0) })
-
-        return elasticStagedBusySlots
-            .compactMap { staged -> EventUndoManager.EventTimeChange? in
-                guard let old = originalsById[staged.id],
-                      old.startTime != staged.startTime || old.endTime != staged.endTime else {
-                    return nil
-                }
-                return EventUndoManager.EventTimeChange(
-                    eventId: staged.id,
-                    oldStartTime: old.startTime,
-                    oldEndTime: old.endTime,
-                    newStartTime: staged.startTime,
-                    newEndTime: staged.endTime,
-                    description: "Elastic move \(staged.title)"
-                )
-            }
-            .sorted { $0.oldStartTime < $1.oldStartTime }
-    }
-
     private func busySlot(_ slot: BusyTimeSlot, replacingStart start: Date, end: Date) -> BusyTimeSlot {
-        BusyTimeSlot(
-            id: slot.id,
-            title: slot.title,
-            startTime: start,
-            endTime: end,
-            notes: slot.notes,
-            url: slot.url,
-            calendarName: slot.calendarName,
-            calendarColor: slot.calendarColor,
-            calendarIdentifier: slot.calendarIdentifier
-        )
+        TimelineEditPlanner.busySlot(slot, replacingStart: start, end: end)
     }
 
     private func applyingTimeUpdates(
         to slots: [BusyTimeSlot],
         updates: [String: (start: Date, end: Date)]
     ) -> [BusyTimeSlot] {
-        slots.map { slot in
-            guard let update = updates[slot.id] else { return slot }
-            return busySlot(slot, replacingStart: update.start, end: update.end)
-        }
-    }
-
-    private func calculateElasticEmptySpaceAfterBySlotId(for slots: [BusyTimeSlot]) -> [String: TimeInterval] {
-        let sortedSlots = slots.sorted {
-            if $0.startTime == $1.startTime {
-                return $0.endTime < $1.endTime
-            }
-            return $0.startTime < $1.startTime
-        }
-        guard sortedSlots.count > 1 else { return [:] }
-
-        var gaps: [String: TimeInterval] = [:]
-        for index in sortedSlots.indices.dropLast() {
-            let current = sortedSlots[index]
-            let next = sortedSlots[sortedSlots.index(after: index)]
-            let gap = next.startTime.timeIntervalSince(current.endTime)
-            if gap > 0 {
-                gaps[current.id] = gap
-            }
-        }
-        return gaps
+        TimelineEditPlanner.applyingTimeUpdates(to: slots, updates: updates)
     }
 
     private func elasticGapMap(
         adjustingForDraggedUpdates draggedUpdates: [String: (start: Date, end: Date)],
         in baseSlots: [BusyTimeSlot]
     ) -> [String: TimeInterval] {
-        guard !draggedUpdates.isEmpty else { return elasticEmptySpaceAfterBySlotId }
-
-        var adjusted = elasticEmptySpaceAfterBySlotId
-        let directlyMovedSlots = applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
-        let directEmptySpaceAfterBySlotId = calculateElasticEmptySpaceAfterBySlotId(for: directlyMovedSlots)
-
-        for (id, preservedGap) in Array(adjusted) {
-            let directGap = directEmptySpaceAfterBySlotId[id] ?? 0
-            if directGap < preservedGap {
-                adjusted[id] = max(0, directGap)
-            }
-        }
-
-        return adjusted
-    }
-
-    private func elasticObstacle(start: Date, end: Date, gapAfter: TimeInterval) -> ElasticObstacle {
-        ElasticObstacle(start: start, paddedEnd: end.addingTimeInterval(gapAfter))
-    }
-
-    private func elasticObstacle(for slot: BusyTimeSlot, gapAfterBySlotId: [String: TimeInterval]) -> ElasticObstacle {
-        elasticObstacle(
-            start: slot.startTime,
-            end: slot.endTime,
-            gapAfter: gapAfterBySlotId[slot.id] ?? 0
-        )
-    }
-
-    private func elasticBlockingEnd(
-        candidateStart: Date,
-        candidateEnd: Date,
-        candidateGapAfter: TimeInterval,
-        obstacles: [ElasticObstacle]
-    ) -> Date? {
-        let candidatePaddedEnd = candidateEnd.addingTimeInterval(candidateGapAfter)
-        return obstacles
-            .filter { candidateStart < $0.paddedEnd && candidatePaddedEnd > $0.start }
-            .map { $0.paddedEnd }
-            .max()
+        elasticEditor.adjustedGapMap(forDraggedUpdates: draggedUpdates, in: baseSlots)
     }
 
     private func displaceBusySlots(
@@ -1564,192 +1371,17 @@ extension TimelineView {
         commitDraggedSlots: Bool,
         gapAfterBySlotId: [String: TimeInterval]? = nil
     ) -> [BusyTimeSlot] {
-        let gapAfterBySlotId = gapAfterBySlotId ?? elasticGapMap(
+        let existingGapMap = gapAfterBySlotId ?? elasticGapMap(
             adjustingForDraggedUpdates: draggedUpdates,
             in: baseSlots
         )
-
-        if elasticDisplacementMode == .pushDown,
-           let pushed = pushDownBusySlots(
+        return elasticEditor.displacedSlots(
             baseSlots: baseSlots,
             draggedUpdates: draggedUpdates,
             commitDraggedSlots: commitDraggedSlots,
-            gapAfterBySlotId: gapAfterBySlotId
-           ) {
-            return pushed
-        }
-
-        let draggedIds = Set(draggedUpdates.keys)
-        var result = commitDraggedSlots
-            ? applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
-            : baseSlots
-
-        var causedObstacles = draggedUpdates.map { entry in
-            elasticObstacle(
-                start: entry.value.start,
-                end: entry.value.end,
-                gapAfter: gapAfterBySlotId[entry.key] ?? 0
-            )
-        }
-        var allObstacles = causedObstacles
-        let floor = timelineDisplacementFloor
-
-        for slot in baseSlots where !draggedIds.contains(slot.id) {
-            if !slot.isFlowFlexible || slot.startTime < floor {
-                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
-            }
-        }
-
-        let candidates = baseSlots
-            .filter { !draggedIds.contains($0.id) && $0.isFlowFlexible && $0.startTime >= floor }
-            .sorted { $0.startTime < $1.startTime }
-
-        for slot in candidates {
-            let duration = slot.endTime.timeIntervalSince(slot.startTime)
-            let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
-            var candidateStart = max(slot.startTime, floor)
-            var candidateEnd = slot.endTime
-            var moved = false
-
-            while true {
-                let causedEnd = elasticBlockingEnd(
-                    candidateStart: candidateStart,
-                    candidateEnd: candidateEnd,
-                    candidateGapAfter: candidateGapAfter,
-                    obstacles: causedObstacles
-                )
-
-                if let causedEnd {
-                    candidateStart = max(causedEnd, floor)
-                    candidateEnd = candidateStart.addingTimeInterval(duration)
-                    moved = true
-                    continue
-                }
-
-                let obstacleEnd = elasticBlockingEnd(
-                    candidateStart: candidateStart,
-                    candidateEnd: candidateEnd,
-                    candidateGapAfter: candidateGapAfter,
-                    obstacles: allObstacles
-                )
-
-                if moved, let obstacleEnd {
-                    candidateStart = max(obstacleEnd, floor)
-                    candidateEnd = candidateStart.addingTimeInterval(duration)
-                    continue
-                }
-
-                break
-            }
-
-            if moved {
-                if let index = result.firstIndex(where: { $0.id == slot.id }) {
-                    result[index] = busySlot(slot, replacingStart: candidateStart, end: candidateEnd)
-                }
-                let obstacle = elasticObstacle(
-                    start: candidateStart,
-                    end: candidateEnd,
-                    gapAfter: candidateGapAfter
-                )
-                causedObstacles.append(obstacle)
-                allObstacles.append(obstacle)
-            } else {
-                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
-            }
-        }
-
-        return result
-    }
-
-    private func pushDownBusySlots(
-        baseSlots: [BusyTimeSlot],
-        draggedUpdates: [String: (start: Date, end: Date)],
-        commitDraggedSlots: Bool,
-        gapAfterBySlotId: [String: TimeInterval]
-    ) -> [BusyTimeSlot]? {
-        let draggedIds = Set(draggedUpdates.keys)
-        let originalsById = Dictionary(uniqueKeysWithValues: baseSlots.map { ($0.id, $0) })
-        let positiveTranslation = draggedUpdates.compactMap { entry -> TimeInterval? in
-            guard let original = originalsById[entry.key] else { return nil }
-            return entry.value.start.timeIntervalSince(original.startTime)
-        }
-        .filter { $0 > 0 }
-        .max()
-
-        guard let translation = positiveTranslation else { return nil }
-
-        let floor = timelineDisplacementFloor
-        let draggedObstacles = draggedUpdates.map { entry in
-            elasticObstacle(
-                start: entry.value.start,
-                end: entry.value.end,
-                gapAfter: gapAfterBySlotId[entry.key] ?? 0
-            )
-        }
-        let pushAnchor = draggedUpdates.keys
-            .compactMap { originalsById[$0]?.startTime }
-            .min() ?? floor
-
-        let hasDownstreamCollision = baseSlots
-            .filter { !draggedIds.contains($0.id) && $0.endTime > floor }
-            .contains { slot in
-                let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
-                return elasticBlockingEnd(
-                    candidateStart: slot.startTime,
-                    candidateEnd: slot.endTime,
-                    candidateGapAfter: candidateGapAfter,
-                    obstacles: draggedObstacles
-                ) != nil
-            }
-
-        guard hasDownstreamCollision else { return nil }
-
-        var result = commitDraggedSlots
-            ? applyingTimeUpdates(to: baseSlots, updates: draggedUpdates)
-            : baseSlots
-
-        var allObstacles = draggedObstacles
-
-        for slot in baseSlots where !draggedIds.contains(slot.id) {
-            let isPushCandidate = slot.isFlowFlexible && slot.startTime >= floor && slot.startTime >= pushAnchor
-            if !isPushCandidate {
-                allObstacles.append(elasticObstacle(for: slot, gapAfterBySlotId: gapAfterBySlotId))
-            }
-        }
-
-        let candidates = baseSlots
-            .filter { !draggedIds.contains($0.id) && $0.isFlowFlexible && $0.startTime >= floor && $0.startTime >= pushAnchor }
-            .sorted { $0.startTime < $1.startTime }
-
-        for slot in candidates {
-            let duration = slot.endTime.timeIntervalSince(slot.startTime)
-            let candidateGapAfter = gapAfterBySlotId[slot.id] ?? 0
-            var candidateStart = max(slot.startTime.addingTimeInterval(translation), floor)
-            var candidateEnd = candidateStart.addingTimeInterval(duration)
-
-            while let blockerEnd = elasticBlockingEnd(
-                candidateStart: candidateStart,
-                candidateEnd: candidateEnd,
-                candidateGapAfter: candidateGapAfter,
-                obstacles: allObstacles
-            ) {
-                candidateStart = max(blockerEnd, floor)
-                candidateEnd = candidateStart.addingTimeInterval(duration)
-            }
-
-            if let index = result.firstIndex(where: { $0.id == slot.id }) {
-                result[index] = busySlot(slot, replacingStart: candidateStart, end: candidateEnd)
-            }
-            allObstacles.append(
-                elasticObstacle(
-                    start: candidateStart,
-                    end: candidateEnd,
-                    gapAfter: candidateGapAfter
-                )
-            )
-        }
-
-        return result
+            gapAfterBySlotId: existingGapMap,
+            floor: timelineDisplacementFloor
+        )
     }
     
     private var timeColumnView: some View {
@@ -1790,37 +1422,7 @@ extension TimelineView {
     }
     
     private func formattedHour(_ hour: Int) -> String {
-        let normalizedHour = ((hour % 24) + 24) % 24
-
-        if uses12HourClock {
-            let displayHour = normalizedHour % 12 == 0 ? 12 : normalizedHour % 12
-            let period = normalizedHour < 12 ? "AM" : "PM"
-            return "\(displayHour) \(period)"
-        }
-
-        let calendar = Calendar.current
-        var components = DateComponents()
-        components.hour = normalizedHour
-        
-        // Handle hour 24 and beyond for formatting by shifting to next day
-        if hour >= 24 {
-            if let date = calendar.date(from: components),
-               let nextDay = calendar.date(byAdding: .day, value: 1, to: date) {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .none
-                formatter.timeStyle = .short
-                return formatter.string(from: nextDay)
-            }
-        }
-        
-        
-        if let date = calendar.date(from: components) {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .none
-            formatter.timeStyle = .short
-            return formatter.string(from: date)
-        }
-        return "\(hour):00"
+        timelineTimeScale.formattedHour(hour, uses12HourClock: uses12HourClock)
     }
     
     /// The upper bound for visible hours.
@@ -1828,98 +1430,32 @@ extension TimelineView {
     /// up to `scheduleEndHour` so scheduled sessions are never clipped off the
     /// timeline. When night hours are shown, we expose a full 24h minimum.
     private var effectiveEndHour: Int {
-        if schedulingEngine.hideNightHours {
-            return max(schedulingEngine.dayEndHour, schedulingEngine.scheduleEndHour)
-        } else {
-            return max(24, schedulingEngine.scheduleEndHour)
-        }
+        timelineTimeScale.effectiveEndHour
     }
 
     private var visibleHours: [Int] {
-        if schedulingEngine.hideNightHours {
-            return Array(schedulingEngine.dayStartHour..<effectiveEndHour)
-        } else {
-            return Array(0..<effectiveEndHour)
-        }
+        timelineTimeScale.visibleHours
     }
 
     /// Effective "now" for the red line: real time or dev override.
     private var effectiveNowTimeForIndicator: Date {
-        guard devNowLineOverrideEnabled else { return currentTime }
-        let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: selectedDate)
-        return cal.date(byAdding: .hour, value: devNowLineOverrideHour, to: dayStart)
-            .flatMap { cal.date(byAdding: .minute, value: devNowLineOverrideMinute, to: $0) } ?? currentTime
+        timelineTimeScale.effectiveNowTime(
+            currentTime: currentTime,
+            overrideEnabled: devNowLineOverrideEnabled,
+            overrideHour: devNowLineOverrideHour,
+            overrideMinute: devNowLineOverrideMinute
+        )
     }
 
     /// Show current-time indicator when viewing today, or when viewing yesterday
     /// and the current time falls within the extended hours (past midnight).
     /// With dev override enabled, always show so screenshots can use any date.
     private var shouldShowCurrentTimeIndicator: Bool {
-        if devNowLineOverrideEnabled { return true }
-        let cal = Calendar.current
-        if cal.isDateInToday(selectedDate) { return true }
-        if effectiveEndHour > 24,
-           let yesterday = cal.date(byAdding: .day, value: -1, to: Date()),
-           cal.isDate(selectedDate, inSameDayAs: yesterday) {
-            let dayStart = cal.startOfDay(for: selectedDate)
-            let hoursFromStart = Date().timeIntervalSince(dayStart) / 3600
-            return hoursFromStart < Double(effectiveEndHour)
-        }
-        return false
+        timelineTimeScale.shouldShowCurrentTimeIndicator(
+            currentDate: Date(),
+            overrideEnabled: devNowLineOverrideEnabled
+        )
     }
-    
-    private func layoutBusySlots(_ slots: [BusyTimeSlot]) -> [PositionedBusySlot] {
-        struct ActiveSlot {
-            let slot: BusyTimeSlot
-            let column: Int
-            let positionedIndex: Int
-        }
-        
-        let sortedSlots = slots.sorted { $0.startTime < $1.startTime }
-        var positionedSlots: [PositionedBusySlot] = []
-        var activeSlots: [ActiveSlot] = []
-        var currentClusterIndices: [Int] = []
-        var currentClusterMaxColumns = 0
-        
-        func finalizeCluster() {
-            guard !currentClusterIndices.isEmpty else { return }
-            let totalColumns = max(currentClusterMaxColumns, 1)
-            for index in currentClusterIndices {
-                positionedSlots[index].totalColumns = totalColumns
-            }
-            currentClusterIndices.removeAll()
-            currentClusterMaxColumns = 0
-        }
-        
-        for slot in sortedSlots {
-            activeSlots.removeAll { active in
-                active.slot.endTime <= slot.startTime
-            }
-            
-            if activeSlots.isEmpty {
-                finalizeCluster()
-            }
-            
-            let usedColumns = Set(activeSlots.map { $0.column })
-            var column = 0
-            while usedColumns.contains(column) {
-                column += 1
-            }
-            
-            let positionedSlot = PositionedBusySlot(slot: slot, column: column, totalColumns: 1)
-            let positionedIndex = positionedSlots.count
-            positionedSlots.append(positionedSlot)
-            activeSlots.append(ActiveSlot(slot: slot, column: column, positionedIndex: positionedIndex))
-            currentClusterIndices.append(positionedIndex)
-            currentClusterMaxColumns = max(currentClusterMaxColumns, column + 1)
-        }
-        
-        finalizeCluster()
-        return positionedSlots
-    }
-    
-    
     
     private func currentTimeIndicator(currentTime: Date, width: CGFloat) -> some View {
         let yPos = calculateYPosition(for: currentTime)
@@ -1961,13 +1497,16 @@ extension TimelineView {
     
     // MARK: - Event Block (Busy) - Left Half
     
-    private func eventBlock(for positionedSlot: PositionedBusySlot, containerWidth: CGFloat) -> some View {
+    private func eventBlock(
+        for positionedSlot: TimelineBusySlotLayout.PositionedSlot,
+        containerWidth: CGFloat
+    ) -> some View {
         let slot = positionedSlot.slot
         let isAnchorDragging = dragSlotId == slot.id && dragMode != .none
         let isGroupMemberDragging = dragMode == .move
             && dragSlotId != nil
             && dragSlotId != slot.id
-            && groupDragOriginalTimes[slot.id] != nil
+            && groupDrag.contains(slot.id)
         let isDragging = isAnchorDragging || isGroupMemberDragging
         let isSelected = selectedBusySlotIds.contains(slot.id)
         let yPos = calculateYPosition(for: slot.startTime)
@@ -1997,7 +1536,11 @@ extension TimelineView {
                         .strokeBorder(slot.calendarColor.opacity(borderOpacity), lineWidth: borderWidth)
                 )
 
-            let showsFeedbackBadge = slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled
+            let showsFeedbackBadge = TimelineEventContent.showsFeedbackBadge(
+                eventEnd: slot.endTime,
+                awarenessEnabled: sessionAwarenessService.config.enabled,
+                productivityEnabled: sessionAwarenessService.config.productivityEnabled
+            )
             let goals = HarshModeSessionNotes.goals(from: slot.notes)
             let showsGoalReminder = !goals.isEmpty
             let urlMinimumHeight: CGFloat = showsGoalReminder ? 76 : 35
@@ -2051,7 +1594,7 @@ extension TimelineView {
                         .truncationMode(.middle)
                 }
 
-                if let notes = editableNotes(from: SessionAwarenessService.strippedNotes(slot.notes)), height > notesMinimumHeight {
+                if let notes = TimelineEventContent.blockDisplayNotes(from: slot.notes), height > notesMinimumHeight {
                     Text(notes)
                         .font(.system(size: 9))
                         .foregroundColor(colors.textSecondary)
@@ -2093,17 +1636,17 @@ extension TimelineView {
                     guard !eventsLocked, !dragCancelled else { return }
                     // Determine mode on first movement
                     if dragMode == .none {
-                        let startY = value.startLocation.y
-                        if startY < edgeZone {
-                            dragMode = .resizeTop
-                        } else if startY > blockHeight - edgeZone {
-                            dragMode = .resizeBottom
-                        } else {
+                        dragMode = TimelineDragPreview.mode(
+                            startY: value.startLocation.y,
+                            blockHeight: blockHeight,
+                            edgeZone: edgeZone,
+                            canResize: true
+                        )
+                        if dragMode == .move {
                             activateElasticModeForDragIfNeeded()
-                            dragMode = .move
                             NSCursor.closedHand.push()
                             if isElasticEditing {
-                                elasticPreDragBusySlots = elasticStagedBusySlots
+                                elasticEditor.capturePreDragSnapshot()
                             }
                             // If dragged slot isn't part of the selection, reset selection to it.
                             // Resize stays single-event (no selection change).
@@ -2112,66 +1655,36 @@ extension TimelineView {
                             }
                             // Snapshot original times for every selected slot (for group drag).
                             if selectedBusySlotIds.count > 1 {
-                                let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
-                                var snapshot: [String: (start: Date, end: Date)] = [:]
-                                for id in selectedBusySlotIds {
-                                    if let s = slotsById[id] {
-                                        snapshot[id] = (s.startTime, s.endTime)
-                                    }
-                                }
-                                groupDragOriginalTimes = snapshot
-                                groupDragPreviewTimes = snapshot
+                                groupDrag.begin(
+                                    selectedIds: selectedBusySlotIds,
+                                    slots: timelineBusySlots(for: actionContext.selectedDate)
+                                )
                             }
                         }
                         if isElasticEditing, dragMode != .move {
-                            elasticPreDragBusySlots = elasticStagedBusySlots
+                            elasticEditor.capturePreDragSnapshot()
                         }
                         dragSlotId = slot.id
                     }
 
-                    switch dragMode {
-                    case .move:
-                        let duration = slot.endTime.timeIntervalSince(slot.startTime)
-                        let originalY = calculateYPosition(for: slot.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        dragPreviewStartTime = newStart
-                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
+                    if let preview = TimelineDragPreview.timeRange(
+                        mode: dragMode,
+                        originalStart: slot.startTime,
+                        originalEnd: slot.endTime,
+                        translationY: value.translation.height,
+                        yPosition: calculateYPosition,
+                        dateFromYOffset: dateFromYOffset,
+                        snap: snapToInterval,
+                        clampStart: clampedForElasticDrag,
+                        preservesRawTime: isShiftHeld
+                    ) {
+                        dragPreviewStartTime = preview.start
+                        dragPreviewEndTime = preview.end
 
                         // Group drag: translate every other selected event by the same delta.
-                        if !groupDragOriginalTimes.isEmpty {
-                            let translation = newStart.timeIntervalSince(slot.startTime)
-                            var live: [String: (start: Date, end: Date)] = [:]
-                            for (id, orig) in groupDragOriginalTimes {
-                                live[id] = (
-                                    orig.start.addingTimeInterval(translation),
-                                    orig.end.addingTimeInterval(translation)
-                                )
-                            }
-                            groupDragPreviewTimes = live
+                        if dragMode == .move && groupDrag.isActive {
+                            groupDrag.updateTranslation(from: slot.startTime, to: preview.start)
                         }
-
-                    case .resizeTop:
-                        let originalY = calculateYPosition(for: slot.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        let maxStart = slot.endTime.addingTimeInterval(-5 * 60)
-                        dragPreviewStartTime = min(newStart, maxStart)
-                        dragPreviewEndTime = slot.endTime
-
-                    case .resizeBottom:
-                        let originalY = calculateYPosition(for: slot.endTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
-                        let minEnd = slot.startTime.addingTimeInterval(5 * 60)
-                        dragPreviewStartTime = slot.startTime
-                        dragPreviewEndTime = max(newEnd, minEnd)
-
-                    case .none:
-                        break
                     }
 
                     // Real-time recalculation with throttle
@@ -2181,19 +1694,19 @@ extension TimelineView {
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
                             if isElasticEditing {
-                                let updates: [String: (start: Date, end: Date)] = !groupDragPreviewTimes.isEmpty
-                                    ? groupDragPreviewTimes
+                                let updates: [String: (start: Date, end: Date)] = groupDrag.isActive
+                                    ? groupDrag.previewTimes
                                     : [slot.id: (start: previewStart, end: previewEnd)]
-                                let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+                                let baseSlots = elasticEditor.dragBaseSlots
                                 let displaced = displaceBusySlots(
                                     baseSlots: baseSlots,
                                     draggedUpdates: updates,
                                     commitDraggedSlots: false
                                 )
-                                elasticStagedBusySlots = displaced
+                                elasticEditor.stagedSlots = displaced
                                 recalculateProjectedSchedule(using: applyingTimeUpdates(to: displaced, updates: updates))
-                            } else if !groupDragOriginalTimes.isEmpty {
-                                recalculateWithDraggedSlots(groupDragPreviewTimes)
+                            } else if groupDrag.isActive {
+                                recalculateWithDraggedSlots(groupDrag.previewTimes)
                             } else {
                                 recalculateWithDraggedSlot(slot, newStart: previewStart, newEnd: previewEnd)
                             }
@@ -2211,7 +1724,7 @@ extension TimelineView {
         .onTapGesture(count: 2) {
             selectedSession = nil
             selectedBusySlot = slot
-            autoFocusField = nil
+            inlineEditor.autoFocusField = nil
         }
         .onTapGesture(count: 1) {
             if isCommandHeld || NSEvent.modifierFlags.contains(.command) {
@@ -2226,51 +1739,39 @@ extension TimelineView {
         }
         .contextMenu {
             Button("View & Edit Event Details") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     selectedSession = nil
                     selectedBusySlot = slot
                 }
             }
             Button(slot.isFlowFlexible ? "Mark Fixed" : "Mark Flexible") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     setBusySlotFlexible(slot, isFlexible: !slot.isFlowFlexible)
                 }
             }
             Divider()
             Button("Delete", role: .destructive) {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                performContextMenuAction {
                     deleteBusySlot(slot)
                 }
             }
             Divider()
             Button("Duplicate") {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    let result = calendarService.duplicateEvent(eventId: slot.id)
-                    if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                        onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: "the same day", targetDate: actionContext.selectedDate, targetStartTime: targetStart, newEventId: eventId))
-                        Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                    } else {
-                        schedulingEngine.schedulingMessage = "Failed to duplicate \"\(slot.title)\""
-                    }
+                performContextMenuAction {
+                    duplicateBusySlot(slot)
                 }
             }
             Menu("Copy to...") {
-                ForEach(copyTargetDays(), id: \.date) { target in
+                ForEach(TimelineEventActions.copyTargets(selectedDate: selectedDate), id: \.date) { target in
                     Button(target.label) {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                            let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
-                            if result.success, let eventId = result.newEventId, let targetStart = result.targetStartTime {
-                                onCopySuccess?(CopyToastInfo(title: slot.title, targetLabel: target.label, targetDate: target.date, targetStartTime: targetStart, newEventId: eventId))
-                                Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
-                            } else {
-                                schedulingEngine.schedulingMessage = "Failed to copy \"\(slot.title)\""
-                            }
+                        performContextMenuAction {
+                            copyBusySlot(slot, to: target)
                         }
                     }
                 }
                 Divider()
                 Button("Custom...") {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    performContextMenuAction {
                         copySlotId = slot.id
                         copyTargetDate = actionContext.selectedDate
                         showingCopyDatePicker = true
@@ -2302,12 +1803,7 @@ extension TimelineView {
     }
 
     private func busySlotGoalReminderText(_ goals: [String]) -> String {
-        switch sessionAwarenessService.config.harshModeReminderStyle {
-        case .compact:
-            return goals.first ?? ""
-        case .prominent:
-            return goals.prefix(2).joined(separator: " / ")
-        }
+        TimelineEventContent.goalReminderText(goals, style: sessionAwarenessService.config.harshModeReminderStyle)
     }
 
     private var busySlotGoalColor: Color {
@@ -2440,13 +1936,13 @@ extension TimelineView {
                 .onChanged { value in
                     guard !eventsLocked, !dragCancelled else { return }
                     if dragMode == .none {
-                        let startY = value.startLocation.y
-                        if !isBigRest && startY < edgeZone {
-                            dragMode = .resizeTop
-                        } else if !isBigRest && startY > blockHeight - edgeZone {
-                            dragMode = .resizeBottom
-                        } else {
-                            dragMode = .move
+                        dragMode = TimelineDragPreview.mode(
+                            startY: value.startLocation.y,
+                            blockHeight: blockHeight,
+                            edgeZone: edgeZone,
+                            canResize: !isBigRest
+                        )
+                        if dragMode == .move {
                             NSCursor.closedHand.push()
                         }
                         dragSessionId = session.id
@@ -2454,40 +1950,22 @@ extension TimelineView {
                         if !schedulingEngine.sessionsFrozen {
                             schedulingEngine.sessionsFrozen = true
                         }
-                        // Snapshot sessions before displacement
-                        preDisplacementSessions = schedulingEngine.projectedSessions
+                        projectedSessionDrag.begin(with: schedulingEngine.projectedSessions)
                     }
 
-                    switch dragMode {
-                    case .move:
-                        let duration = session.endTime.timeIntervalSince(session.startTime)
-                        let originalY = calculateYPosition(for: session.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        dragPreviewStartTime = newStart
-                        dragPreviewEndTime = newStart.addingTimeInterval(duration)
-
-                    case .resizeTop:
-                        let originalY = calculateYPosition(for: session.startTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newStart = clampedForElasticDrag(isShiftHeld ? rawDate : snapToInterval(rawDate))
-                        let maxStart = session.endTime.addingTimeInterval(-5 * 60)
-                        dragPreviewStartTime = min(newStart, maxStart)
-                        dragPreviewEndTime = session.endTime
-
-                    case .resizeBottom:
-                        let originalY = calculateYPosition(for: session.endTime)
-                        let newY = originalY + value.translation.height
-                        let rawDate = dateFromYOffset(newY)
-                        let newEnd = isShiftHeld ? rawDate : snapToInterval(rawDate)
-                        let minEnd = session.startTime.addingTimeInterval(5 * 60)
-                        dragPreviewStartTime = session.startTime
-                        dragPreviewEndTime = max(newEnd, minEnd)
-
-                    case .none:
-                        break
+                    if let preview = TimelineDragPreview.timeRange(
+                        mode: dragMode,
+                        originalStart: session.startTime,
+                        originalEnd: session.endTime,
+                        translationY: value.translation.height,
+                        yPosition: calculateYPosition,
+                        dateFromYOffset: dateFromYOffset,
+                        snap: snapToInterval,
+                        clampStart: clampedForElasticDrag,
+                        preservesRawTime: isShiftHeld
+                    ) {
+                        dragPreviewStartTime = preview.start
+                        dragPreviewEndTime = preview.end
                     }
 
                     // Displacement with throttle
@@ -2496,8 +1974,7 @@ extension TimelineView {
                         let now = Date()
                         if now.timeIntervalSince(lastDragRecalcTime) >= dragRecalcInterval {
                             lastDragRecalcTime = now
-                            // Restore from snapshot before each displacement pass
-                            if let snapshot = preDisplacementSessions {
+                            if let snapshot = projectedSessionDrag.sessionsForDisplacementPass() {
                                 schedulingEngine.projectedSessions = snapshot
                             }
                             schedulingEngine.displaceProjectedSessions(
@@ -2713,8 +2190,8 @@ extension TimelineView {
                         .padding(.top, 2)
                 
                 // Inline editable title
-                if isEditingTitle {
-                    TextField("Event title", text: $editingTitle)
+                if inlineEditor.title.isEditing {
+                    TextField("Event title", text: $inlineEditor.title.draft)
                         .textFieldStyle(.plain)
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(colors.textPrimary)
@@ -2733,9 +2210,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalTitle = slot.title
-                            editingTitle = slot.title
-                            isEditingTitle = true
+                            inlineEditor.begin(.title, original: slot.title)
                             focusedField = .title
                         }
                 }
@@ -2785,12 +2260,12 @@ extension TimelineView {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
                     
-                    if isEditingNotes {
+                    if inlineEditor.notes.isEditing {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(colors.textSecondary)
-                            TextEditor(text: $editingNotes)
+                            TextEditor(text: $inlineEditor.notes.draft)
                                 .font(.system(size: 12))
                                 .foregroundColor(colors.textPrimary)
                                 .scrollContentBackground(.hidden)
@@ -2815,7 +2290,7 @@ extension TimelineView {
                                     return .ignored
                                 }
                         }
-                    } else if let displayNotes = editableNotes(from: slot.notes), !displayNotes.isEmpty {
+                    } else if let displayNotes = TimelineEventContent.detailEditableNotes(from: slot.notes), !displayNotes.isEmpty {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("Notes:")
                                 .font(.system(size: 12, weight: .bold))
@@ -2826,10 +2301,8 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            let stripped = editableNotes(from: slot.notes) ?? ""
-                            originalNotes = stripped
-                            editingNotes = stripped
-                            isEditingNotes = true
+                            let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
+                            inlineEditor.begin(.notes, original: stripped)
                             focusedField = .notes
                         }
                     } else {
@@ -2843,16 +2316,18 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalNotes = ""
-                            editingNotes = ""
-                            isEditingNotes = true
+                            inlineEditor.begin(.notes, original: "")
                             focusedField = .notes
                         }
                     }
                 }
                 
                 // Feedback rating picker
-                if slot.endTime < Date() && sessionAwarenessService.config.enabled && sessionAwarenessService.config.productivityEnabled {
+                if TimelineEventContent.showsFeedbackBadge(
+                    eventEnd: slot.endTime,
+                    awarenessEnabled: sessionAwarenessService.config.enabled,
+                    productivityEnabled: sessionAwarenessService.config.productivityEnabled
+                ) {
                     VStack(alignment: .leading, spacing: 4) {
                         Divider().background(colors.divider)
                         feedbackPicker(for: slot)
@@ -2866,12 +2341,12 @@ extension TimelineView {
                 VStack(alignment: .leading, spacing: 4) {
                     Divider().background(colors.divider)
 
-                    if isEditingURL {
+                    if inlineEditor.url.isEditing {
                         VStack(alignment: .leading, spacing: 4) {
                             Text("URL:")
                                 .font(.system(size: 12, weight: .bold))
                                 .foregroundColor(colors.textSecondary)
-                            TextField("https://example.com", text: $editingURL)
+                            TextField("https://example.com", text: $inlineEditor.url.draft)
                                 .textFieldStyle(.plain)
                                 .font(.system(size: 11))
                                 .foregroundColor(colors.textSecondary)
@@ -2899,9 +2374,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalURL = url.absoluteString
-                            editingURL = url.absoluteString
-                            isEditingURL = true
+                            inlineEditor.begin(.url, original: url.absoluteString)
                             focusedField = .url
                         }
                     } else {
@@ -2915,9 +2388,7 @@ extension TimelineView {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            originalURL = ""
-                            editingURL = ""
-                            isEditingURL = true
+                            inlineEditor.begin(.url, original: "")
                             focusedField = .url
                         }
                     }
@@ -2928,59 +2399,38 @@ extension TimelineView {
         }
         .onChange(of: focusedField) { oldValue, newValue in
             // Don't auto-save if we're canceling
-            guard !isCanceling else { return }
+            guard !inlineEditor.isCanceling else { return }
             
             // Auto-save when focus leaves a field
-            if oldValue == .title && newValue != .title && isEditingTitle {
+            if oldValue == .title && newValue != .title && inlineEditor.title.isEditing {
                 saveTitle(for: slot)
             }
-            if oldValue == .notes && newValue != .notes && isEditingNotes {
+            if oldValue == .notes && newValue != .notes && inlineEditor.notes.isEditing {
                 saveNotes(for: slot)
             }
-            if oldValue == .url && newValue != .url && isEditingURL {
+            if oldValue == .url && newValue != .url && inlineEditor.url.isEditing {
                 saveURL(for: slot)
             }
         }
         .onAppear {
             // Auto-focus on field when detail view opens
-            if let field = autoFocusField {
+            if let field = inlineEditor.autoFocusField {
                 switch field {
                 case .title:
-                    originalTitle = slot.title
-                    editingTitle = slot.title
-                    isEditingTitle = true
+                    inlineEditor.begin(.title, original: slot.title)
                     focusedField = .title
                 case .notes:
-                    let stripped = editableNotes(from: slot.notes) ?? ""
-                    originalNotes = stripped
-                    editingNotes = stripped
-                    isEditingNotes = true
+                    let stripped = TimelineEventContent.detailEditableNotes(from: slot.notes) ?? ""
+                    inlineEditor.begin(.notes, original: stripped)
                     focusedField = .notes
                 case .url:
-                    originalURL = slot.url?.absoluteString ?? ""
-                    editingURL = slot.url?.absoluteString ?? ""
-                    isEditingURL = true
+                    inlineEditor.begin(.url, original: slot.url?.absoluteString ?? "")
                     focusedField = .url
                 }
                 // Clear auto-focus after applying it
-                autoFocusField = nil
+                inlineEditor.autoFocusField = nil
             }
         }
-    }
-
-    private func editableNotes(from notes: String?) -> String? {
-        FlowFlexibilityNotes.strippingTags(from: SessionAlignment.stripAlignmentTags(SessionRating.stripFeedbackTags(notes)))
-    }
-
-    private func reviewTags(from notes: String?) -> String {
-        var tags: [String] = []
-        if let rating = SessionRating.fromNotes(notes) {
-            tags.append(rating.tag)
-        }
-        if let alignment = SessionAlignment.fromNotes(notes) {
-            tags.append(alignment.tag)
-        }
-        return tags.isEmpty ? "" : " " + tags.joined(separator: " ")
     }
 
     private func setBusySlotFlexible(_ slot: BusyTimeSlot, isFlexible: Bool) {
@@ -3020,51 +2470,75 @@ extension TimelineView {
         }
     }
     
-    // MARK: - Copy Target Days
+    // MARK: - Busy Slot Actions
 
-    private struct CopyTarget: Hashable {
-        let label: String
-        let date: Date
-        func hash(into hasher: inout Hasher) { hasher.combine(label) }
-        static func == (lhs: CopyTarget, rhs: CopyTarget) -> Bool { lhs.label == rhs.label }
+    private func performContextMenuAction(_ action: @escaping () -> Void) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + TimelineEventActions.contextMenuActionDelay) {
+            action()
+        }
     }
 
-    private func copyTargetDays() -> [CopyTarget] {
-        let cal = Calendar.current
-        let today = Date()
-        var targets: [CopyTarget] = []
-        for offset in 0...6 {
-            let date = cal.date(byAdding: .day, value: offset, to: today) ?? today
-            if cal.isDate(date, inSameDayAs: selectedDate) { continue }
-            let label: String
-            switch offset {
-            case 0: label = "Today"
-            case 1: label = "Tomorrow"
-            default:
-                let formatter = DateFormatter()
-                formatter.dateFormat = "EEE, MMM d"
-                label = formatter.string(from: date)
-            }
-            targets.append(CopyTarget(label: label, date: date))
+    private func duplicateBusySlot(_ slot: BusyTimeSlot) {
+        let result = calendarService.duplicateEvent(eventId: slot.id)
+        handleCopyOutcome(TimelineEventActions.duplicateOutcome(
+            title: slot.title,
+            selectedDate: actionContext.selectedDate,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func copyBusySlot(_ slot: BusyTimeSlot, to target: TimelineEventActions.CopyTarget) {
+        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: target.date)
+        handleCopyOutcome(TimelineEventActions.copyOutcome(
+            title: slot.title,
+            target: target,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func copyBusySlot(_ slot: BusyTimeSlot, toCustomDate targetDate: Date) {
+        let result = calendarService.copyEventToDay(eventId: slot.id, targetDate: targetDate)
+        handleCopyOutcome(TimelineEventActions.customCopyOutcome(
+            title: slot.title,
+            targetDate: targetDate,
+            result: TimelineEventActions.calendarCopyResult(
+                success: result.success,
+                newEventId: result.newEventId,
+                targetStartTime: result.targetStartTime
+            )
+        ))
+    }
+
+    private func handleCopyOutcome(_ outcome: TimelineEventActions.CopyOutcome) {
+        switch outcome {
+        case .success(let toast):
+            onCopySuccess?(CopyToastInfo(
+                title: toast.title,
+                targetLabel: toast.targetLabel,
+                targetDate: toast.targetDate,
+                targetStartTime: toast.targetStartTime,
+                newEventId: toast.newEventId
+            ))
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
+        case .failure(let message):
+            schedulingEngine.schedulingMessage = message
         }
-        return targets
     }
 
     private func deleteBusySlot(_ slot: BusyTimeSlot) {
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
-        let snapshot = EventDeleteSnapshot(
-            eventId: slot.id,
-            title: slot.title,
-            notes: slot.notes,
-            url: slot.url,
-            startDate: slot.startTime,
-            endDate: slot.endTime,
-            calendarIdentifier: slot.calendarIdentifier,
-            calendarName: slot.calendarName
-        )
+        let snapshot = TimelineEventActions.deleteSnapshot(for: slot)
         if calendarService.deleteEvent(identifier: slot.id) {
             eventUndoManager.recordDelete(snapshot)
             dismissTransientInteractionState()
@@ -3075,17 +2549,13 @@ extension TimelineView {
     /// Atomically deletes multiple slots — one undo step for the whole batch.
     private func deleteSelectedSlots(_ slots: [BusyTimeSlot]) {
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
         guard !slots.isEmpty else { return }
         var snapshots: [EventDeleteSnapshot] = []
         for slot in slots {
-            let snapshot = EventDeleteSnapshot(
-                eventId: slot.id, title: slot.title, notes: slot.notes, url: slot.url,
-                startDate: slot.startTime, endDate: slot.endTime,
-                calendarIdentifier: slot.calendarIdentifier, calendarName: slot.calendarName
-            )
+            let snapshot = TimelineEventActions.deleteSnapshot(for: slot)
             if calendarService.deleteEvent(identifier: slot.id) {
                 snapshots.append(snapshot)
             }
@@ -3102,9 +2572,9 @@ extension TimelineView {
     private func eventCreationBackgroundLayer(containerWidth: CGFloat) -> some View {
         let leftHalfWidth = max((containerWidth / 2), 10)
         return Color.clear
-            .frame(width: leftHalfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .frame(width: leftHalfWidth, height: timelineTimeScale.contentHeight)
             .contentShape(Rectangle())
-            .position(x: leftHalfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .position(x: leftHalfWidth / 2, y: timelineTimeScale.contentHeight / 2)
             .onTapGesture(count: 2) { location in
                 let clickedTime = snapToInterval(dateFromYOffset(location.y))
                 beginEventCreation(at: clickedTime)
@@ -3120,9 +2590,9 @@ extension TimelineView {
     private func rightHalfDeselectLayer(containerWidth: CGFloat) -> some View {
         let halfWidth = max((containerWidth / 2), 10)
         return Color.clear
-            .frame(width: halfWidth, height: CGFloat(visibleHours.count) * hourHeight + 40)
+            .frame(width: halfWidth, height: timelineTimeScale.contentHeight)
             .contentShape(Rectangle())
-            .position(x: containerWidth - halfWidth / 2, y: (CGFloat(visibleHours.count) * hourHeight + 40) / 2)
+            .position(x: containerWidth - halfWidth / 2, y: timelineTimeScale.contentHeight / 2)
             .onTapGesture {
                 if !selectedBusySlotIds.isEmpty {
                     selectedBusySlotIds.removeAll()
@@ -3137,7 +2607,7 @@ extension TimelineView {
             return
         }
         guard !isElasticEditing else {
-            onModeToast?("Save or cancel elastic edits first")
+            onModeToast?(TimelineEventActions.elasticEditBlockedMessage)
             return
         }
         // Close any open detail sheet
@@ -3206,47 +2676,28 @@ extension TimelineView {
     // MARK: - Position Calculations
 
     private func calculateYPosition(for date: Date) -> CGFloat {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: selectedDate)
-        let secondsSinceStart = date.timeIntervalSince(dayStart)
-        let hours = secondsSinceStart / 3600
-
-        let finalHours = hours - (schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0)
-        return finalHours * hourHeight
+        timelineTimeScale.yPosition(for: date)
     }
 
     /// Inverse of calculateYPosition — converts a Y offset back to a Date.
     private func dateFromYOffset(_ yPosition: CGFloat) -> Date {
-        let calendar = Calendar.current
-        let dayStart = calendar.startOfDay(for: selectedDate)
-        let offsetHours = schedulingEngine.hideNightHours ? CGFloat(schedulingEngine.dayStartHour) : 0
-        let hours = yPosition / hourHeight + offsetHours
-        return dayStart.addingTimeInterval(Double(hours) * 3600)
+        timelineTimeScale.date(fromYOffset: yPosition)
     }
 
     private func snapToInterval(_ date: Date) -> Date {
-        TimeSnapping.snapToNearest(date, intervalMinutes: 5)
+        timelineTimeScale.snapToInterval(date)
     }
 
     private func calculateHeight(from start: Date, to end: Date) -> CGFloat {
-        let duration = end.timeIntervalSince(start)
-        let hours = duration / 3600
-        return CGFloat(hours) * hourHeight
+        timelineTimeScale.height(from: start, to: end)
     }
     
     private func timeRangeString(start: Date, end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
+        timelineTimeScale.timeRangeString(start: start, end: end)
     }
 
     private func startAndDurationString(start: Date, end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        let durationMinutes = Int(end.timeIntervalSince(start) / 60)
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end)) \u{2022} \(durationMinutes) min"
+        timelineTimeScale.startAndDurationString(start: start, end: end)
     }
     
     // MARK: - Feedback Badge
@@ -3425,46 +2876,30 @@ extension TimelineView {
 
     private func updatePopoverFeedback(for slot: BusyTimeSlot, rating: SessionRating) {
         let currentNotes = currentReviewNotes(for: slot)
-        let oldRating = SessionRating.fromNotes(currentNotes)
-        let newRating: SessionRating? = oldRating == rating ? nil : rating
-        let updatedNotes: String?
-
-        if let newRating {
-            guard calendarService.setFeedbackTag(eventId: slot.id, rating: newRating) else { return }
-            updatedNotes = newRating.applyTo(notes: currentNotes)
-        } else {
-            guard calendarService.clearFeedbackTag(eventId: slot.id) else { return }
-            updatedNotes = SessionRating.stripFeedbackTags(currentNotes)
-        }
-
-        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
+        guard let result = TimelineReviewUpdate.setFeedback(
             eventId: slot.id,
-            oldRating: oldRating,
-            newRating: newRating
-        ))
-        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+            currentNotes: currentNotes,
+            rating: rating,
+            toggleWhenAlreadySelected: true,
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordFeedback(result.undoChange)
+        finishPopoverFeedbackUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func updatePopoverFeedback(for slot: BusyTimeSlot, alignment: SessionAlignment) {
         let currentNotes = currentReviewNotes(for: slot)
-        let oldAlignment = SessionAlignment.fromNotes(currentNotes)
-        let newAlignment: SessionAlignment? = oldAlignment == alignment ? nil : alignment
-        let updatedNotes: String?
-
-        if let newAlignment {
-            guard calendarService.setAlignmentTag(eventId: slot.id, alignment: newAlignment) else { return }
-            updatedNotes = newAlignment.applyTo(notes: currentNotes)
-        } else {
-            guard calendarService.clearAlignmentTag(eventId: slot.id) else { return }
-            updatedNotes = SessionAlignment.stripAlignmentTags(currentNotes)
-        }
-
-        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
+        guard let result = TimelineReviewUpdate.setAlignment(
             eventId: slot.id,
-            oldAlignment: oldAlignment,
-            newAlignment: newAlignment
-        ))
-        finishPopoverFeedbackUpdate(for: slot, notes: updatedNotes)
+            currentNotes: currentNotes,
+            alignment: alignment,
+            toggleWhenAlreadySelected: true,
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordAlignment(result.undoChange)
+        finishPopoverFeedbackUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func currentReviewNotes(for slot: BusyTimeSlot) -> String? {
@@ -3476,9 +2911,7 @@ extension TimelineView {
     private func finishPopoverFeedbackUpdate(for slot: BusyTimeSlot, notes: String?) {
         optimisticallyUpdateSlotNotes(id: slot.id, notes: notes)
 
-        let rating = SessionRating.fromNotes(notes)
-        let alignment = SessionAlignment.fromNotes(notes)
-        feedbackPopoverEventId = rating != nil && alignment != nil ? nil : slot.id
+        feedbackPopoverEventId = TimelineReviewUpdate.shouldKeepPopoverOpen(afterNotes: notes) ? slot.id : nil
 
         Task {
             await calendarService.fetchEvents(for: actionContext.selectedDate)
@@ -3486,6 +2919,16 @@ extension TimelineView {
                selectedBusySlot?.id == slot.id {
                 selectedBusySlot = updated
             }
+        }
+    }
+
+    private func finishDetailReviewUpdate(for slot: BusyTimeSlot, notes: String?) {
+        optimisticallyUpdateSlotNotes(id: slot.id, notes: notes)
+        refreshSelectedBusySlot(slot.id)
+
+        Task {
+            await calendarService.fetchEvents(for: actionContext.selectedDate)
+            refreshSelectedBusySlot(slot.id)
         }
     }
 
@@ -3533,15 +2976,14 @@ extension TimelineView {
 
             ForEach(SessionRating.allCases, id: \.rawValue) { rating in
                 Button {
-                    let oldRating = currentRating
-                    calendarService.setFeedbackTag(eventId: slot.id, rating: rating)
-                    eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-                        eventId: slot.id, oldRating: oldRating, newRating: rating))
-                    Task {
-                        await calendarService.fetchEvents(for: actionContext.selectedDate)
-                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                            selectedBusySlot = updated
-                        }
+                    if let result = TimelineReviewUpdate.setFeedback(
+                        eventId: slot.id,
+                        currentNotes: currentReviewNotes(for: slot),
+                        rating: rating,
+                        calendar: calendarService
+                    ) {
+                        eventUndoManager.recordFeedback(result.undoChange)
+                        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
                     }
                 } label: {
                     Image(systemName: rating.icon)
@@ -3564,23 +3006,18 @@ extension TimelineView {
     }
 
     private func clearFeedbackTag(for slot: BusyTimeSlot) {
-        let oldRating = SessionRating.fromNotes(slot.notes)
-        calendarService.clearFeedbackTag(eventId: slot.id)
-        eventUndoManager.recordFeedback(EventUndoManager.FeedbackChange(
-            eventId: slot.id, oldRating: oldRating, newRating: nil))
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                selectedBusySlot = updated
-            }
-        }
+        guard let result = TimelineReviewUpdate.clearFeedback(
+            eventId: slot.id,
+            currentNotes: currentReviewNotes(for: slot),
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordFeedback(result.undoChange)
+        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
     }
 
     private func shouldShowAlignmentPicker(for slot: BusyTimeSlot) -> Bool {
-        FlowFlexibilityNotes.countsTowardAlignmentScore(
-            slot.notes,
-            alignment: SessionAlignment.fromNotes(slot.notes)
-        )
+        TimelineEventContent.shouldShowAlignmentPicker(for: slot.notes)
     }
 
     private func alignmentPicker(for slot: BusyTimeSlot) -> some View {
@@ -3616,15 +3053,14 @@ extension TimelineView {
 
             ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
                 Button {
-                    let oldAlignment = currentAlignment
-                    calendarService.setAlignmentTag(eventId: slot.id, alignment: alignment)
-                    eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
-                        eventId: slot.id, oldAlignment: oldAlignment, newAlignment: alignment))
-                    Task {
-                        await calendarService.fetchEvents(for: actionContext.selectedDate)
-                        if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                            selectedBusySlot = updated
-                        }
+                    if let result = TimelineReviewUpdate.setAlignment(
+                        eventId: slot.id,
+                        currentNotes: currentReviewNotes(for: slot),
+                        alignment: alignment,
+                        calendar: calendarService
+                    ) {
+                        eventUndoManager.recordAlignment(result.undoChange)
+                        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
                     }
                 } label: {
                     Image(systemName: alignment.icon)
@@ -3647,194 +3083,86 @@ extension TimelineView {
     }
 
     private func clearAlignmentTag(for slot: BusyTimeSlot) {
-        let oldAlignment = SessionAlignment.fromNotes(slot.notes)
-        calendarService.clearAlignmentTag(eventId: slot.id)
-        eventUndoManager.recordAlignment(EventUndoManager.AlignmentChange(
-            eventId: slot.id, oldAlignment: oldAlignment, newAlignment: nil))
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                selectedBusySlot = updated
-            }
-        }
+        guard let result = TimelineReviewUpdate.clearAlignment(
+            eventId: slot.id,
+            currentNotes: currentReviewNotes(for: slot),
+            calendar: calendarService
+        ) else { return }
+
+        eventUndoManager.recordAlignment(result.undoChange)
+        finishDetailReviewUpdate(for: slot, notes: result.updatedNotes)
     }
 
     // MARK: - Inline Editing Helpers
-    
-    private func saveTitle(for slot: BusyTimeSlot) {
-        // Validate title is not empty
-        guard !editingTitle.isEmpty else {
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-            return
-        }
-        
-        // Only save if actually changed
-        guard editingTitle != originalTitle else {
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-            return
-        }
-        
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: editingTitle,
-            notes: nil,
-            url: nil
-        )
 
-        if success {
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .title(old: originalTitle, new: editingTitle),
-                description: "Rename Event"
-            ))
-            Task {
-                await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingTitle = false
-                editingTitle = ""
-                originalTitle = ""
-            }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingTitle = false
-            editingTitle = ""
-            originalTitle = ""
-        }
+    private func saveTitle(for slot: BusyTimeSlot) {
+        saveInlineEdit(.title, for: slot)
     }
 
     private func saveNotes(for slot: BusyTimeSlot) {
-        // Normalize empty strings to nil for comparison
-        let normalizedNew = editingNotes.isEmpty ? nil : editingNotes
-        let normalizedOriginal = originalNotes.isEmpty ? nil : originalNotes
+        saveInlineEdit(.notes, for: slot)
+    }
 
-        // Only save if actually changed
-        guard normalizedNew != normalizedOriginal else {
-            isEditingNotes = false
-            editingNotes = ""
-            originalNotes = ""
+    private func saveURL(for slot: BusyTimeSlot) {
+        saveInlineEdit(.url, for: slot)
+    }
+
+    private func saveInlineEdit(_ field: TimelineInlineEditField, for slot: BusyTimeSlot) {
+        guard let commit = inlineEditor.commitPlan(
+            for: field,
+            existingNotes: slot.notes,
+            isFlowFlexible: slot.isFlowFlexible
+        ) else {
+            inlineEditor.reset(field)
             return
         }
 
-        // Preserve review tags from the original notes (session type tags are user-editable).
-        let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
-        let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
-        let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
-
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: nil,
-            notes: notesToSave,
-            url: nil
-        )
+        let success = applyInlineEditCommit(commit, for: slot)
+        inlineEditor.reset(field)
 
         if success {
-            let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .notes(old: oldNotesForUndo, new: notesToSave),
-                description: "Edit Notes"
-            ))
             Task {
                 await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingNotes = false
-                editingNotes = ""
-                originalNotes = ""
+                refreshSelectedBusySlot(slot.id)
             }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingNotes = false
-            editingNotes = ""
-            originalNotes = ""
         }
     }
-    
-    private func saveURL(for slot: BusyTimeSlot) {
-        // Normalize and prepare URL
-        let urlToSave: URL?
-        if editingURL.isEmpty {
-            urlToSave = nil
-        } else {
-            // Try to create URL, add https:// if no scheme
-            var urlString = editingURL.trimmingCharacters(in: .whitespaces)
-            if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
-                urlString = "https://" + urlString
-            }
-            // URL encode the string to handle spaces and special characters
-            if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                urlToSave = URL(string: encoded)
-            } else {
-                urlToSave = URL(string: urlString)
-            }
-        }
-        
-        // Only save if actually changed
-        let originalURLString = originalURL.isEmpty ? nil : originalURL
-        let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
-        
-        guard newURLString != originalURLString else {
-            isEditingURL = false
-            editingURL = ""
-            originalURL = ""
-            return
-        }
-        
-        let success = calendarService.updateEvent(
-            eventId: slot.id,
-            title: nil,
-            notes: nil,
-            url: urlToSave,
-            updateURL: true
-        )
 
-        if success {
-            let oldURL: URL? = originalURL.isEmpty ? nil : URL(string: originalURL)
-            eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                eventId: slot.id,
-                change: .url(old: oldURL, new: urlToSave),
-                description: "Edit URL"
-            ))
-            Task {
-                await calendarService.fetchEvents(for: actionContext.selectedDate)
-                // Update the selected slot with fresh data
-                if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slot.id }) {
-                    selectedBusySlot = updatedSlot
-                }
-                isEditingURL = false
-                editingURL = ""
-                originalURL = ""
-            }
-        } else {
-            // On failure, exit edit mode but keep the popup open
-            isEditingURL = false
-            editingURL = ""
-            originalURL = ""
+    private func applyInlineEditCommit(_ commit: TimelineInlineEditCommit, for slot: BusyTimeSlot) -> Bool {
+        let success: Bool
+        let undoChange: EventUndoManager.EventContentChange.FieldChange
+
+        switch commit.change {
+        case .title(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: new, notes: nil, url: nil)
+            undoChange = .title(old: old, new: new)
+        case .notes(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: nil, notes: new, url: nil)
+            undoChange = .notes(old: old, new: new)
+        case .url(let old, let new):
+            success = calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: new, updateURL: true)
+            undoChange = .url(old: old, new: new)
+        }
+
+        guard success else { return false }
+
+        eventUndoManager.recordContent(EventUndoManager.EventContentChange(
+            eventId: slot.id,
+            change: undoChange,
+            description: commit.description
+        ))
+        return true
+    }
+
+    private func refreshSelectedBusySlot(_ slotId: String) {
+        if let updatedSlot = calendarService.busySlots.first(where: { $0.id == slotId }) {
+            selectedBusySlot = updatedSlot
         }
     }
     
     private func resetEditingState() {
-        isEditingTitle = false
-        isEditingNotes = false
-        isEditingURL = false
-        editingTitle = ""
-        editingNotes = ""
-        editingURL = ""
-        originalTitle = ""
-        originalNotes = ""
-        originalURL = ""
-        isCanceling = false
+        inlineEditor.resetAll()
         focusedField = nil
-        autoFocusField = nil
     }
 
     private func dismissTransientInteractionState() {
@@ -3868,70 +3196,13 @@ extension TimelineView {
         }
 
         // Suppress focus-loss onChange auto-save; we're saving synchronously here.
-        isCanceling = true
-        var didChange = false
-
-        // Title
-        if isEditingTitle, !editingTitle.isEmpty, editingTitle != originalTitle {
-            if calendarService.updateEvent(eventId: slot.id, title: editingTitle, notes: nil, url: nil) {
-                eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                    eventId: slot.id,
-                    change: .title(old: originalTitle, new: editingTitle),
-                    description: "Rename Event"
-                ))
-                didChange = true
-            }
-        }
-
-        // Notes
-        if isEditingNotes {
-            let normalizedNew: String? = editingNotes.isEmpty ? nil : editingNotes
-            let normalizedOriginal: String? = originalNotes.isEmpty ? nil : originalNotes
-            if normalizedNew != normalizedOriginal {
-                let finalNotes = (normalizedNew ?? "") + reviewTags(from: slot.notes)
-                let trimmedNotes: String? = finalNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : finalNotes
-                let notesToSave = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: trimmedNotes)
-                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: notesToSave, url: nil) {
-                    let oldNotesForUndo = FlowFlexibilityNotes.applyingFlexible(slot.isFlowFlexible, to: normalizedOriginal)
-                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                        eventId: slot.id,
-                        change: .notes(old: oldNotesForUndo, new: notesToSave),
-                        description: "Edit Notes"
-                    ))
-                    didChange = true
-                }
-            }
-        }
-
-        // URL
-        if isEditingURL {
-            let originalURLString = originalURL.isEmpty ? nil : originalURL
-            let newURLString = editingURL.isEmpty ? nil : editingURL.trimmingCharacters(in: .whitespaces)
-            if newURLString != originalURLString {
-                let urlToSave: URL?
-                if editingURL.isEmpty {
-                    urlToSave = nil
-                } else {
-                    var urlString = editingURL.trimmingCharacters(in: .whitespaces)
-                    if !urlString.hasPrefix("http://") && !urlString.hasPrefix("https://") {
-                        urlString = "https://" + urlString
-                    }
-                    if let encoded = urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) {
-                        urlToSave = URL(string: encoded)
-                    } else {
-                        urlToSave = URL(string: urlString)
-                    }
-                }
-                if calendarService.updateEvent(eventId: slot.id, title: nil, notes: nil, url: urlToSave, updateURL: true) {
-                    let oldURL: URL? = originalURLString.flatMap { URL(string: $0) }
-                    eventUndoManager.recordContent(EventUndoManager.EventContentChange(
-                        eventId: slot.id,
-                        change: .url(old: oldURL, new: urlToSave),
-                        description: "Edit URL"
-                    ))
-                    didChange = true
-                }
-            }
+        inlineEditor.isCanceling = true
+        let commits = inlineEditor.dirtyCommitPlans(
+            existingNotes: slot.notes,
+            isFlowFlexible: slot.isFlowFlexible
+        )
+        let didChange = commits.reduce(false) { changed, commit in
+            applyInlineEditCommit(commit, for: slot) || changed
         }
 
         selectedSession = nil
@@ -3944,32 +3215,23 @@ extension TimelineView {
     }
     
     private func cancelTitleEdit() {
-        isCanceling = true
-        isEditingTitle = false
-        editingTitle = ""
-        originalTitle = ""
+        inlineEditor.cancel(.title)
         focusedField = nil
         // onChange(of: focusedField) fires on the next runloop; clear the guard
         // after it has had a chance to run.
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     private func cancelNotesEdit() {
-        isCanceling = true
-        isEditingNotes = false
-        editingNotes = ""
-        originalNotes = ""
+        inlineEditor.cancel(.notes)
         focusedField = nil
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     private func cancelURLEdit() {
-        isCanceling = true
-        isEditingURL = false
-        editingURL = ""
-        originalURL = ""
+        inlineEditor.cancel(.url)
         focusedField = nil
-        DispatchQueue.main.async { isCanceling = false }
+        DispatchQueue.main.async { inlineEditor.clearCancelGuard() }
     }
 
     // MARK: - Drag Commit
@@ -3987,7 +3249,7 @@ extension TimelineView {
         }
 
         // Group drag commits every selected slot atomically.
-        if dragMode == .move && !groupDragOriginalTimes.isEmpty {
+        if dragMode == .move && groupDrag.isActive {
             commitGroupDrag()
             return
         }
@@ -3999,31 +3261,23 @@ extension TimelineView {
         }
 
         let description = dragMode == .move ? "Move \(slot.title)" : "Resize \(slot.title)"
-        eventUndoManager.record(EventUndoManager.EventTimeChange(
-            eventId: slot.id,
-            oldStartTime: slot.startTime,
-            oldEndTime: slot.endTime,
-            newStartTime: newStart,
-            newEndTime: newEnd,
-            description: description
-        ))
+        let result = TimelineEventTimeCommitter.commit([
+            TimelineEventTimeCommitter.Target(
+                eventId: slot.id,
+                oldStart: slot.startTime,
+                oldEnd: slot.endTime,
+                newStart: newStart,
+                newEnd: newEnd,
+                description: description
+            )
+        ], calendar: calendarService)
 
-        let success = calendarService.updateEventTime(
-            eventId: slot.id,
-            newStart: newStart,
-            newEnd: newEnd
-        )
-
-        if !success {
-            _ = eventUndoManager.undo()
-        } else {
-            optimisticallyUpdateSlot(id: slot.id, newStart: newStart, newEnd: newEnd)
-            // Final recalculation with committed position
-            recalculateWithDraggedSlot(slot, newStart: newStart, newEnd: newEnd)
+        applyEventTimeCommitResult(result)
+        if !result.optimisticUpdates.isEmpty {
+            recalculateWithCommittedTimeUpdates(result.optimisticUpdates)
         }
-
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
+        if result.shouldFetchEvents {
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
         }
 
         resetDragState()
@@ -4031,13 +3285,13 @@ extension TimelineView {
 
     private func commitElasticDrag(for slot: BusyTimeSlot, newStart: Date, newEnd: Date) {
         let updates: [String: (start: Date, end: Date)]
-        if dragMode == .move && !groupDragPreviewTimes.isEmpty {
-            updates = groupDragPreviewTimes
+        if dragMode == .move && groupDrag.isActive {
+            updates = groupDrag.previewTimes
         } else {
             updates = [slot.id: (start: newStart, end: newEnd)]
         }
 
-        let baseSlots = elasticPreDragBusySlots ?? elasticStagedBusySlots
+        let baseSlots = elasticEditor.dragBaseSlots
         let originalsById = Dictionary(uniqueKeysWithValues: baseSlots.map { ($0.id, $0) })
         let hasChanges = updates.contains { entry in
             guard let original = originalsById[entry.key] else { return false }
@@ -4046,7 +3300,7 @@ extension TimelineView {
         }
 
         guard hasChanges else {
-            elasticStagedBusySlots = baseSlots
+            elasticEditor.stagedSlots = baseSlots
             recalculateProjectedSchedule(using: baseSlots)
             resetDragState()
             return
@@ -4058,14 +3312,14 @@ extension TimelineView {
         )
 
         recordElasticUndoSnapshot(baseSlots)
-        elasticStagedBusySlots = displaceBusySlots(
+        elasticEditor.stagedSlots = displaceBusySlots(
             baseSlots: baseSlots,
             draggedUpdates: updates,
             commitDraggedSlots: true,
             gapAfterBySlotId: adjustedGapAfterBySlotId
         )
-        elasticEmptySpaceAfterBySlotId = adjustedGapAfterBySlotId
-        recalculateProjectedSchedule(using: elasticStagedBusySlots)
+        elasticEditor.emptySpaceAfterBySlotId = adjustedGapAfterBySlotId
+        recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
         onModeToast?("\(elasticChangeCount) staged")
 
         resetDragState()
@@ -4074,44 +3328,30 @@ extension TimelineView {
     /// Commit a group drag — every selected slot moves by the same translation atomically.
     private func commitGroupDrag() {
         let slotsById = Dictionary(uniqueKeysWithValues: timelineBusySlots(for: actionContext.selectedDate).map { ($0.id, $0) })
+        var targets: [TimelineEventTimeCommitter.Target] = []
 
-        var changes: [EventUndoManager.EventTimeChange] = []
-        var committed: [(id: String, newStart: Date, newEnd: Date)] = []
-
-        for (id, target) in groupDragPreviewTimes {
-            guard let original = groupDragOriginalTimes[id],
+        for (id, target) in groupDrag.previewTimes {
+            guard let original = groupDrag.originalTimes[id],
                   let liveSlot = slotsById[id] else { continue }
             guard target.start != original.start || target.end != original.end else { continue }
 
-            let success = calendarService.updateEventTime(
+            targets.append(TimelineEventTimeCommitter.Target(
                 eventId: id,
+                oldStart: original.start,
+                oldEnd: original.end,
                 newStart: target.start,
-                newEnd: target.end
-            )
-            if success {
-                changes.append(EventUndoManager.EventTimeChange(
-                    eventId: id,
-                    oldStartTime: original.start,
-                    oldEndTime: original.end,
-                    newStartTime: target.start,
-                    newEndTime: target.end,
-                    description: "Move \(liveSlot.title)"
-                ))
-                committed.append((id, target.start, target.end))
-            }
+                newEnd: target.end,
+                description: "Move \(liveSlot.title)"
+            ))
         }
 
-        if !changes.isEmpty {
-            eventUndoManager.recordBatch(changes)
-            for c in committed {
-                optimisticallyUpdateSlot(id: c.id, newStart: c.newStart, newEnd: c.newEnd)
-            }
-            let finalMap = Dictionary(uniqueKeysWithValues: committed.map { ($0.id, (start: $0.newStart, end: $0.newEnd)) })
-            recalculateWithDraggedSlots(finalMap)
+        let result = TimelineEventTimeCommitter.commit(targets, calendar: calendarService)
+        applyEventTimeCommitResult(result)
+        if !result.optimisticUpdates.isEmpty {
+            recalculateWithCommittedTimeUpdates(result.optimisticUpdates)
         }
-
-        Task {
-            await calendarService.fetchEvents(for: actionContext.selectedDate)
+        if result.shouldFetchEvents {
+            Task { await calendarService.fetchEvents(for: actionContext.selectedDate) }
         }
 
         resetDragState()
@@ -4124,25 +3364,24 @@ extension TimelineView {
         dragSessionId = nil
         dragPreviewStartTime = nil
         dragPreviewEndTime = nil
-        preDisplacementSessions = nil
-        elasticPreDragBusySlots = nil
-        groupDragOriginalTimes.removeAll()
-        groupDragPreviewTimes.removeAll()
+        projectedSessionDrag.reset()
+        elasticEditor.clearPreDragSnapshot()
+        groupDrag.reset()
     }
 
     /// Cancel drag and revert all changes (called on Escape).
     private func cancelDrag() {
         // Revert displaced projected sessions
-        if let snapshot = preDisplacementSessions {
+        if let snapshot = projectedSessionDrag.sessionsForDisplacementPass() {
             schedulingEngine.projectedSessions = snapshot
         }
-        if isElasticEditing, let snapshot = elasticPreDragBusySlots {
-            elasticStagedBusySlots = snapshot
+        if isElasticEditing, let snapshot = elasticEditor.restorePreDragSnapshot() {
+            elasticEditor.stagedSlots = snapshot
         }
         // Revert real-time schedule recalculation (calendar event drag)
         if dragSlotId != nil, !schedulingEngine.sessionsFrozen {
             if isElasticEditing {
-                recalculateProjectedSchedule(using: elasticStagedBusySlots)
+                recalculateProjectedSchedule(using: elasticEditor.stagedSlots)
             } else {
                 recalculateWithOriginalSlots()
             }
@@ -4159,28 +3398,10 @@ extension TimelineView {
     private func recalculateProjectedSchedule(using busySlots: [BusyTimeSlot]) {
         guard !schedulingEngine.sessionsFrozen else { return }
 
-        let operationDate = actionContext.selectedDate
-        let operationStartTime = actionContext.startTime
-        let planningExists = calendarService.hasPlanningSession(for: operationDate)
-        let existing = calendarService.countExistingSessions(
-            for: operationDate,
-            workCalendar: CalendarDescriptor(
-                name: schedulingEngine.workCalendarName,
-                identifier: schedulingEngine.workCalendarIdentifier
-            ),
-            sideCalendar: CalendarDescriptor(
-                name: schedulingEngine.sideCalendarName,
-                identifier: schedulingEngine.sideCalendarIdentifier
-            ),
-            deepConfig: schedulingEngine.deepSessionConfig
-        )
-        _ = schedulingEngine.generateSchedule(
-            startTime: operationStartTime,
-            baseDate: operationDate,
-            busySlots: busySlots,
-            includePlanning: !planningExists,
-            existingSessions: (work: existing.work, side: existing.side, deep: existing.deep),
-            existingTitles: existing.titles
+        _ = scheduleCoordinator.regeneratePreviewFromFetched(
+            date: actionContext.selectedDate,
+            startTime: actionContext.startTime,
+            busySlots: busySlots
         )
     }
 
@@ -4190,17 +3411,10 @@ extension TimelineView {
         guard !schedulingEngine.sessionsFrozen else { return }
 
         let operationDate = actionContext.selectedDate
-        var modifiedSlots = timelineBusySlots(for: operationDate)
-        for i in modifiedSlots.indices {
-            if let target = updates[modifiedSlots[i].id] {
-                let old = modifiedSlots[i]
-                modifiedSlots[i] = BusyTimeSlot(
-                    id: old.id, title: old.title, startTime: target.start, endTime: target.end,
-                    notes: old.notes, url: old.url, calendarName: old.calendarName,
-                    calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
-                )
-            }
-        }
+        let modifiedSlots = applyingTimeUpdates(
+            to: timelineBusySlots(for: operationDate),
+            updates: updates
+        )
 
         recalculateProjectedSchedule(using: modifiedSlots)
     }
@@ -4225,56 +3439,59 @@ extension TimelineView {
     }
 
     private func commitSessionDrag(for session: ScheduledSession) {
-        guard let newStart = dragPreviewStartTime,
-              let newEnd = dragPreviewEndTime else {
-            // Restore original positions if drag was a no-op
-            if let snapshot = preDisplacementSessions {
-                schedulingEngine.projectedSessions = snapshot
-            }
-            resetDragState()
-            return
-        }
-        guard newStart != session.startTime || newEnd != session.endTime else {
-            // Restore original positions if nothing changed
-            if let snapshot = preDisplacementSessions {
-                schedulingEngine.projectedSessions = snapshot
-            }
-            resetDragState()
-            return
-        }
-
-        // Restore from snapshot, commit dragged session, then do final displacement
-        if let snapshot = preDisplacementSessions {
-            schedulingEngine.projectedSessions = snapshot
-        }
-        if let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == session.id }) {
-            schedulingEngine.projectedSessions[idx].startTime = newStart
-            schedulingEngine.projectedSessions[idx].endTime = newEnd
-        }
-
-        // Final displacement pass
-        schedulingEngine.displaceProjectedSessions(
-            draggedSessionId: session.id,
-            draggedStart: newStart,
-            draggedEnd: newEnd,
-            busySlots: timelineBusySlots(for: actionContext.selectedDate),
-            earliestTime: elasticAwareEarliestTime
+        let decision = projectedSessionDrag.prepareCommit(
+            for: session,
+            previewStart: dragPreviewStartTime,
+            previewEnd: dragPreviewEndTime,
+            currentSessions: schedulingEngine.projectedSessions
         )
 
-        // Record undo with pre-drag snapshot and post-displacement snapshot
-        let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
-        eventUndoManager.record(EventUndoManager.EventTimeChange(
-            sessionId: session.id,
-            oldStartTime: session.startTime,
-            oldEndTime: session.endTime,
-            newStartTime: newStart,
-            newEndTime: newEnd,
-            description: description,
-            sessionsSnapshot: preDisplacementSessions,
-            postSnapshot: schedulingEngine.projectedSessions
-        ))
+        switch decision {
+        case .restore(let snapshot):
+            if let snapshot {
+                schedulingEngine.projectedSessions = snapshot
+            }
+            resetDragState()
+            return
 
-        resetDragState()
+        case .commit(let plan):
+            schedulingEngine.projectedSessions = plan.sessions
+
+            schedulingEngine.displaceProjectedSessions(
+                draggedSessionId: plan.sessionId,
+                draggedStart: plan.draggedStart,
+                draggedEnd: plan.draggedEnd,
+                busySlots: timelineBusySlots(for: actionContext.selectedDate),
+                earliestTime: elasticAwareEarliestTime
+            )
+
+            let description = dragMode == .move ? "Move \(session.title)" : "Resize \(session.title)"
+            eventUndoManager.record(plan.undoChange(
+                description: description,
+                postSnapshot: schedulingEngine.projectedSessions
+            ))
+
+            resetDragState()
+        }
+    }
+
+    private func applyEventTimeCommitResult(_ result: TimelineEventTimeCommitter.Result) {
+        guard !result.undoChanges.isEmpty else { return }
+        eventUndoManager.recordBatch(result.undoChanges)
+        for update in result.optimisticUpdates {
+            optimisticallyUpdateSlot(
+                id: update.eventId,
+                newStart: update.newStart,
+                newEnd: update.newEnd
+            )
+        }
+    }
+
+    private func recalculateWithCommittedTimeUpdates(_ updates: [TimelineEventTimeCommitter.EventTimeUpdate]) {
+        let updateMap = Dictionary(uniqueKeysWithValues: updates.map {
+            ($0.eventId, (start: $0.newStart, end: $0.newEnd))
+        })
+        recalculateWithDraggedSlots(updateMap)
     }
 
     private func sessionDragPreviewBlock(
@@ -4350,226 +3567,73 @@ extension TimelineView {
         let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.undo() else { return }
         dismissTransientInteractionState()
-        switch change {
-        case .time(let tc):
-            if tc.sessionId != nil {
-                if let snapshot = tc.sessionsSnapshot {
-                    schedulingEngine.projectedSessions = snapshot
-                } else if let sessionId = tc.sessionId,
-                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
-                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
-                }
-                if schedulingEngine.sessionsFrozen && !eventUndoManager.hasSessionChanges {
-                    schedulingEngine.sessionsFrozen = false
-                }
-            } else {
-                let success = calendarService.updateEventTime(
-                    eventId: tc.eventId,
-                    newStart: tc.newStartTime,
-                    newEnd: tc.newEndTime
-                )
-                if success {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: operationDate) }
-                }
-            }
-        case .timeBatch(let items):
-            for tc in items {
-                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                }
-            }
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .delete(let snap):
-            if let newId = calendarService.restoreEvent(snap) {
-                eventUndoManager.pushRedoForRestoredDelete(original: snap, newEventId: newId)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .deleteBatch(let snaps):
-            var newIds: [String] = []
-            for snap in snaps {
-                if let newId = calendarService.restoreEvent(snap) {
-                    newIds.append(newId)
-                }
-            }
-            if !newIds.isEmpty {
-                let restoredSnaps = Array(snaps.prefix(newIds.count))
-                eventUndoManager.pushRedoForRestoredDeleteBatch(originals: restoredSnaps, newEventIds: newIds)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .schedule(let snap):
-            // Undo: delete created events, restore projected sessions.
-            // Freeze before the fetch so the subsequent regeneration can't
-            // overwrite the restored snapshot with fresh UUIDs, which would
-            // leave the undo stack pointing at sessions that no longer exist.
-            for eventId in snap.eventIds {
-                _ = calendarService.deleteEvent(identifier: eventId)
-            }
-            schedulingEngine.projectedSessions.append(contentsOf: snap.sessions)
-            schedulingEngine.projectedSessions.sort { $0.startTime < $1.startTime }
-            schedulingEngine.sessionsFrozen = true
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .create(let snap):
-            // Undo create = delete the event
-            if calendarService.deleteEvent(identifier: snap.eventId) {
-                eventUndoManager.pushRedoForUndoneCreate(snap)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .feedback(let fc):
-            if let rating = fc.newRating {
-                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
-            } else {
-                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
-                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .alignment(let ac):
-            if let alignment = ac.newAlignment {
-                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
-            } else {
-                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
-                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .content(let cc):
-            applyContentChange(cc)
-        }
+        applyUndoRedoChange(
+            change,
+            direction: .undo(hasRemainingSessionChanges: eventUndoManager.hasSessionChanges),
+            operationDate: operationDate
+        )
     }
 
     private func performRedo() {
         let operationDate = actionContext.selectedDate
         guard let change = eventUndoManager.redo() else { return }
         dismissTransientInteractionState()
-        switch change {
-        case .time(let tc):
-            if tc.sessionId != nil {
-                if !schedulingEngine.sessionsFrozen {
-                    schedulingEngine.sessionsFrozen = true
-                }
-                if let postSnapshot = tc.postSnapshot {
-                    schedulingEngine.projectedSessions = postSnapshot
-                } else if let sessionId = tc.sessionId,
-                          let idx = schedulingEngine.projectedSessions.firstIndex(where: { $0.id == sessionId }) {
-                    schedulingEngine.projectedSessions[idx].startTime = tc.newStartTime
-                    schedulingEngine.projectedSessions[idx].endTime = tc.newEndTime
-                }
-            } else {
-                let success = calendarService.updateEventTime(
-                    eventId: tc.eventId,
-                    newStart: tc.newStartTime,
-                    newEnd: tc.newEndTime
-                )
-                if success {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                    Task { await calendarService.fetchEvents(for: operationDate) }
-                }
+        applyUndoRedoChange(change, direction: .redo, operationDate: operationDate)
+    }
+
+    private func applyUndoRedoChange(
+        _ change: EventUndoManager.UndoableChange,
+        direction: TimelineUndoRedoApplier.Direction,
+        operationDate: Date
+    ) {
+        var scheduleState = TimelineUndoRedoApplier.ScheduleState(
+            projectedSessions: schedulingEngine.projectedSessions,
+            sessionsFrozen: schedulingEngine.sessionsFrozen
+        )
+        let result = TimelineUndoRedoApplier.apply(
+            change,
+            direction: direction,
+            calendar: calendarService,
+            schedule: &scheduleState
+        )
+
+        if schedulingEngine.projectedSessions != scheduleState.projectedSessions {
+            schedulingEngine.projectedSessions = scheduleState.projectedSessions
+        }
+        if schedulingEngine.sessionsFrozen != scheduleState.sessionsFrozen {
+            schedulingEngine.sessionsFrozen = scheduleState.sessionsFrozen
+        }
+
+        for followUp in result.undoManagerFollowUps {
+            applyUndoManagerFollowUp(followUp)
+        }
+        for update in result.optimisticTimeUpdates {
+            optimisticallyUpdateSlot(id: update.eventId, newStart: update.newStart, newEnd: update.newEnd)
+        }
+
+        guard result.shouldFetchEvents else { return }
+        Task {
+            await calendarService.fetchEvents(for: operationDate)
+            if let id = result.selectedSlotRefreshId,
+               let updated = calendarService.busySlots.first(where: { $0.id == id }),
+               selectedBusySlot?.id == id {
+                selectedBusySlot = updated
             }
-        case .timeBatch(let items):
-            for tc in items {
-                if calendarService.updateEventTime(eventId: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime) {
-                    optimisticallyUpdateSlot(id: tc.eventId, newStart: tc.newStartTime, newEnd: tc.newEndTime)
-                }
-            }
-            Task { await calendarService.fetchEvents(for: operationDate) }
-        case .delete(let snap):
-            if calendarService.deleteEvent(identifier: snap.eventId) {
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .deleteBatch(let snaps):
-            var anyDeleted = false
-            for snap in snaps {
-                if calendarService.deleteEvent(identifier: snap.eventId) { anyDeleted = true }
-            }
-            if anyDeleted { Task { await calendarService.fetchEvents(for: operationDate) } }
-        case .schedule(let snap):
-            // Redo: re-create the sessions and remove them from projected
-            let result = calendarService.createSessions(snap.sessions)
-            if result.success > 0 {
-                let scheduledIds = Set(snap.sessions.map { $0.id })
-                schedulingEngine.projectedSessions.removeAll { scheduledIds.contains($0.id) }
-                eventUndoManager.pushRedoForScheduleUndo(EventUndoManager.ScheduleSnapshot(
-                    eventIds: result.eventIds,
-                    sessions: snap.sessions
-                ))
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .feedback(let fc):
-            if let rating = fc.newRating {
-                _ = calendarService.setFeedbackTag(eventId: fc.eventId, rating: rating)
-            } else {
-                _ = calendarService.clearFeedbackTag(eventId: fc.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == fc.eventId }) {
-                    if selectedBusySlot?.id == fc.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .alignment(let ac):
-            if let alignment = ac.newAlignment {
-                _ = calendarService.setAlignmentTag(eventId: ac.eventId, alignment: alignment)
-            } else {
-                _ = calendarService.clearAlignmentTag(eventId: ac.eventId)
-            }
-            Task {
-                await calendarService.fetchEvents(for: operationDate)
-                if let updated = calendarService.busySlots.first(where: { $0.id == ac.eventId }) {
-                    if selectedBusySlot?.id == ac.eventId { selectedBusySlot = updated }
-                }
-            }
-        case .create(let snap):
-            // Redo create = restore the event
-            if let newId = calendarService.restoreEvent(snap) {
-                // Update the undo stack entry with the new event ID
-                let updatedSnap = EventDeleteSnapshot(
-                    eventId: newId,
-                    title: snap.title,
-                    notes: snap.notes,
-                    url: snap.url,
-                    startDate: snap.startDate,
-                    endDate: snap.endDate,
-                    calendarIdentifier: snap.calendarIdentifier,
-                    calendarName: snap.calendarName
-                )
-                // Replace the top of the undo stack with updated ID
-                eventUndoManager.updateTopUndoCreateId(updatedSnap)
-                Task { await calendarService.fetchEvents(for: operationDate) }
-            }
-        case .content(let cc):
-            applyContentChange(cc)
         }
     }
 
-    /// Applies a content (title/notes/URL) change to the underlying calendar event.
-    /// Used by both undo (inverted change) and redo (original change).
-    private func applyContentChange(_ cc: EventUndoManager.EventContentChange) {
-        let success: Bool
-        switch cc.change {
-        case .title(_, let new):
-            success = calendarService.updateEvent(eventId: cc.eventId, title: new, notes: nil, url: nil)
-        case .notes(_, let new):
-            // updateEvent skips nil notes — pass empty string to clear.
-            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: new ?? "", url: nil)
-        case .url(_, let new):
-            success = calendarService.updateEvent(eventId: cc.eventId, title: nil, notes: nil, url: new, updateURL: true)
-        }
-        guard success else { return }
-        let operationDate = actionContext.selectedDate
-        Task {
-            await calendarService.fetchEvents(for: operationDate)
-            if let updated = calendarService.busySlots.first(where: { $0.id == cc.eventId }),
-               selectedBusySlot?.id == cc.eventId {
-                selectedBusySlot = updated
-            }
+    private func applyUndoManagerFollowUp(_ followUp: TimelineUndoRedoApplier.UndoManagerFollowUp) {
+        switch followUp {
+        case .pushRedoForRestoredDelete(let original, let newEventId):
+            eventUndoManager.pushRedoForRestoredDelete(original: original, newEventId: newEventId)
+        case .pushRedoForRestoredDeleteBatch(let originals, let newEventIds):
+            eventUndoManager.pushRedoForRestoredDeleteBatch(originals: originals, newEventIds: newEventIds)
+        case .pushRedoForUndoneCreate(let snapshot):
+            eventUndoManager.pushRedoForUndoneCreate(snapshot)
+        case .updateTopUndoCreate(let snapshot):
+            eventUndoManager.updateTopUndoCreateId(snapshot)
+        case .updateTopUndoSchedule(let snapshot):
+            eventUndoManager.updateTopUndoSchedule(snapshot)
         }
     }
 
@@ -4593,15 +3657,15 @@ extension TimelineView {
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
         }
-        if let idx = elasticStagedBusySlots.firstIndex(where: { $0.id == id }) {
-            let old = elasticStagedBusySlots[idx]
-            elasticStagedBusySlots[idx] = BusyTimeSlot(
+        if let idx = elasticEditor.stagedSlots.firstIndex(where: { $0.id == id }) {
+            let old = elasticEditor.stagedSlots[idx]
+            elasticEditor.stagedSlots[idx] = BusyTimeSlot(
                 id: old.id, title: old.title, startTime: old.startTime, endTime: old.endTime,
                 notes: notes, url: old.url, calendarName: old.calendarName,
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
         }
-        if var originals = elasticOriginalBusySlots,
+        if var originals = elasticEditor.originalSlots,
            let idx = originals.firstIndex(where: { $0.id == id }) {
             let old = originals[idx]
             originals[idx] = BusyTimeSlot(
@@ -4609,7 +3673,7 @@ extension TimelineView {
                 notes: notes, url: old.url, calendarName: old.calendarName,
                 calendarColor: old.calendarColor, calendarIdentifier: old.calendarIdentifier
             )
-            elasticOriginalBusySlots = originals
+            elasticEditor.replaceOriginalSlots(originals)
         }
     }
 }
