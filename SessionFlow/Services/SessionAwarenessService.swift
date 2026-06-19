@@ -1240,7 +1240,13 @@ class SessionAwarenessService: ObservableObject {
         }
     }
 
-    private func fireHarshStartLifecycle(prompt: HarshModePrompt, title: String) {
+    private func fireHarshStartLifecycle(
+        prompt: HarshModePrompt,
+        title: String,
+        playTransition: Bool = true,
+        fireStartedShortcut: Bool = true,
+        triggerStartFlash: Bool = true
+    ) {
         guard currentEventId == prompt.eventId, isActive else { return }
         guard !harshLifecycleStartedPromptIDs.contains(prompt.id) else { return }
         harshLifecycleStartedPromptIDs.insert(prompt.id)
@@ -1251,23 +1257,27 @@ class SessionAwarenessService: ObservableObject {
         hasFiredEndingSoonShortcut = false
 
         if isEnabled {
-            triggerFlash(.sessionStarted)
+            if triggerStartFlash {
+                triggerFlash(.sessionStarted)
+            }
             if !isSessionMuted {
-                playSessionStartAudio(sessionType: prompt.sessionType, skipTransition: false)
+                playSessionStartAudio(sessionType: prompt.sessionType, skipTransition: !playTransition)
             }
         }
 
-        shortcutService.fire(
-            trigger: .started,
-            session: .init(
-                title: title,
-                type: prompt.sessionType,
-                isBusySlot: false,
-                startTime: prompt.startTime,
-                endTime: prompt.endTime
-            ),
-            config: config.shortcuts
-        )
+        if fireStartedShortcut {
+            shortcutService.fire(
+                trigger: .started,
+                session: .init(
+                    title: title,
+                    type: prompt.sessionType,
+                    isBusySlot: false,
+                    startTime: prompt.startTime,
+                    endTime: prompt.endTime
+                ),
+                config: config.shortcuts
+            )
+        }
     }
 
     private func fireHarshEndLifecycle(prompt: HarshModePrompt) {
@@ -1516,13 +1526,23 @@ class SessionAwarenessService: ObservableObject {
         switch prompt.phase {
         case .start:
             harshStartBypassedPromptIDs.insert(prompt.id)
+            harshPromptSnoozeUntilByID[prompt.id] = nil
+            harshEndPendingMutedByID[prompt.id] = nil
+            harshModePrompt = nil
+            fireHarshStartLifecycle(
+                prompt: prompt,
+                title: prompt.sessionTitle,
+                playTransition: false,
+                fireStartedShortcut: false,
+                triggerStartFlash: false
+            )
         case .end:
             harshEndBypassedPromptIDs.insert(prompt.id)
             fireHarshEndLifecycle(prompt: prompt)
+            harshPromptSnoozeUntilByID[prompt.id] = nil
+            harshEndPendingMutedByID[prompt.id] = nil
+            harshModePrompt = nil
         }
-        harshPromptSnoozeUntilByID[prompt.id] = nil
-        harshEndPendingMutedByID[prompt.id] = nil
-        harshModePrompt = nil
     }
 
     func submitFeedback(rating: SessionRating) {
