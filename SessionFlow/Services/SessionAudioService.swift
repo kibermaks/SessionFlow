@@ -30,6 +30,10 @@ class SessionAudioService: ObservableObject {
     private var ambientPlayerNode = AVAudioPlayerNode()
     private var varispeedNode = AVAudioUnitVarispeed()
     private var transitionPlayer: AVAudioPlayer?
+    private let audioControlQueue = DispatchQueue(
+        label: "com.kibermaks.SessionFlow.audio-control",
+        qos: .userInteractive
+    )
 
     private var currentAmbientBuffer: AVAudioPCMBuffer?
     private var currentAmbientConfig: SessionSoundConfig?
@@ -51,6 +55,7 @@ class SessionAudioService: ObservableObject {
     private var previewPausedShouldPlay = false
     private var previewPausedRate: Float = 1.0
     private var ambientResumePlaybackRate: Float = 1.0
+    private var lastAppliedPlaybackRate: Float = 1.0
 
     private var deviceListenerBlock: AudioObjectPropertyListenerBlock?
 
@@ -220,6 +225,7 @@ class SessionAudioService: ObservableObject {
 
         currentAmbientConfig = config
         shouldBePlayingAmbient = true
+        updateAudioActivity()
 
         guard !userSessionIsInactive else {
             stopAmbientInternal()
@@ -366,8 +372,19 @@ class SessionAudioService: ObservableObject {
         if rememberForResume {
             ambientResumePlaybackRate = clampedRate
         }
-        guard abs(varispeedNode.rate - clampedRate) >= 0.001 else { return }
-        varispeedNode.rate = clampedRate
+        guard abs(lastAppliedPlaybackRate - clampedRate) >= 0.001 else { return }
+        lastAppliedPlaybackRate = clampedRate
+
+        if !ambientEngine.isRunning {
+            varispeedNode.rate = clampedRate
+            return
+        }
+
+        let node = varispeedNode
+        audioControlQueue.async {
+            guard abs(node.rate - clampedRate) >= 0.001 else { return }
+            node.rate = clampedRate
+        }
     }
 
     /// Update playback rate for accelerando effect
@@ -534,13 +551,17 @@ class SessionAudioService: ObservableObject {
     // MARK: - Audio performance assertion
 
     private func updateAudioActivity() {
-        let shouldHoldActivity = ambientPlayerNode.isPlaying || transitionIsPlaying
+        let intendsAmbientPlayback = shouldBePlayingAmbient
+            && currentAmbientConfig?.isPlayable == true
+            && !isMuted
+            && !userSessionIsInactive
+        let shouldHoldActivity = intendsAmbientPlayback || ambientPlayerNode.isPlaying || transitionIsPlaying
 
         if shouldHoldActivity {
             guard audioActivity == nil else { return }
             audioActivity = ProcessInfo.processInfo.beginActivity(
                 options: [
-                    .userInitiatedAllowingIdleSystemSleep,
+                    .userInitiated,
                     .latencyCritical,
                     .suddenTerminationDisabled,
                     .automaticTerminationDisabled
@@ -1064,6 +1085,7 @@ class SessionAudioService: ObservableObject {
         ambientEngine = AVAudioEngine()
         ambientPlayerNode = AVAudioPlayerNode()
         varispeedNode = AVAudioUnitVarispeed()
+        lastAppliedPlaybackRate = 1.0
         setupAmbientEngine()
         ambientEngine.mainMixerNode.outputVolume = masterVolume
         applyOutputDevice(uid: selectedOutputDeviceUID, restartIfNeeded: false)
