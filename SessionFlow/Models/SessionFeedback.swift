@@ -220,7 +220,20 @@ struct HarshModePrompt: Identifiable, Equatable {
     let nextTaskStartTime: Date?
 
     var id: String {
-        "\(eventId)-\(phase.rawValue)"
+        Self.id(eventId: eventId, phase: phase, startTime: startTime, endTime: endTime)
+    }
+
+    static func id(eventId: String, phase: HarshModePromptPhase, startTime: Date, endTime: Date) -> String {
+        switch phase {
+        case .start:
+            return "\(eventId)-\(phase.rawValue)-\(timestampKey(startTime))"
+        case .end:
+            return "\(eventId)-\(phase.rawValue)-\(timestampKey(startTime))-\(timestampKey(endTime))"
+        }
+    }
+
+    private static func timestampKey(_ date: Date) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1000).rounded())
     }
 }
 

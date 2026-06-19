@@ -228,13 +228,13 @@ class SessionAwarenessService: ObservableObject {
     private var savedEndingSoonPlayed: Bool = false
     private var savedEndingSoonShortcutFired: Bool = false
     private var savedSessionMuted: Bool = false
-    private var harshStartBypassedEventIds: Set<String> = []
-    private var harshEndBypassedEventIds: Set<String> = []
-    private var harshStartAcceptedEventIds: Set<String> = []
-    private var harshReviewCapturedEventIds: Set<String> = []
+    private var harshStartBypassedPromptIDs: Set<String> = []
+    private var harshEndBypassedPromptIDs: Set<String> = []
+    private var harshStartAcceptedPromptIDs: Set<String> = []
+    private var harshReviewCapturedPromptIDs: Set<String> = []
     private var harshPromptSnoozeUntilByID: [String: Date] = [:]
-    private var harshLifecycleStartedEventIds: Set<String> = []
-    private var harshLifecycleEndedEventIds: Set<String> = []
+    private var harshLifecycleStartedPromptIDs: Set<String> = []
+    private var harshLifecycleEndedPromptIDs: Set<String> = []
     private var harshEndPendingMutedByID: [String: Bool] = [:]
     private var isHarshCommitPromptVisible: Bool {
         harshModePrompt != nil
@@ -646,6 +646,8 @@ class SessionAwarenessService: ObservableObject {
             eventId: slot.id,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
             now: now
         )
 
@@ -803,14 +805,20 @@ class SessionAwarenessService: ObservableObject {
         startSubmissionRecorded || !HarshModeSessionNotes.goals(from: notes).isEmpty
     }
 
-    private func isHarshStartAccepted(eventId: String) -> Bool {
-        Self.hasSubmittedHarshStart(startSubmissionRecorded: harshStartAcceptedEventIds.contains(eventId))
+    private func harshPromptID(
+        phase: HarshModePromptPhase,
+        eventId: String,
+        startTime: Date,
+        endTime: Date
+    ) -> String {
+        HarshModePrompt.id(eventId: eventId, phase: phase, startTime: startTime, endTime: endTime)
     }
 
-    private func hasHarshStartEvidence(eventId: String, notes: String?) -> Bool {
-        Self.hasCompletedHarshStartForEndGate(
+    private func hasHarshStartEvidence(eventId: String, startTime: Date, endTime: Date, notes: String?) -> Bool {
+        let promptID = harshPromptID(phase: .start, eventId: eventId, startTime: startTime, endTime: endTime)
+        return Self.hasCompletedHarshStartForEndGate(
             notes: notes,
-            startSubmissionRecorded: harshStartAcceptedEventIds.contains(eventId)
+            startSubmissionRecorded: harshStartAcceptedPromptIDs.contains(promptID)
         )
     }
 
@@ -830,23 +838,30 @@ class SessionAwarenessService: ObservableObject {
         eventId: String,
         sessionType: SessionType?,
         isBusySlot: Bool,
+        startTime: Date,
+        endTime: Date,
         now: Date
     ) -> Bool {
-        Self.shouldPauseHarshStartLifecycle(
+        let promptID = harshPromptID(phase: .start, eventId: eventId, startTime: startTime, endTime: endTime)
+        return Self.shouldPauseHarshStartLifecycle(
             config: config,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
-            startAccepted: isHarshStartAccepted(eventId: eventId),
-            startBypassed: harshStartBypassedEventIds.contains(eventId)
+            startAccepted: harshStartAcceptedPromptIDs.contains(promptID),
+            startBypassed: harshStartBypassedPromptIDs.contains(promptID)
         )
     }
 
     private func isCurrentHarshStartBlocked(now: Date) -> Bool {
-        guard let eventId = currentEventId else { return false }
+        guard let eventId = currentEventId,
+              let startTime = sessionStartTime,
+              let endTime = sessionEndTime else { return false }
         return shouldGateHarshStart(
             eventId: eventId,
             sessionType: currentSessionType,
             isBusySlot: isBusySlotMode,
+            startTime: startTime,
+            endTime: endTime,
             now: now
         )
     }
@@ -854,6 +869,8 @@ class SessionAwarenessService: ObservableObject {
     private func shouldGateHarshEnd(
         eventId: String,
         sessionType: SessionType?,
+        startTime: Date,
+        endTime: Date,
         notes: String?,
         isNaturalEnd: Bool,
         now: Date
@@ -861,35 +878,41 @@ class SessionAwarenessService: ObservableObject {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
         guard config.harshModeRequireEndRating || config.harshModeRequireReviewNote else { return false }
-        guard hasHarshStartEvidence(eventId: eventId, notes: notes) else { return false }
-        guard !harshReviewCapturedEventIds.contains(eventId),
-              !harshEndBypassedEventIds.contains(eventId),
-              !harshLifecycleEndedEventIds.contains(eventId) else { return false }
-        return !isHarshPromptSnoozed(phase: .end, eventId: eventId, now: now)
+        guard hasHarshStartEvidence(eventId: eventId, startTime: startTime, endTime: endTime, notes: notes) else { return false }
+        let promptID = harshPromptID(phase: .end, eventId: eventId, startTime: startTime, endTime: endTime)
+        guard !harshReviewCapturedPromptIDs.contains(promptID),
+              !harshEndBypassedPromptIDs.contains(promptID),
+              !harshLifecycleEndedPromptIDs.contains(promptID) else { return false }
+        return !isHarshPromptSnoozed(promptID: promptID, now: now)
     }
 
     private func shouldSuppressHarshEndWithoutStart(
         eventId: String,
         sessionType: SessionType?,
+        startTime: Date,
+        endTime: Date,
         notes: String?,
         isNaturalEnd: Bool
     ) -> Bool {
         guard isNaturalEnd else { return false }
         guard isHarshModeEligible(sessionType: sessionType, isBusySlot: false) else { return false }
-        return !hasHarshStartEvidence(eventId: eventId, notes: notes)
+        return !hasHarshStartEvidence(eventId: eventId, startTime: startTime, endTime: endTime, notes: notes)
     }
 
     private func presentHarshModeStartPromptIfNeeded(slot: BusyTimeSlot, sessionType: SessionType?, isBusySlot: Bool) {
+        let promptID = harshPromptID(phase: .start, eventId: slot.id, startTime: slot.startTime, endTime: slot.endTime)
         guard shouldGateHarshStart(
             eventId: slot.id,
             sessionType: sessionType,
             isBusySlot: isBusySlot,
+            startTime: slot.startTime,
+            endTime: slot.endTime,
             now: effectiveNow
         ) else { return }
-        guard !isHarshPromptSnoozed(phase: .start, eventId: slot.id, now: effectiveNow) else { return }
-        guard !harshStartAcceptedEventIds.contains(slot.id),
-              !harshStartBypassedEventIds.contains(slot.id) else { return }
-        if harshModePrompt?.phase == .start && harshModePrompt?.eventId == slot.id {
+        guard !isHarshPromptSnoozed(promptID: promptID, now: effectiveNow) else { return }
+        guard !harshStartAcceptedPromptIDs.contains(promptID),
+              !harshStartBypassedPromptIDs.contains(promptID) else { return }
+        if harshModePrompt?.id == promptID {
             return
         }
 
@@ -916,16 +939,19 @@ class SessionAwarenessService: ObservableObject {
         endTime: Date,
         notes: String?
     ) {
+        let promptID = harshPromptID(phase: .end, eventId: eventId, startTime: startTime, endTime: endTime)
         guard shouldGateHarshEnd(
             eventId: eventId,
             sessionType: sessionType,
+            startTime: startTime,
+            endTime: endTime,
             notes: notes,
             isNaturalEnd: true,
             now: effectiveNow
         ) else { return }
-        guard !harshReviewCapturedEventIds.contains(eventId),
-              !harshEndBypassedEventIds.contains(eventId) else { return }
-        if harshModePrompt?.phase == .end && harshModePrompt?.eventId == eventId {
+        guard !harshReviewCapturedPromptIDs.contains(promptID),
+              !harshEndBypassedPromptIDs.contains(promptID) else { return }
+        if harshModePrompt?.id == promptID {
             return
         }
         let nextSlot = nextBlockingSlot(after: endTime, excluding: eventId, in: cachedNowSlots)
@@ -1007,7 +1033,14 @@ class SessionAwarenessService: ObservableObject {
         }
 
         // Re-enter tracking immediately; do not mark goal/review captured so the gate returns later.
-        harshPromptSnoozeUntilByID[prompt.id] = timing.snoozeUntil
+        harshPromptSnoozeUntilByID[prompt.id] = nil
+        let delayedPromptID = harshPromptID(
+            phase: prompt.phase,
+            eventId: prompt.eventId,
+            startTime: timing.start,
+            endTime: timing.end
+        )
+        harshPromptSnoozeUntilByID[delayedPromptID] = timing.snoozeUntil
         sessionStartTime = timing.start
         sessionEndTime = timing.end
         remaining = max(0, timing.end.timeIntervalSince(effectiveNow))
@@ -1078,8 +1111,7 @@ class SessionAwarenessService: ObservableObject {
             .first
     }
 
-    private func isHarshPromptSnoozed(phase: HarshModePromptPhase, eventId: String, now: Date) -> Bool {
-        let promptID = "\(eventId)-\(phase.rawValue)"
+    private func isHarshPromptSnoozed(promptID: String, now: Date) -> Bool {
         guard let snoozeUntil = harshPromptSnoozeUntilByID[promptID] else { return false }
         if snoozeUntil > now {
             return true
@@ -1106,6 +1138,8 @@ class SessionAwarenessService: ObservableObject {
         if shouldSuppressHarshEndWithoutStart(
             eventId: eventId,
             sessionType: sessionType,
+            startTime: startTime,
+            endTime: endTime,
             notes: notes,
             isNaturalEnd: isNaturalEnd
         ) {
@@ -1119,11 +1153,14 @@ class SessionAwarenessService: ObservableObject {
         if shouldGateHarshEnd(
             eventId: eventId,
             sessionType: sessionType,
+            startTime: startTime,
+            endTime: endTime,
             notes: notes,
             isNaturalEnd: isNaturalEnd,
             now: effectiveNow
         ) {
-            harshEndPendingMutedByID["\(eventId)-\(HarshModePromptPhase.end.rawValue)"] = isSessionMuted
+            let promptID = harshPromptID(phase: .end, eventId: eventId, startTime: startTime, endTime: endTime)
+            harshEndPendingMutedByID[promptID] = isSessionMuted
             cancelPendingSessionAudioStart()
             pauseSessionAudioForHarshEndPrompt(wasSessionMuted: isSessionMuted)
             presentHarshModeEndPromptIfNeeded(
@@ -1205,8 +1242,8 @@ class SessionAwarenessService: ObservableObject {
 
     private func fireHarshStartLifecycle(prompt: HarshModePrompt, title: String) {
         guard currentEventId == prompt.eventId, isActive else { return }
-        guard !harshLifecycleStartedEventIds.contains(prompt.eventId) else { return }
-        harshLifecycleStartedEventIds.insert(prompt.eventId)
+        guard !harshLifecycleStartedPromptIDs.contains(prompt.id) else { return }
+        harshLifecycleStartedPromptIDs.insert(prompt.id)
 
         let now = effectiveNow
         lastPresenceReminderTime = now
@@ -1234,8 +1271,8 @@ class SessionAwarenessService: ObservableObject {
     }
 
     private func fireHarshEndLifecycle(prompt: HarshModePrompt) {
-        guard !harshLifecycleEndedEventIds.contains(prompt.eventId) else { return }
-        harshLifecycleEndedEventIds.insert(prompt.eventId)
+        guard !harshLifecycleEndedPromptIDs.contains(prompt.id) else { return }
+        harshLifecycleEndedPromptIDs.insert(prompt.id)
 
         let promptID = prompt.id
         let wasSessionMuted = harshEndPendingMutedByID[promptID] ?? isSessionMuted
@@ -1396,7 +1433,7 @@ class SessionAwarenessService: ObservableObject {
         }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
             currentSessionTitle = cleanedTitle
-            harshStartAcceptedEventIds.insert(prompt.eventId)
+            harshStartAcceptedPromptIDs.insert(prompt.id)
             harshPromptSnoozeUntilByID[prompt.id] = nil
             harshModePrompt = nil
             return true
@@ -1421,7 +1458,7 @@ class SessionAwarenessService: ObservableObject {
             currentSessionTitle = cleanedTitle
             currentEventNotes = updatedNotes
         }
-        harshStartAcceptedEventIds.insert(prompt.eventId)
+        harshStartAcceptedPromptIDs.insert(prompt.id)
         harshPromptSnoozeUntilByID[prompt.id] = nil
         fireHarshStartLifecycle(prompt: prompt, title: cleanedTitle)
         harshModePrompt = nil
@@ -1442,7 +1479,7 @@ class SessionAwarenessService: ObservableObject {
         guard !config.harshModeRequireReviewNote || !cleanedReflection.isEmpty else { return false }
         if Self.isDebugHarshModeEvent(prompt.eventId) {
             currentSessionTitle = cleanedTitle
-            harshReviewCapturedEventIds.insert(prompt.eventId)
+            harshReviewCapturedPromptIDs.insert(prompt.id)
             harshPromptSnoozeUntilByID[prompt.id] = nil
             sessionFeedbackPending = nil
             feedbackDismissTimer?.invalidate()
@@ -1464,7 +1501,7 @@ class SessionAwarenessService: ObservableObject {
             currentSessionTitle = cleanedTitle
             currentEventNotes = updatedNotes
         }
-        harshReviewCapturedEventIds.insert(prompt.eventId)
+        harshReviewCapturedPromptIDs.insert(prompt.id)
         harshPromptSnoozeUntilByID[prompt.id] = nil
         fireHarshEndLifecycle(prompt: prompt)
         sessionFeedbackPending = nil
@@ -1478,9 +1515,9 @@ class SessionAwarenessService: ObservableObject {
         guard let prompt = harshModePrompt else { return }
         switch prompt.phase {
         case .start:
-            harshStartBypassedEventIds.insert(prompt.eventId)
+            harshStartBypassedPromptIDs.insert(prompt.id)
         case .end:
-            harshEndBypassedEventIds.insert(prompt.eventId)
+            harshEndBypassedPromptIDs.insert(prompt.id)
             fireHarshEndLifecycle(prompt: prompt)
         }
         harshPromptSnoozeUntilByID[prompt.id] = nil

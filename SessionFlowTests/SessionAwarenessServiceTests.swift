@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SessionFlow
 
@@ -68,6 +69,40 @@ struct SessionAwarenessServiceTests {
             notes: notesWithGoals,
             startSubmissionRecorded: false
         ))
+    }
+
+    @Test func commitModeStartPromptIdentityChangesWhenSessionStartMoves() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let movedStart = start.addingTimeInterval(2 * 60 * 60)
+        let movedEnd = movedStart.addingTimeInterval(40 * 60)
+
+        let originalID = HarshModePrompt.id(eventId: "event", phase: .start, startTime: start, endTime: end)
+        let movedID = HarshModePrompt.id(eventId: "event", phase: .start, startTime: movedStart, endTime: movedEnd)
+
+        #expect(originalID != movedID)
+    }
+
+    @Test func commitModeStartPromptIdentityIgnoresEndOnlyResize() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let resizedEnd = start.addingTimeInterval(90 * 60)
+
+        let originalID = HarshModePrompt.id(eventId: "event", phase: .start, startTime: start, endTime: end)
+        let resizedID = HarshModePrompt.id(eventId: "event", phase: .start, startTime: start, endTime: resizedEnd)
+
+        #expect(originalID == resizedID)
+    }
+
+    @Test func commitModeEndPromptIdentityTracksFullInterval() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let resizedEnd = start.addingTimeInterval(90 * 60)
+
+        let originalID = HarshModePrompt.id(eventId: "event", phase: .end, startTime: start, endTime: end)
+        let resizedID = HarshModePrompt.id(eventId: "event", phase: .end, startTime: start, endTime: resizedEnd)
+
+        #expect(originalID != resizedID)
     }
 
     @Test func commitModeStartAcceptsEmptyGoalsWhenGoalsAreOptional() {
