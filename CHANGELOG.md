@@ -7,6 +7,16 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.7.4] - 2026-07-04
+
+### Changed
+
+- Feedback, Alignment, and Focus summaries now use a clearer worst-to-best review order across the app.
+
+### Fixed
+
+- Commit Mode and awareness audio are more reliable around delayed sessions, emergency breaks, expired start prompts, and ambient playback.
+
 ## [2026.6.17] - 2026-06-17
 
 ### Added
