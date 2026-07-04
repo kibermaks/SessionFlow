@@ -892,6 +892,7 @@ private struct HarshModeOverlayView: View {
                     .foregroundColor(.secondary)
 
                 promptActionRow(
+                    askLaterTitle: "Delay Start",
                     askLaterHelp: "Move this Calendar event later and ask again at the new start time",
                     primaryTitle: "Start Session",
                     primaryIcon: "play.fill",
@@ -944,7 +945,7 @@ private struct HarshModeOverlayView: View {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 10) {
-                ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                     ratingButton(rating)
                 }
             }
@@ -954,7 +955,7 @@ private struct HarshModeOverlayView: View {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 8) {
-                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                     alignmentButton(alignment)
                 }
             }
@@ -994,6 +995,7 @@ private struct HarshModeOverlayView: View {
                     .foregroundColor(.secondary)
 
                 promptActionRow(
+                    askLaterTitle: "Extend Session",
                     askLaterHelp: "Extend this Calendar event and ask again later",
                     primaryTitle: "Save and Close",
                     primaryIcon: "checkmark.circle.fill",
@@ -1028,6 +1030,7 @@ private struct HarshModeOverlayView: View {
     }
 
     private func promptActionRow(
+        askLaterTitle: String,
         askLaterHelp: String,
         primaryTitle: String,
         primaryIcon: String,
@@ -1050,7 +1053,7 @@ private struct HarshModeOverlayView: View {
                     Text("No room before next task")
                 }
             } label: {
-                Label("Ask Later", systemImage: "clock.badge.plus")
+                Label(askLaterTitle, systemImage: "clock.badge.plus")
                     .font(.system(size: 12, weight: .semibold))
                     .frame(minHeight: 34)
             }
@@ -1487,13 +1490,13 @@ struct HarshModeGuide: View {
         } else {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
-                    ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                    ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                         guideRatingButton(rating)
                     }
                 }
 
                 HStack(spacing: 6) {
-                    ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                    ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                         guideAlignmentButton(alignment)
                     }
                 }

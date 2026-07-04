@@ -333,6 +333,7 @@ class SessionAwarenessService: ObservableObject {
     private func tick() {
         let now = effectiveNow
         currentTime = now
+        dismissExpiredHarshStartPrompt(now: now)
 
         guard let calendarService = calendarService else {
             clearActiveState()
@@ -801,8 +802,21 @@ class SessionAwarenessService: ObservableObject {
         startSubmissionRecorded
     }
 
+    static func shouldDismissHarshStartPromptAtEnd(prompt: HarshModePrompt?, now: Date) -> Bool {
+        guard let prompt, prompt.phase == .start else { return false }
+        return now >= prompt.endTime
+    }
+
     static func hasCompletedHarshStartForEndGate(notes: String?, startSubmissionRecorded: Bool) -> Bool {
         startSubmissionRecorded || !HarshModeSessionNotes.goals(from: notes).isEmpty
+    }
+
+    private func dismissExpiredHarshStartPrompt(now: Date) {
+        guard Self.shouldDismissHarshStartPromptAtEnd(prompt: harshModePrompt, now: now) else { return }
+        if let prompt = harshModePrompt {
+            harshPromptSnoozeUntilByID[prompt.id] = nil
+        }
+        harshModePrompt = nil
     }
 
     private func harshPromptID(

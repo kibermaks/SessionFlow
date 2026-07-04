@@ -701,30 +701,30 @@ struct AppSettingsView: View {
                                     .foregroundColor(.secondary)
                                     .fixedSize(horizontal: false, vertical: true)
 
-                                focusWeightRow(label: "Fire", icon: "flame.fill", color: .orange,
+                                focusWeightRow(label: "Skipped", icon: "xmark.circle.fill", color: colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"),
                                                value: Binding(
-                                                   get: { sessionAwarenessService.config.focusWeights.rocketPercent },
-                                                   set: { sessionAwarenessService.config.focusWeights.rocketPercent = $0 }
-                                               ))
-                                focusWeightRow(label: "Done", icon: "checkmark.circle.fill", color: .green,
-                                               value: Binding(
-                                                   get: { sessionAwarenessService.config.focusWeights.completedPercent },
-                                                   set: { sessionAwarenessService.config.focusWeights.completedPercent = $0 }
-                                               ))
-                                focusWeightRow(label: "Partly", icon: "circle.lefthalf.filled", color: colors.isDark ? .yellow : Color(hex: "D97706"),
-                                               value: Binding(
-                                                   get: { sessionAwarenessService.config.focusWeights.partialPercent },
-                                                   set: { sessionAwarenessService.config.focusWeights.partialPercent = $0 }
+                                                   get: { sessionAwarenessService.config.focusWeights.skippedPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.skippedPercent = $0 }
                                                ))
                                 focusWeightRow(label: "Procrast.", icon: "iphone", color: .red,
                                                value: Binding(
                                                    get: { sessionAwarenessService.config.focusWeights.procrastinatedPercent },
                                                    set: { sessionAwarenessService.config.focusWeights.procrastinatedPercent = $0 }
                                                ))
-                                focusWeightRow(label: "Skipped", icon: "xmark.circle.fill", color: colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"),
+                                focusWeightRow(label: "Partly", icon: "circle.lefthalf.filled", color: colors.isDark ? .yellow : Color(hex: "D97706"),
                                                value: Binding(
-                                                   get: { sessionAwarenessService.config.focusWeights.skippedPercent },
-                                                   set: { sessionAwarenessService.config.focusWeights.skippedPercent = $0 }
+                                                   get: { sessionAwarenessService.config.focusWeights.partialPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.partialPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Done", icon: "checkmark.circle.fill", color: .green,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.completedPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.completedPercent = $0 }
+                                               ))
+                                focusWeightRow(label: "Fire", icon: "flame.fill", color: .orange,
+                                               value: Binding(
+                                                   get: { sessionAwarenessService.config.focusWeights.rocketPercent },
+                                                   set: { sessionAwarenessService.config.focusWeights.rocketPercent = $0 }
                                                ))
                             }
                         }

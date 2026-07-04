@@ -356,16 +356,16 @@ struct ProductivityCard: View {
                                 .font(.system(size: 12, weight: .semibold))
 
                             VStack(alignment: .leading, spacing: 4) {
-                                Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
-                                    .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
-                                Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
-                                    .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
-                                Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
-                                    .foregroundColor(colors.isDark ? .yellow : Color(hex: "D97706"))
-                                Label("Procrastinated — counts \(w.procrastinatedPercent)% Focus, but still counts as spent time", systemImage: "iphone")
-                                    .foregroundColor(.red)
                                 Label("Skipped — counts \(w.skippedPercent)%", systemImage: "xmark.circle.fill")
                                     .foregroundColor(colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"))
+                                Label("Procrastinated — counts \(w.procrastinatedPercent)% Focus, but still counts as spent time", systemImage: "iphone")
+                                    .foregroundColor(.red)
+                                Label("Partly — counts \(w.partialPercent)%", systemImage: "circle.lefthalf.filled")
+                                    .foregroundColor(colors.isDark ? .yellow : Color(hex: "D97706"))
+                                Label("Done — counts \(w.completedPercent)%", systemImage: "checkmark.circle.fill")
+                                    .foregroundColor(colors.isDark ? .green : Color(hex: "15803D"))
+                                Label("Fire — counts \(w.rocketPercent)% of event duration", systemImage: "flame.fill")
+                                    .foregroundColor(colors.isDark ? .orange : Color(hex: "C2410C"))
                             }
                             .font(.system(size: 12))
 
@@ -381,7 +381,7 @@ struct ProductivityCard: View {
                                 .font(.system(size: 12, weight: .semibold))
 
                             VStack(alignment: .leading, spacing: 4) {
-                                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                                ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                                     Label("\(alignment.label) — counts \(aw.percent(for: alignment))% of Focus Time", systemImage: alignment.icon)
                                         .foregroundColor(alignmentColor(alignment))
                                 }
@@ -543,7 +543,18 @@ struct ProductivityCard: View {
     private var todayStats: some View {
         let metrics = reviewMetrics
         return HStack(spacing: 0) {
-            ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+            VStack(spacing: 4) {
+                Image(systemName: "questionmark.circle")
+                    .font(.system(size: 14))
+                    .foregroundColor(colors.textMuted)
+                Text("\(metrics.unrated)")
+                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    .foregroundColor(metrics.unrated > 0 ? colors.textSecondary : colors.textMuted)
+            }
+            .frame(maxWidth: .infinity)
+            .help("Unrated")
+
+            ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                 let count = metrics.ratingCounts[rating] ?? 0
                 VStack(spacing: 4) {
                     Image(systemName: rating.icon)
@@ -556,24 +567,13 @@ struct ProductivityCard: View {
                 .frame(maxWidth: .infinity)
                 .help(rating.label)
             }
-
-            VStack(spacing: 4) {
-                Image(systemName: "questionmark.circle")
-                    .font(.system(size: 14))
-                    .foregroundColor(colors.textMuted)
-                Text("\(metrics.unrated)")
-                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
-                    .foregroundColor(metrics.unrated > 0 ? colors.textSecondary : colors.textMuted)
-            }
-            .frame(maxWidth: .infinity)
-            .help("Unrated")
         }
     }
 
     private var alignmentStats: some View {
         let metrics = reviewMetrics
         return HStack(spacing: 0) {
-            ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+            ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                 let count = metrics.alignmentCounts[alignment] ?? 0
                 VStack(spacing: 4) {
                     Image(systemName: alignment.icon)
@@ -1502,7 +1502,13 @@ struct MonthlyStatsView: View {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 0) {
-                ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                dayCountPill(
+                    icon: "questionmark.circle",
+                    count: stats.unrated,
+                    color: .secondary.opacity(0.6),
+                    help: "Unrated"
+                )
+                ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                     dayCountPill(
                         icon: rating.icon,
                         count: stats.counts[rating] ?? 0,
@@ -1510,16 +1516,10 @@ struct MonthlyStatsView: View {
                         help: rating.label
                     )
                 }
-                dayCountPill(
-                    icon: "questionmark.circle",
-                    count: stats.unrated,
-                    color: .secondary.opacity(0.6),
-                    help: "Unrated"
-                )
             }
 
             HStack(spacing: 0) {
-                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                     dayCountPill(
                         icon: alignment.icon,
                         count: stats.alignmentCounts[alignment] ?? 0,
@@ -1715,17 +1715,6 @@ struct MonthlyStatsView: View {
 
                 if hasData {
                     HStack(spacing: 5) {
-                        ForEach(SessionRating.allCases, id: \.rawValue) { rating in
-                            let count = stat?.counts[rating] ?? 0
-                            HStack(spacing: 2) {
-                                Image(systemName: rating.icon)
-                                    .font(.system(size: 10))
-                                    .foregroundColor(count > 0 ? ratingColor(rating) : .secondary.opacity(0.2))
-                                Text("\(count)")
-                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                    .foregroundColor(count > 0 ? .primary.opacity(0.7) : .secondary.opacity(0.2))
-                            }
-                        }
                         let unrated = stat?.unrated ?? 0
                         if unrated > 0 {
                             HStack(spacing: 2) {
@@ -1735,6 +1724,17 @@ struct MonthlyStatsView: View {
                                 Text("\(unrated)")
                                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                                     .foregroundColor(.secondary.opacity(0.5))
+                            }
+                        }
+                        ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
+                            let count = stat?.counts[rating] ?? 0
+                            HStack(spacing: 2) {
+                                Image(systemName: rating.icon)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(count > 0 ? ratingColor(rating) : .secondary.opacity(0.2))
+                                Text("\(count)")
+                                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                    .foregroundColor(count > 0 ? .primary.opacity(0.7) : .secondary.opacity(0.2))
                             }
                         }
                     }
@@ -1836,7 +1836,17 @@ struct MonthlyStatsView: View {
 
         return VStack(spacing: 8) {
             HStack(spacing: 10) {
-                ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                HStack(spacing: 3) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("\(unrated)")
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .foregroundColor(unrated > 0 ? .primary.opacity(0.6) : .secondary.opacity(0.4))
+                }
+                .help("Unrated")
+
+                ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                     let count = totals.counts[rating] ?? 0
                     HStack(spacing: 3) {
                         Image(systemName: rating.icon)
@@ -1850,20 +1860,10 @@ struct MonthlyStatsView: View {
                 }
 
                 Spacer()
-
-                HStack(spacing: 3) {
-                    Image(systemName: "questionmark.circle")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("\(unrated)")
-                        .font(.system(size: 14, weight: .medium, design: .monospaced))
-                        .foregroundColor(unrated > 0 ? .primary.opacity(0.6) : .secondary.opacity(0.4))
-                }
-                .help("Unrated")
             }
 
             HStack(spacing: 8) {
-                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                     let count = totals.alignmentCounts[alignment] ?? 0
                     HStack(spacing: 3) {
                         Image(systemName: alignment.icon)

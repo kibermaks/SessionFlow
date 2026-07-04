@@ -2919,7 +2919,7 @@ extension TimelineView {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 8) {
-                ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+                ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                     Button {
                         updatePopoverFeedback(for: slot, rating: rating)
                     } label: {
@@ -2956,7 +2956,7 @@ extension TimelineView {
                 .foregroundColor(.secondary)
 
             HStack(spacing: 6) {
-                ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                     Button {
                         updatePopoverFeedback(for: slot, alignment: alignment)
                     } label: {
@@ -3089,7 +3089,7 @@ extension TimelineView {
             .hoverEffect(brightness: 0.2)
             .help("Not set")
 
-            ForEach(SessionRating.allCases, id: \.rawValue) { rating in
+            ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
                 Button {
                     if let result = TimelineReviewUpdate.setFeedback(
                         eventId: slot.id,
@@ -3166,7 +3166,7 @@ extension TimelineView {
             .hoverEffect(brightness: 0.2)
             .help("Not set")
 
-            ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+            ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                 Button {
                     if let result = TimelineReviewUpdate.setAlignment(
                         eventId: slot.id,

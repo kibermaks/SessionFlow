@@ -9,7 +9,7 @@ struct SessionAwarenessGuide: View {
     @State private var remainingMinutes: Int = Self.demoSessionMinutes
     @State private var countdownActive = false
     @State private var soundWavePhase: CGFloat = 0
-    @State private var selectedFeedback: String? = nil
+    @State private var selectedFeedback: SessionRating? = nil
 
     private static let demoSessionMinutes = 40
     private let countdownTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -284,18 +284,17 @@ struct SessionAwarenessGuide: View {
     private var feedbackButtonsView: some View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
-                feedbackButton(label: "Done", icon: "checkmark.circle.fill", color: Color(hex: "10B981"))
-                feedbackButton(label: "Partly", icon: "circle.lefthalf.filled", color: Color(hex: "F59E0B"))
-                feedbackButton(label: "Procrast.", icon: "iphone", color: Color(hex: "EF4444"))
-                feedbackButton(label: "Skipped", icon: "xmark.circle.fill", color: colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B"))
+                ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
+                    feedbackButton(rating)
+                }
             }
 
             // Badge preview
             if let feedback = selectedFeedback {
                 HStack(spacing: 6) {
-                    Image(systemName: badgeIcon(for: feedback))
+                    Image(systemName: feedback.icon)
                         .font(.system(size: 10))
-                    Text(feedback)
+                    Text(feedback.shortLabel)
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(badgeColor(for: feedback))
@@ -312,51 +311,39 @@ struct SessionAwarenessGuide: View {
         .padding(.horizontal, 40)
     }
 
-    private func feedbackButton(label: String, icon: String, color: Color) -> some View {
-        Button {
+    private func feedbackButton(_ rating: SessionRating) -> some View {
+        let color = badgeColor(for: rating)
+
+        return Button {
             withAnimation(.spring(response: 0.3)) {
-                selectedFeedback = label
+                selectedFeedback = rating
             }
         } label: {
             VStack(spacing: 6) {
-                Image(systemName: icon)
+                Image(systemName: rating.icon)
                     .font(.system(size: 22))
-                Text(label)
+                Text(rating.shortLabel)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
             }
-            .foregroundColor(selectedFeedback == label ? color : colors.textSecondary)
-            .frame(width: 72, height: 60)
+            .foregroundColor(selectedFeedback == rating ? color : colors.textSecondary)
+            .frame(width: 66, height: 60)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(selectedFeedback == label ? color.opacity(0.15) : colors.subtleBackground)
+                    .fill(selectedFeedback == rating ? color.opacity(0.15) : colors.subtleBackground)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10)
-                    .stroke(selectedFeedback == label ? color.opacity(0.4) : Color.clear, lineWidth: 1)
+                    .stroke(selectedFeedback == rating ? color.opacity(0.4) : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .hoverEffect(brightness: 0.15)
     }
 
-    private func badgeIcon(for feedback: String) -> String {
-        switch feedback {
-        case "Done": return "checkmark.circle.fill"
-        case "Partly": return "circle.lefthalf.filled"
-        case "Procrast.": return "iphone"
-        default: return "xmark.circle.fill"
-        }
-    }
-
-    private func badgeColor(for feedback: String) -> Color {
-        switch feedback {
-        case "Done": return Color(hex: "10B981")
-        case "Partly": return Color(hex: "F59E0B")
-        case "Procrast.": return Color(hex: "EF4444")
-        default: return colors.isDark ? Color(hex: "94A3B8") : Color(hex: "64748B")
-        }
+    private func badgeColor(for feedback: SessionRating) -> Color {
+        awarenessRatingColor(feedback, isDark: colors.isDark)
     }
 }
 

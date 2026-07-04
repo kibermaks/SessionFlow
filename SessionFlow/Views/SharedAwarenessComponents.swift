@@ -756,7 +756,7 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                     Spacer(minLength: 8)
 
                     HStack(spacing: 6) {
-                        ForEach(SessionAlignment.allCases, id: \.rawValue) { alignment in
+                        ForEach(SessionAlignment.displayOrder, id: \.rawValue) { alignment in
                             AwarenessAlignmentButton(alignment: alignment) {
                                 submitFeedback(rating: rating, alignment: $0)
                             }
@@ -789,10 +789,9 @@ struct AwarenessFeedbackContent<ToggleButton: View>: View {
                     Spacer(minLength: 8)
 
                     HStack(spacing: 6) {
-                        AwarenessFeedbackButton(rating: .rocket) { submitFeedback($0) }
-                        AwarenessFeedbackButton(rating: .completed) { submitFeedback($0) }
-                        AwarenessFeedbackButton(rating: .partial) { submitFeedback($0) }
-                        AwarenessFeedbackButton(rating: .skipped) { submitFeedback($0) }
+                        ForEach(SessionRating.displayOrder, id: \.rawValue) { rating in
+                            AwarenessFeedbackButton(rating: rating) { submitFeedback($0) }
+                        }
                     }
 
                     Button {

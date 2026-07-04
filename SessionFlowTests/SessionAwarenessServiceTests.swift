@@ -94,6 +94,46 @@ struct SessionAwarenessServiceTests {
         #expect(originalID == resizedID)
     }
 
+    @Test func commitModeStartPromptExpiresAtSessionEnd() {
+        let start = Date(timeIntervalSince1970: 1_000_000)
+        let end = start.addingTimeInterval(40 * 60)
+        let startPrompt = HarshModePrompt(
+            phase: .start,
+            eventId: "event",
+            sessionTitle: "Work",
+            sessionType: .work,
+            startTime: start,
+            endTime: end,
+            notes: "#work",
+            nextTaskTitle: nil,
+            nextTaskStartTime: nil
+        )
+        let endPrompt = HarshModePrompt(
+            phase: .end,
+            eventId: "event",
+            sessionTitle: "Work",
+            sessionType: .work,
+            startTime: start,
+            endTime: end,
+            notes: "#work",
+            nextTaskTitle: nil,
+            nextTaskStartTime: nil
+        )
+
+        #expect(!SessionAwarenessService.shouldDismissHarshStartPromptAtEnd(
+            prompt: startPrompt,
+            now: end.addingTimeInterval(-1)
+        ))
+        #expect(SessionAwarenessService.shouldDismissHarshStartPromptAtEnd(
+            prompt: startPrompt,
+            now: end
+        ))
+        #expect(!SessionAwarenessService.shouldDismissHarshStartPromptAtEnd(
+            prompt: endPrompt,
+            now: end.addingTimeInterval(1)
+        ))
+    }
+
     @Test func commitModeEndPromptIdentityTracksFullInterval() {
         let start = Date(timeIntervalSince1970: 1_000_000)
         let end = start.addingTimeInterval(40 * 60)

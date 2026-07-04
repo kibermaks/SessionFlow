@@ -25,6 +25,14 @@ enum SessionRating: String, Codable, CaseIterable {
         allCases.map(\.tag)
     }
 
+    static let displayOrder: [SessionRating] = [
+        .skipped,
+        .procrastinated,
+        .partial,
+        .completed,
+        .rocket,
+    ]
+
     var icon: String {
         switch self {
         case .rocket: return "flame.fill"
@@ -111,6 +119,14 @@ enum SessionAlignment: String, Codable, CaseIterable {
     static var allTags: [String] {
         allCases.map(\.tag)
     }
+
+    static let displayOrder: [SessionAlignment] = [
+        .offTrack,
+        .maintenance,
+        .support,
+        .strategic,
+        .direct,
+    ]
 
     var icon: String {
         switch self {

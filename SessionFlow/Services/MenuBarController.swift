@@ -152,13 +152,13 @@ class MenuBarController: ObservableObject {
 
         menu.addItem(NSMenuItem.separator())
 
-        for rating in SessionRating.allCases {
+        for rating in SessionRating.displayOrder {
             let item = NSMenuItem(title: rating.label, action: nil, keyEquivalent: "")
             item.image = symbolImage(rating.icon, pointSize: 13)
             item.isEnabled = true
 
             let alignmentMenu = NSMenu()
-            for alignment in SessionAlignment.allCases {
+            for alignment in SessionAlignment.displayOrder {
                 let alignmentItem = NSMenuItem(title: alignment.label, action: #selector(submitFeedbackWithAlignmentFromMenu(_:)), keyEquivalent: "")
                 alignmentItem.target = self
                 alignmentItem.representedObject = "\(rating.rawValue)|\(alignment.rawValue)"

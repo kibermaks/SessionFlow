@@ -18,6 +18,24 @@ struct SessionFlowEventSemanticsTests {
         #expect(SessionFlowEventSemantics.ownershipTag(for: .bigRest) == .bigRest)
     }
 
+    @Test func reviewDisplayOrderRunsWorstToBest() {
+        #expect(SessionRating.displayOrder == [
+            .skipped,
+            .procrastinated,
+            .partial,
+            .completed,
+            .rocket,
+        ])
+
+        #expect(SessionAlignment.displayOrder == [
+            .offTrack,
+            .maintenance,
+            .support,
+            .strategic,
+            .direct,
+        ])
+    }
+
     @Test func sessionTypeFromNotesUsesExactCaseInsensitiveTags() {
         #expect(SessionFlowEventSemantics.sessionType(fromNotes: "Client delivery #WORK") == .work)
         #expect(SessionFlowEventSemantics.sessionType(fromNotes: "Admin #side") == .side)
