@@ -5,6 +5,88 @@ import CoreAudio
 import SwiftUI
 import Combine
 
+final class AudioRouteRecoveryCoordinator {
+    enum SuspensionReason: Hashable {
+        case systemSleep
+        case screenSleep
+        case inactiveSession
+    }
+
+    enum ResumeOutcome: Equatable {
+        case ignored
+        case waiting
+        case scheduled
+    }
+
+    typealias Cancellation = () -> Void
+    typealias Scheduler = (_ delay: TimeInterval, _ operation: @escaping () -> Void) -> Cancellation
+
+    private let scheduler: Scheduler
+    private var suspensionReasons: Set<SuspensionReason> = []
+    private var longestResumeDelay: TimeInterval = 0
+    private var generation = 0
+    private var cancelPendingOperation: Cancellation?
+
+    init(scheduler: @escaping Scheduler = { delay, operation in
+        let workItem = DispatchWorkItem(block: operation)
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        return { workItem.cancel() }
+    }) {
+        self.scheduler = scheduler
+    }
+
+    func suspend(reason: SuspensionReason) {
+        if suspensionReasons.isEmpty {
+            longestResumeDelay = 0
+        }
+        suspensionReasons.insert(reason)
+        invalidatePendingOperation()
+    }
+
+    @discardableResult
+    func resume(
+        reason: SuspensionReason,
+        delay: TimeInterval,
+        operation: @escaping () -> Void
+    ) -> ResumeOutcome {
+        guard suspensionReasons.remove(reason) != nil else { return .ignored }
+        longestResumeDelay = max(longestResumeDelay, delay)
+        guard suspensionReasons.isEmpty else { return .waiting }
+        let recoveryDelay = longestResumeDelay
+        longestResumeDelay = 0
+        replacePendingOperation(delay: recoveryDelay, operation: operation)
+        return .scheduled
+    }
+
+    func scheduleWhileActive(delay: TimeInterval, operation: @escaping () -> Void) {
+        guard suspensionReasons.isEmpty else { return }
+        replacePendingOperation(delay: delay, operation: operation)
+    }
+
+    func cancelPending() {
+        invalidatePendingOperation()
+    }
+
+    private func replacePendingOperation(delay: TimeInterval, operation: @escaping () -> Void) {
+        invalidatePendingOperation()
+        let scheduledGeneration = generation
+        cancelPendingOperation = scheduler(delay) { [weak self] in
+            guard let self,
+                  self.suspensionReasons.isEmpty,
+                  self.generation == scheduledGeneration else { return }
+
+            self.cancelPendingOperation = nil
+            operation()
+        }
+    }
+
+    private func invalidatePendingOperation() {
+        generation &+= 1
+        cancelPendingOperation?()
+        cancelPendingOperation = nil
+    }
+}
+
 class SessionAudioService: ObservableObject {
 
     // MARK: - Published state
@@ -41,6 +123,8 @@ class SessionAudioService: ObservableObject {
     private var shouldBePlayingAmbient = false
     private var ambientPlaybackGeneration = 0
     private var audioRouteIsRecovering = false
+    private var audioRouteRecoveryNeedsEngineRebuild = false
+    private let audioRouteRecoveryCoordinator = AudioRouteRecoveryCoordinator()
     private var userSessionIsInactive = false
     private var selectedOutputDeviceUID: String?
     private(set) var masterVolume: Float = 1.0
@@ -131,6 +215,7 @@ class SessionAudioService: ObservableObject {
     }
 
     deinit {
+        audioRouteRecoveryCoordinator.cancelPending()
         if let audioActivity {
             ProcessInfo.processInfo.endActivity(audioActivity)
         }
@@ -173,6 +258,8 @@ class SessionAudioService: ObservableObject {
         ambientBufferCache.removeAll()
         shouldBePlayingAmbient = false
         audioRouteIsRecovering = false
+        audioRouteRecoveryNeedsEngineRebuild = false
+        audioRouteRecoveryCoordinator.cancelPending()
         previewPausedConfig = nil
         previewPausedShouldPlay = false
         ambientResumePlaybackRate = 1.0
@@ -555,6 +642,7 @@ class SessionAudioService: ObservableObject {
             && currentAmbientConfig?.isPlayable == true
             && !isMuted
             && !userSessionIsInactive
+            && !audioRouteIsRecovering
         let shouldHoldActivity = intendsAmbientPlayback || ambientPlayerNode.isPlaying || transitionIsPlaying
 
         if shouldHoldActivity {
@@ -951,10 +1039,15 @@ class SessionAudioService: ObservableObject {
                     mElement: kAudioObjectPropertyElementMain
                 )
                 var outputSize: UInt32 = 0
-                if AudioObjectGetPropertyDataSize(id, &outputAddress, 0, nil, &outputSize) == noErr && outputSize > 0 {
-                    let bufferListPointer = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: 1)
-                    defer { bufferListPointer.deallocate() }
-                    if AudioObjectGetPropertyData(id, &outputAddress, 0, nil, &outputSize, bufferListPointer) == noErr {
+                if AudioObjectGetPropertyDataSize(id, &outputAddress, 0, nil, &outputSize) == noErr
+                    && outputSize >= UInt32(MemoryLayout<AudioBufferList>.size) {
+                    let rawBufferList = UnsafeMutableRawPointer.allocate(
+                        byteCount: Int(outputSize),
+                        alignment: MemoryLayout<AudioBufferList>.alignment
+                    )
+                    defer { rawBufferList.deallocate() }
+                    let bufferListPointer = rawBufferList.bindMemory(to: AudioBufferList.self, capacity: 1)
+                    if AudioObjectGetPropertyData(id, &outputAddress, 0, nil, &outputSize, rawBufferList) == noErr {
                         let bufferList = UnsafeMutableAudioBufferListPointer(bufferListPointer)
                         let outputChannels = bufferList.reduce(0) { $0 + Int($1.mNumberChannels) }
                         hasOutput = outputChannels > 0
@@ -1107,11 +1200,29 @@ class SessionAudioService: ObservableObject {
     }
 
     @objc private func handleEngineConfigChange(_ notification: Notification) {
-        audioRouteIsRecovering = true
-        stopAmbientInternal()
-        rebuildAmbientEngine()
-        updateAudioActivity()
-        resumeAmbientAfterAudioRouteSettles(delay: 0.75)
+        guard let engine = notification.object as? AVAudioEngine else { return }
+
+        // AVAudioEngine posts this notification on an internal audio queue. Rebuilding
+        // or releasing the engine from that callback can deadlock its teardown.
+        DispatchQueue.main.async { [weak self, weak engine] in
+            guard let self,
+                  let engine,
+                  engine === self.ambientEngine else { return }
+            self.beginEngineConfigurationRecovery()
+        }
+    }
+
+    private func beginEngineConfigurationRecovery() {
+        audioRouteRecoveryNeedsEngineRebuild = true
+        if !audioRouteIsRecovering {
+            audioRouteIsRecovering = true
+            stopAmbientInternal()
+            updateAudioActivity()
+        }
+
+        audioRouteRecoveryCoordinator.scheduleWhileActive(delay: 0.75) { [weak self] in
+            self?.finishAudioRouteRecovery()
+        }
     }
 
     private func observeWorkspaceAudioRecoveryNotifications() {
@@ -1155,44 +1266,101 @@ class SessionAudioService: ObservableObject {
     }
 
     @objc private func handleWorkspaceAudioWillSuspend(_ notification: Notification) {
+        let reason: AudioRouteRecoveryCoordinator.SuspensionReason
+        switch notification.name {
+        case NSWorkspace.willSleepNotification:
+            reason = .systemSleep
+        case NSWorkspace.screensDidSleepNotification:
+            reason = .screenSleep
+        default:
+            return
+        }
+
+        performAudioRouteMutationOnMain { [weak self] in
+            self?.suspendAudioRoute(reason: reason)
+        }
+    }
+
+    private func suspendAudioRoute(reason: AudioRouteRecoveryCoordinator.SuspensionReason) {
+        audioRouteRecoveryCoordinator.suspend(reason: reason)
         audioRouteIsRecovering = true
         stopAmbientInternal()
         updateAudioActivity()
     }
 
     @objc private func handleWorkspaceAudioDidResume(_ notification: Notification) {
-        audioRouteIsRecovering = true
-        refreshOutputDevices()
-        guard !userSessionIsInactive else { return }
-        resumeAmbientAfterAudioRouteSettles(delay: 2.0)
+        let reason: AudioRouteRecoveryCoordinator.SuspensionReason
+        switch notification.name {
+        case NSWorkspace.didWakeNotification:
+            reason = .systemSleep
+        case NSWorkspace.screensDidWakeNotification:
+            reason = .screenSleep
+        default:
+            return
+        }
+
+        performAudioRouteMutationOnMain { [weak self] in
+            self?.resumeAudioRoute(reason: reason, delay: 2.0)
+        }
     }
 
     @objc private func handleUserSessionDidResignActive(_ notification: Notification) {
-        userSessionIsInactive = true
-        audioRouteIsRecovering = true
-        stopAmbientInternal()
-        updateAudioActivity()
+        performAudioRouteMutationOnMain { [weak self] in
+            guard let self else { return }
+            self.userSessionIsInactive = true
+            self.suspendAudioRoute(reason: .inactiveSession)
+        }
     }
 
     @objc private func handleUserSessionDidBecomeActive(_ notification: Notification) {
-        userSessionIsInactive = false
-        audioRouteIsRecovering = true
-        refreshOutputDevices()
-        resumeAmbientAfterAudioRouteSettles(delay: 1.0)
+        performAudioRouteMutationOnMain { [weak self] in
+            guard let self else { return }
+            self.userSessionIsInactive = false
+            self.resumeAudioRoute(reason: .inactiveSession, delay: 1.0)
+        }
     }
 
-    private func resumeAmbientAfterAudioRouteSettles(delay: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self = self else { return }
-            self.audioRouteIsRecovering = false
-
-            guard self.shouldBePlayingAmbient,
-                  !self.isMuted,
-                  !self.userSessionIsInactive else { return }
-
-            self.resumeAmbient()
-            self.updateAudioActivity()
+    private func resumeAudioRoute(
+        reason: AudioRouteRecoveryCoordinator.SuspensionReason,
+        delay: TimeInterval
+    ) {
+        let outcome = audioRouteRecoveryCoordinator.resume(reason: reason, delay: delay) { [weak self] in
+            self?.finishAudioRouteRecovery()
         }
+
+        switch outcome {
+        case .ignored:
+            return
+        case .waiting:
+            audioRouteIsRecovering = true
+        case .scheduled:
+            audioRouteIsRecovering = true
+            refreshOutputDevices()
+        }
+    }
+
+    private func performAudioRouteMutationOnMain(_ operation: @escaping () -> Void) {
+        if Thread.isMainThread {
+            operation()
+        } else {
+            DispatchQueue.main.async(execute: operation)
+        }
+    }
+
+    private func finishAudioRouteRecovery() {
+        if audioRouteRecoveryNeedsEngineRebuild {
+            audioRouteRecoveryNeedsEngineRebuild = false
+            rebuildAmbientEngine()
+        }
+        audioRouteIsRecovering = false
+        updateAudioActivity()
+
+        guard shouldBePlayingAmbient,
+              !isMuted,
+              !userSessionIsInactive else { return }
+
+        resumeAmbient()
+        updateAudioActivity()
     }
 
     // MARK: - Custom Sound Import

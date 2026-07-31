@@ -120,6 +120,7 @@
 		TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TRUTF01 /* TimelineReviewUpdateTests.swift */; };
 		TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TETCTF01 /* TimelineEventTimeCommitterTests.swift */; };
 		SASTB01 /* SessionAwarenessServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SASTF01 /* SessionAwarenessServiceTests.swift */; };
+		ARTB01 /* AudioRouteRecoveryCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ARTF01 /* AudioRouteRecoveryCoordinatorTests.swift */; };
 		TESTMCPBLD /* MCP in Frameworks */ = {isa = PBXBuildFile; productRef = MCPPRD02 /* MCP */; };
 /* End PBXBuildFile section */
 
@@ -241,6 +242,7 @@
 		TRUTF01 /* TimelineReviewUpdateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReviewUpdateTests.swift; sourceTree = "<group>"; };
 		TETCTF01 /* TimelineEventTimeCommitterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineEventTimeCommitterTests.swift; sourceTree = "<group>"; };
 		SASTF01 /* SessionAwarenessServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAwarenessServiceTests.swift; sourceTree = "<group>"; };
+		ARTF01 /* AudioRouteRecoveryCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioRouteRecoveryCoordinatorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -331,6 +333,7 @@
 				TRUTF01 /* TimelineReviewUpdateTests.swift */,
 				TETCTF01 /* TimelineEventTimeCommitterTests.swift */,
 				SASTF01 /* SessionAwarenessServiceTests.swift */,
+				ARTF01 /* AudioRouteRecoveryCoordinatorTests.swift */,
 			);
 			path = SessionFlowTests;
 			sourceTree = "<group>";
@@ -710,6 +713,7 @@
 				TRUTB01 /* TimelineReviewUpdateTests.swift in Sources */,
 				TETCTB01 /* TimelineEventTimeCommitterTests.swift in Sources */,
 				SASTB01 /* SessionAwarenessServiceTests.swift in Sources */,
+				ARTB01 /* AudioRouteRecoveryCoordinatorTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -848,7 +852,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1098;
+				CURRENT_PROJECT_VERSION = 1099;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -867,7 +871,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.7.4;
+				MARKETING_VERSION = 2026.7.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";
@@ -886,7 +890,7 @@
 				CODE_SIGN_ENTITLEMENTS = SessionFlow/SessionFlow.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1098;
+				CURRENT_PROJECT_VERSION = 1099;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_APP_SANDBOX = NO;
@@ -905,7 +909,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 2026.7.4;
+				MARKETING_VERSION = 2026.7.31;
 				PRODUCT_BUNDLE_IDENTIFIER = com.kibermaks.SessionFlow;
 				PRODUCT_NAME = SessionFlow;
 				SWIFT_OBJC_BRIDGING_HEADER = "SessionFlow/SessionFlow-Bridging-Header.h";

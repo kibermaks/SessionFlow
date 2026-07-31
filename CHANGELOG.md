@@ -7,6 +7,12 @@ and SessionFlow marketing versions now follow the release date format `YYYY.M.D`
 
 ## [Unreleased]
 
+## [2026.7.31] - 2026-07-31
+
+### Fixed
+
+- Ambient audio recovery now avoids occasional sustained high CPU usage after repeated Mac sleep, display sleep, session unlock, or audio-device changes.
+
 ## [2026.7.4] - 2026-07-04
 
 ### Changed
